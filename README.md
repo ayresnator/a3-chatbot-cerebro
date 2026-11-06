@@ -1,30 +1,45 @@
-#### Cérebro ✦
+# 🧠 Cérebro ✦
 
-O **Cérebro** é um assistente de estudos com inteligência artificial, desenvolvido para ajudar alunos a entender conteúdos, organizar materiais e revisar o que aprenderam.
+**Assistente inteligente de estudos com inteligência artificial.**
 
-O aluno pode inserir um texto, informar uma matéria ou fazer uma pergunta. A partir disso, o sistema oferece explicações, resumos, flashcards e quizzes em português, considerando a área de conhecimento e o nível selecionado.
+O **Cérebro** é uma aplicação desenvolvida para auxiliar estudantes na compreensão de conteúdos, organização de materiais e revisão do aprendizado. Utilizando inteligência artificial, o sistema transforma textos e dúvidas em explicações, resumos, flashcards e quizzes personalizados.
 
-#### Objetivo
+---
 
-Facilitar a preparação do material de estudo e incentivar o aprendizado ativo. O projeto reúne a criação de conteúdo, a revisão e o acompanhamento de respostas em uma única interface.
+## 🎯 Objetivo
 
-#### Inteligência artificial utilizada
+Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo. O projeto reúne criação de conteúdo, revisão e acompanhamento do desempenho em uma única interface.
+
+## 🤖 Inteligência artificial utilizada
 
 O projeto utiliza a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na configuração utilizada durante o desenvolvimento.
 
-A aplicação envia as solicitações ao Gemini pelo backend Python. A IA interpreta o conteúdo e produz explicações ou materiais de estudo, que são apresentados na interface.
+A comunicação com a inteligência artificial acontece por meio do backend desenvolvido em Python. A IA interpreta as solicitações e gera explicações e materiais de estudo, que são apresentados na interface.
 
-A chave de acesso fica no arquivo `.env`, lido exclusivamente pelo backend. Ela não deve ser incluída no código do frontend nem publicada no GitHub.
+**Segurança da API:**
 
-O uso da API depende das condições de acesso e dos limites da conta no provedor. As respostas podem conter imprecisões e devem ser conferidas, especialmente em conteúdos que exigem maior rigor.
+- A chave de acesso fica armazenada no arquivo `.env`.
+- Somente o backend tem acesso à chave.
+- As credenciais não devem ser inseridas no frontend.
+- O arquivo `.env` não deve ser publicado no GitHub.
+- O uso da API está sujeito aos limites e às condições do provedor.
 
-#### Funcionalidades
+As respostas geradas pela IA podem conter imprecisões. Por isso, recomenda-se conferir as informações, especialmente em conteúdos que exigem maior rigor.
 
-#### Entrada de conteúdo
+---
 
-O aluno pode colar um texto, digitar uma matéria ou utilizar o microfone, quando o navegador oferecer suporte ao reconhecimento de voz.
+## ✨ Funcionalidades
 
-Antes de gerar o material, é possível selecionar uma das seis áreas:
+### 1. Entrada de conteúdo
+
+O aluno pode inserir informações de diferentes maneiras:
+
+- Colar um texto;
+- Digitar uma matéria;
+- Fazer uma pergunta;
+- Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz.
+
+O sistema permite selecionar uma das seis áreas de conhecimento:
 
 - Tecnologia;
 - Administração;
@@ -33,120 +48,217 @@ Antes de gerar o material, é possível selecionar uma das seis áreas:
 - Direito;
 - Matérias escolares.
 
-Também é possível escolher o nível básico, intermediário ou avançado, usado pela IA para adaptar suas explicações.
+Também é possível escolher o nível de conhecimento:
 
-#### Resumos
+- Básico;
+- Intermediário;
+- Avançado.
 
-Organizam o conteúdo em tópicos com os principais conceitos destacados.
+Essas configurações ajudam a IA a adaptar o conteúdo ao nível do estudante.
 
-O aluno pode selecionar quantos tópicos deseja visualizar, copiar o resumo, salvar o material ou acessar os flashcards relacionados.
+### 2. Resumos
 
-#### Flashcards
+Transformam conteúdos extensos em tópicos organizados, destacando os principais conceitos e informações.
 
-Apresentam uma pergunta por cartão. Ao clicar, o aluno revela a resposta e pode marcar se acertou, errou ou deseja revisar depois.
+O estudante pode:
 
-As respostas registradas ajudam a acompanhar o desempenho por área.
+- Selecionar a quantidade de tópicos;
+- Visualizar os principais conceitos;
+- Copiar o resumo;
+- Salvar o material na biblioteca;
+- Acessar os flashcards relacionados.
 
-#### Quizzes
+### 3. Flashcards
 
-Oferecem questões de múltipla escolha, verdadeiro ou falso e resposta curta.
+Permitem revisar o conteúdo por meio de cartões de perguntas e respostas.
 
-Após cada resposta, o sistema apresenta uma explicação. Ao concluir, o aluno visualiza seu aproveitamento e pode refazer apenas as questões que errou.
+Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e pode indicar se:
 
-As respostas curtas são corrigidas por comparação de texto, com normalização de maiúsculas e pontuação simples.
+- Acertou;
+- Errou;
+- Deseja revisar posteriormente.
 
-#### Dúvidas
+As respostas registradas contribuem para o acompanhamento do desempenho por área de conhecimento.
 
-Permitem conversar com o assistente para pedir explicações e exemplos sobre uma matéria ou sobre o conteúdo inserido.
+### 4. Quizzes
 
-Cada solicitação considera a pergunta, o texto atual, a área e o nível selecionado. A versão atual não mantém memória da conversa no servidor.
+Oferecem atividades interativas para testar o conhecimento adquirido.
 
-#### Desempenho
+O sistema disponibiliza questões de:
 
-Apresenta os registros de estudo, incluindo:
+- Múltipla escolha;
+- Verdadeiro ou falso;
+- Resposta curta.
+
+Após cada resposta, é apresentada uma explicação. Ao finalizar o quiz, o estudante visualiza seu aproveitamento e pode refazer somente as questões que errou.
+
+As respostas curtas são corrigidas por comparação de texto, com normalização de letras maiúsculas e pontuação simples.
+
+### 5. Dúvidas
+
+Permite conversar com o assistente para solicitar explicações, exemplos e esclarecimentos sobre uma matéria ou conteúdo inserido.
+
+Cada solicitação considera:
+
+- A pergunta realizada;
+- O texto atual;
+- A área selecionada;
+- O nível de conhecimento.
+
+Na versão atual, o servidor não mantém memória das conversas.
+
+### 6. Desempenho
+
+Apresenta indicadores relacionados à evolução dos estudos.
+
+Entre as informações disponíveis estão:
 
 - Percentual de acertos;
 - Quantidade de flashcards revisados;
 - Quantidade de questões respondidas;
 - Sequência de dias com atividade;
 - Evolução dos acertos;
-- Áreas com mais erros e sugestões de revisão.
+- Áreas com maior quantidade de erros;
+- Sugestões de revisão.
 
-Os indicadores são calculados a partir das respostas registradas no aplicativo.
+Os indicadores são calculados com base nas respostas registradas no aplicativo.
 
-#### Biblioteca
+### 7. Biblioteca
 
-Reúne os materiais salvos para consulta posterior. É possível buscar por palavra-chave, filtrar por área, abrir um material ou excluí-lo.
+Reúne os materiais salvos para consulta posterior.
 
-#### Tecnologias utilizadas
+O estudante pode:
+
+- Pesquisar por palavras-chave;
+- Filtrar materiais por área;
+- Abrir conteúdos salvos;
+- Excluir materiais.
+
+---
+
+## 🛠️ Tecnologias utilizadas
 
 | Tecnologia | Função |
 |---|---|
 | React | Construção da interface e controle das interações |
 | Vite | Ambiente de desenvolvimento e geração do frontend |
-| CSS | Estilização e adaptação da interface a diferentes telas |
+| CSS | Estilização e adaptação da interface |
 | Python | Implementação do backend |
-| FastAPI | Criação das rotas de comunicação com o frontend |
+| FastAPI | Criação das rotas de comunicação |
 | Pydantic | Validação dos dados recebidos e dos materiais gerados |
-| Google Gemini API | Geração das explicações e dos materiais de estudo |
-| localStorage | Armazenamento dos dados no navegador |
+| Google Gemini API | Geração de explicações e materiais de estudo |
+| localStorage | Armazenamento de dados no navegador |
 
-#### Como o sistema funciona
+---
 
-1. O aluno informa uma pergunta ou um conteúdo na interface React.
+## ⚙️ Como o sistema funciona
+
+O funcionamento da aplicação acontece por meio das seguintes etapas:
+
+1. O aluno informa uma pergunta ou conteúdo na interface React.
 2. O frontend envia a solicitação ao backend FastAPI.
 3. O backend lê a configuração privada e encaminha a solicitação ao Gemini.
-4. A IA gera uma resposta conforme as instruções do tutor.
+4. A inteligência artificial gera uma resposta conforme as instruções do assistente.
 5. O backend valida os materiais estruturados antes de devolvê-los.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-Os materiais salvos, o perfil local e os registros de desempenho ficam no navegador. Eles não são armazenados em um banco de dados no servidor.
+**Armazenamento:** os materiais salvos, o perfil local e os registros de desempenho ficam armazenados no navegador, utilizando `localStorage`. Esses dados não são armazenados em um banco de dados no servidor.
 
-#### Estrutura do projeto
+---
+
+## 📁 Estrutura do projeto
 
 ```text
 cerebro/
 ├── backend/
 │   ├── app/
-│   │   ├── config.py       # Configurações e leitura do .env
-│   │   ├── providers.py    # Comunicação com o provedor de IA
-│   │   ├── models.py       # Validação dos dados
-│   │   ├── prompts.py      # Instruções do assistente
-│   │   ├── main.py         # Rotas da API
-│   │   └── check.py        # Diagnóstico da integração
-│   ├── tests/              # Testes com chamadas simuladas
-│   └── requirements.txt   # Dependências do backend
+│   │   ├── config.py
+│   │   ├── providers.py
+│   │   ├── models.py
+│   │   ├── prompts.py
+│   │   ├── main.py
+│   │   └── check.py
+│   ├── tests/
+│   └── requirements.txt
+│
 ├── frontend/
-│   ├── src/                # Interface React e estilos
-│   ├── public/             # Arquivos públicos
-│   ├── package.json        # Dependências e comandos do frontend
-│   └── vite.config.js      # Configuração do Vite e do proxy
-├── docs/                   # Documentação de validação
-├── .env.example            # Modelo de configuração sem credenciais
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.js
+│
+├── docs/
+├── .env.example
 ├── .gitignore
 ├── INICIAR-NO-VSCODE.md
 └── README.md
+```
 
-#### Executar o projeto
+### Descrição dos principais arquivos
 
-As instruções de instalação e execução estão em [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md).
+| Arquivo/Pasta | Descrição |
+|---|---|
+| `backend/app/config.py` | Configurações e leitura do `.env` |
+| `backend/app/providers.py` | Comunicação com o provedor de IA |
+| `backend/app/models.py` | Validação dos dados |
+| `backend/app/prompts.py` | Instruções do assistente |
+| `backend/app/main.py` | Rotas da API |
+| `backend/app/check.py` | Diagnóstico da integração |
+| `backend/tests/` | Testes com chamadas simuladas |
+| `frontend/src/` | Interface React e estilos |
+| `frontend/public/` | Arquivos públicos |
+| `docs/` | Documentação de validação |
 
-É necessário configurar o arquivo `.env` na raiz do projeto e manter o backend e o frontend em execução em terminais separados.
+---
 
-A interface local fica disponível em [http://localhost:5173](http://localhost:5173).
+## 🚀 Executar o projeto
 
-#### Limitações atuais
+As instruções completas de instalação e execução estão disponíveis no arquivo [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md).
+
+Para executar a aplicação:
+
+1. Clone ou baixe o repositório.
+2. Configure o arquivo `.env` na raiz do projeto.
+3. Instale as dependências do backend.
+4. Instale as dependências do frontend.
+5. Inicie o backend e o frontend em terminais separados.
+
+A interface local ficará disponível em:
+
+**http://localhost:5173**
+
+Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
+
+---
+
+## ⚠️ Limitações atuais
 
 - O perfil é local, sem autenticação real ou login com Google.
 - Não há sincronização entre dispositivos.
-- Limpar os dados do navegador pode apagar materiais e desempenho.
+- Limpar os dados do navegador pode apagar materiais e informações de desempenho.
 - O reconhecimento de voz depende do navegador e de suas permissões.
-- A disponibilidade da IA depende da conexão, do modelo e da cota do provedor.
+- A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor.
 - A entrada estática da raiz é uma demonstração que organiza frases, sem consultar a IA.
 - O backend precisa de autenticação e controle de chamadas antes de ser disponibilizado para acesso público amplo.
 
-#### Segurança
+---
 
-Nunca publique o arquivo `.env` ou exemplos preenchidos com chaves reais. O arquivo `.env.example` deve conter apenas os nomes das variáveis e valores de exemplo sem credenciais.
+## 🔒 Segurança
 
-As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa. Evite inserir dados pessoais ou informações confidenciais.
+Algumas recomendações importantes para manter o projeto seguro:
+
+- Nunca publique o arquivo `.env`.
+- Não compartilhe chaves reais da API.
+- Mantenha as credenciais exclusivamente no backend.
+- Utilize o `.env.example` apenas como modelo de configuração, sem credenciais reais.
+- Evite inserir dados pessoais ou informações confidenciais nos conteúdos enviados à inteligência artificial.
+
+As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa.
+
+---
+
+## 📌 Considerações finais
+
+O **Cérebro** foi desenvolvido para tornar o processo de aprendizagem mais acessível, organizado e interativo, reunindo ferramentas de estudo em uma única aplicação.
+
+A proposta é utilizar a inteligência artificial como apoio ao aprendizado, permitindo que os estudantes compreendam conteúdos, pratiquem seus conhecimentos e acompanhem sua evolução.
