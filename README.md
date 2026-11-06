@@ -1,87 +1,152 @@
-# Cérebro ✦
+#### Cérebro ✦
 
-Assistente de estudos em português com frontend React/Vite e backend Python/FastAPI.
-Inclui resumos, flashcards, quizzes, dúvidas, biblioteca e desempenho local.
+O **Cérebro** é um assistente de estudos com inteligência artificial, desenvolvido para ajudar alunos a entender conteúdos, organizar materiais e revisar o que aprenderam.
 
-## Rodar no VS Code
+O aluno pode inserir um texto, informar uma matéria ou fazer uma pergunta. A partir disso, o sistema oferece explicações, resumos, flashcards e quizzes em português, considerando a área de conhecimento e o nível selecionado.
 
-Siga **INICIAR-NO-VSCODE.md**. Crie **.env na raiz cerebro**, ao lado deste README, copiando .env.exemple. O backend lê esse único caminho, sem depender da pasta do terminal.
+#### Objetivo
 
-- .env.exemple: exemplo privado solicitado, ignorado pelo Git.
-- .env.example: modelo público vazio, sem credenciais.
-- .env: configuração real que você cria localmente; ignorada pelo Git.
+Facilitar a preparação do material de estudo e incentivar o aprendizado ativo. O projeto reúne a criação de conteúdo, a revisão e o acompanhamento de respostas em uma única interface.
 
-A interface não recebe chaves nem configurações privadas. O React envia /api ao Python via proxy Vite.
+#### Inteligência artificial utilizada
 
-## Organização
+O projeto utiliza a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na configuração utilizada durante o desenvolvimento.
+
+A aplicação envia as solicitações ao Gemini pelo backend Python. A IA interpreta o conteúdo e produz explicações ou materiais de estudo, que são apresentados na interface.
+
+A chave de acesso fica no arquivo `.env`, lido exclusivamente pelo backend. Ela não deve ser incluída no código do frontend nem publicada no GitHub.
+
+O uso da API depende das condições de acesso e dos limites da conta no provedor. As respostas podem conter imprecisões e devem ser conferidas, especialmente em conteúdos que exigem maior rigor.
+
+#### Funcionalidades
+
+#### Entrada de conteúdo
+
+O aluno pode colar um texto, digitar uma matéria ou utilizar o microfone, quando o navegador oferecer suporte ao reconhecimento de voz.
+
+Antes de gerar o material, é possível selecionar uma das seis áreas:
+
+- Tecnologia;
+- Administração;
+- Economia;
+- Matemática;
+- Direito;
+- Matérias escolares.
+
+Também é possível escolher o nível básico, intermediário ou avançado, usado pela IA para adaptar suas explicações.
+
+#### Resumos
+
+Organizam o conteúdo em tópicos com os principais conceitos destacados.
+
+O aluno pode selecionar quantos tópicos deseja visualizar, copiar o resumo, salvar o material ou acessar os flashcards relacionados.
+
+#### Flashcards
+
+Apresentam uma pergunta por cartão. Ao clicar, o aluno revela a resposta e pode marcar se acertou, errou ou deseja revisar depois.
+
+As respostas registradas ajudam a acompanhar o desempenho por área.
+
+#### Quizzes
+
+Oferecem questões de múltipla escolha, verdadeiro ou falso e resposta curta.
+
+Após cada resposta, o sistema apresenta uma explicação. Ao concluir, o aluno visualiza seu aproveitamento e pode refazer apenas as questões que errou.
+
+As respostas curtas são corrigidas por comparação de texto, com normalização de maiúsculas e pontuação simples.
+
+#### Dúvidas
+
+Permitem conversar com o assistente para pedir explicações e exemplos sobre uma matéria ou sobre o conteúdo inserido.
+
+Cada solicitação considera a pergunta, o texto atual, a área e o nível selecionado. A versão atual não mantém memória da conversa no servidor.
+
+#### Desempenho
+
+Apresenta os registros de estudo, incluindo:
+
+- Percentual de acertos;
+- Quantidade de flashcards revisados;
+- Quantidade de questões respondidas;
+- Sequência de dias com atividade;
+- Evolução dos acertos;
+- Áreas com mais erros e sugestões de revisão.
+
+Os indicadores são calculados a partir das respostas registradas no aplicativo.
+
+#### Biblioteca
+
+Reúne os materiais salvos para consulta posterior. É possível buscar por palavra-chave, filtrar por área, abrir um material ou excluí-lo.
+
+#### Tecnologias utilizadas
+
+| Tecnologia | Função |
+|---|---|
+| React | Construção da interface e controle das interações |
+| Vite | Ambiente de desenvolvimento e geração do frontend |
+| CSS | Estilização e adaptação da interface a diferentes telas |
+| Python | Implementação do backend |
+| FastAPI | Criação das rotas de comunicação com o frontend |
+| Pydantic | Validação dos dados recebidos e dos materiais gerados |
+| Google Gemini API | Geração das explicações e dos materiais de estudo |
+| localStorage | Armazenamento dos dados no navegador |
+
+#### Como o sistema funciona
+
+1. O aluno informa uma pergunta ou um conteúdo na interface React.
+2. O frontend envia a solicitação ao backend FastAPI.
+3. O backend lê a configuração privada e encaminha a solicitação ao Gemini.
+4. A IA gera uma resposta conforme as instruções do tutor.
+5. O backend valida os materiais estruturados antes de devolvê-los.
+6. O frontend apresenta o resultado e permite estudar ou salvar o material.
+
+Os materiais salvos, o perfil local e os registros de desempenho ficam no navegador. Eles não são armazenados em um banco de dados no servidor.
+
+#### Estrutura do projeto
 
 ```text
 cerebro/
-  .env.exemple                 # privado, ignorado pelo Git
-  .env.example                 # modelo sem credenciais
-  .gitignore
-  README.md
-  INICIAR-NO-VSCODE.md
-  backend/
-    requirements.txt
-    requirements-dev.txt
-    app/
-      config.py                # lê cerebro/.env
-      providers.py             # Gemini nativo ou OpenAI
-      models.py                # validação
-      prompts.py               # instruções do tutor
-      main.py                  # rotas FastAPI
-      check.py                 # diagnóstico real, sem imprimir segredo
-    tests/
-      test_api.py              # chamadas simuladas
-  frontend/
-    package.json
-    vite.config.js             # proxy /api para porta 8000
-    index.html
-    public/
-      config.js                # configuração pública, sem chave
-      favicon.svg
-    src/
-      App.jsx
-      styles.css
-      mobile.css
-  index.html                   # demonstração estática
-  config.js
-  docs/VALIDACAO.md
-```
+├── backend/
+│   ├── app/
+│   │   ├── config.py       # Configurações e leitura do .env
+│   │   ├── providers.py    # Comunicação com o provedor de IA
+│   │   ├── models.py       # Validação dos dados
+│   │   ├── prompts.py      # Instruções do assistente
+│   │   ├── main.py         # Rotas da API
+│   │   └── check.py        # Diagnóstico da integração
+│   ├── tests/              # Testes com chamadas simuladas
+│   └── requirements.txt   # Dependências do backend
+├── frontend/
+│   ├── src/                # Interface React e estilos
+│   ├── public/             # Arquivos públicos
+│   ├── package.json        # Dependências e comandos do frontend
+│   └── vite.config.js      # Configuração do Vite e do proxy
+├── docs/                   # Documentação de validação
+├── .env.example            # Modelo de configuração sem credenciais
+├── .gitignore
+├── INICIAR-NO-VSCODE.md
+└── README.md
 
-## API
+#### Executar o projeto
 
-- GET /api/health: estado local, modelo e presença de credencial. Não confirma autenticação.
-- POST /api/chat: recebe pergunta, conteúdo, área e nível; retorna answer.
-- POST /api/generate: retorna resumo, cartões e quiz validados.
+As instruções de instalação e execução estão em [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md).
 
-Gemini usa generateContent nativo e autenticação x-goog-api-key.
-Padrão: AI_PROVIDER=gemini e AI_MODEL=auto.
-OpenAI é opcional com AI_PROVIDER=openai, AI_MODEL=gpt-4o-mini e OPENAI_API_KEY no .env.
-Credenciais, modelos, região e cotas precisam ser válidos no provedor; não há troca automática para um serviço pago.
+É necessário configurar o arquivo `.env` na raiz do projeto e manter o backend e o frontend em execução em terminais separados.
 
-## Produção
+A interface local fica disponível em [http://localhost:5173](http://localhost:5173).
 
-Na pasta frontend, npm run build produz frontend/dist. Publique apenas esse diretório e hospede Python separadamente. Configure um proxy /api ou a URL pública do backend em frontend/public/config.js antes do build. Configure ALLOWED_ORIGINS quando necessário.
-Nunca sirva a raiz do repositório como conteúdo estático: .env e .env.exemple são privados.
-O servidor ainda requer autenticação e controle de chamadas por usuário antes de acesso público amplo.
+#### Limitações atuais
 
-## Limites e validação
+- O perfil é local, sem autenticação real ou login com Google.
+- Não há sincronização entre dispositivos.
+- Limpar os dados do navegador pode apagar materiais e desempenho.
+- O reconhecimento de voz depende do navegador e de suas permissões.
+- A disponibilidade da IA depende da conexão, do modelo e da cota do provedor.
+- A entrada estática da raiz é uma demonstração que organiza frases, sem consultar a IA.
+- O backend precisa de autenticação e controle de chamadas antes de ser disponibilizado para acesso público amplo.
 
-Perfil e materiais ficam no navegador, sem autenticação real nem sincronização.
-A demonstração estática organiza frases sem chamar IA.
-A integração real exige Python ativo, .env válido e acesso ao provedor.
-Foi realizada revisão estática; não foram executados servidores, builds, testes ou chamadas autenticadas neste ambiente.
+#### Segurança
 
-## Modelo não encontrado (404)
+Nunca publique o arquivo `.env` ou exemplos preenchidos com chaves reais. O arquivo `.env.example` deve conter apenas os nomes das variáveis e valores de exemplo sem credenciais.
 
-Com esta versão atualizada do backend, use AI_MODEL=auto no .env da raiz e reinicie o Python. O backend consulta models.list, filtra modelos de texto com generateContent e prefere Gemini Flash estável, sem mudar o provedor nem ativar faturamento. A listagem não garante cota gratuita ou acesso à geração.
-
-Para consultar os nomes informados pela API, execute na pasta backend:
-
-```powershell
-.\.venv\Scripts\python.exe -m app.check --list-models
-```
-
-Você também pode definir AI_MODEL com um nome exato da listagem. Um nome definido explicitamente não é substituído automaticamente. Se um modelo listado ainda retornar 404, confira a situação e as permissões do projeto no Google AI Studio. Nenhum nome fixo é presumido como disponível.
+As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa. Evite inserir dados pessoais ou informações confidenciais.
