@@ -8,7 +8,6 @@ class StudyInput(BaseModel):
     content: str = Field(min_length=3, max_length=20000)
     area: Area
     level: Level
-    size: Literal["Curto", "Médio", "Detalhado"] = "Médio"
 
 class ChatInput(BaseModel):
     question: str = Field(min_length=1, max_length=20000)
@@ -31,6 +30,25 @@ class QuizItem(BaseModel):
     answer: int | str
     explanation: str
     steps: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_answer(cls, data):
+        # O modelo às vezes troca o tipo de answer. Índice como texto ("1") derrubava o material
+        # inteiro; true/false era convertido em 1/0 pelo Pydantic e invertia a resposta certa.
+        if isinstance(data, dict) and "answer" in data:
+            answer, kind = data["answer"], data.get("type")
+            if isinstance(answer, bool):
+                # true/false só tem leitura segura quando as opções são exatamente as do prompt.
+                if kind != "boolean" or data.get("options") != ["Verdadeiro", "Falso"]:
+                    raise ValueError("Answer must be an option index, not true/false")
+                answer = 0 if answer else 1
+            elif kind == "short" and isinstance(answer, (int, float)):
+                answer = str(answer).removesuffix(".0")
+            elif kind != "short" and isinstance(answer, str) and answer.strip().isdecimal():
+                answer = int(answer)
+            data = {**data, "answer": answer}
+        return data
 
     @model_validator(mode="after")
     def check_answer(self):

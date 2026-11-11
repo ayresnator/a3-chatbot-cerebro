@@ -1,11 +1,12 @@
 """Transportes dos provedores. Nenhuma chave vai para URLs, logs ou respostas."""
+import http.client
 import json
 import logging
 import re
+import time
 from functools import lru_cache
 from urllib.parse import urlencode
-import socket
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from fastapi import HTTPException
@@ -61,22 +62,29 @@ def provider_error(exc: HTTPError):
     fail(502, "AI_PROVIDER_ERROR", "Não foi possível concluir a solicitação ao provedor de IA.", status)
 
 def request_json(request: Request) -> dict:
-    try:
-        with urlopen(request, timeout=settings.timeout_seconds) as response:
-            result = json.load(response)
-        if not isinstance(result, dict):
-            raise ValueError("Expected JSON object")
-        return result
-    except HTTPError as exc:
-        provider_error(exc)
-    except (TimeoutError, socket.timeout) as exc:
-        fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
-    except URLError as exc:
-        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=settings.timeout_seconds) as response:
+                result = json.load(response)
+            if not isinstance(result, dict):
+                raise ValueError("Expected JSON object")
+            return result
+        except HTTPError as exc:
+            # 503 = modelo sobrecarregado ("high demand"): o provedor pede nova tentativa e costuma passar em segundos.
+            if exc.code == 503 and attempt < 2:
+                time.sleep(3 * (attempt + 1))
+                continue
+            provider_error(exc)
+        except TimeoutError:
             fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
-        fail(503, "AI_NETWORK_ERROR", "O backend não conseguiu acessar a IA. Confira internet, proxy, firewall e certificados HTTPS.")
-    except (ValueError, UnicodeError):
-        fail(502, "AI_INVALID_RESPONSE", "O provedor retornou uma resposta inválida.")
+        except (OSError, http.client.HTTPException) as exc:
+            # OSError inclui URLError e conexão derrubada; http.client cobre resposta cortada no meio.
+            # Sem isto a queda virava HTTP 500 em texto puro e a tela culpava o backend.
+            if isinstance(getattr(exc, "reason", None), TimeoutError):
+                fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
+            fail(503, "AI_NETWORK_ERROR", "O backend não conseguiu acessar a IA. Confira internet, proxy, firewall e certificados HTTPS.")
+        except (ValueError, UnicodeError):
+            fail(502, "AI_INVALID_RESPONSE", "O provedor retornou uma resposta inválida.")
 
 def decode_output(text: str) -> dict:
     try:
@@ -149,18 +157,23 @@ def resolve_gemini_model() -> str:
     return selected
 
 
-def ai(payload: dict, instruction: str) -> dict:
-    if not settings.api_key or settings.api_key in {"sua_credencial_privada", "COLE_A_NOVA_CHAVE_AQUI"}:
+def ai(payload: dict, instruction: str, schema: dict | None = None, retry: bool = True) -> dict:
+    if not settings.api_key:
         fail(503, "AI_NOT_CONFIGURED", "A IA ainda não foi ativada. O responsável deve configurar a credencial no .env da raiz do projeto e reiniciar o backend.")
     prompt = SYSTEM + "\n" + instruction
     user = json.dumps(payload, ensure_ascii=False)
     if settings.provider == "gemini":
         # API nativa Gemini: API keys vão em x-goog-api-key, não como OAuth Bearer.
         endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + resolve_gemini_model() + ":generateContent"
+        config = {"responseMimeType": "application/json"}
+        if schema:
+            # Só "modo JSON" não basta: o modelo já devolveu JSON quebrado e índice como texto ("1").
+            # Com o esquema, o provedor só gera saída que obedece ao formato.
+            config["responseJsonSchema"] = schema
         body = {
             "systemInstruction": {"parts": [{"text": prompt}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
+            "generationConfig": config,
         }
         headers = {"Content-Type": "application/json", "x-goog-api-key": settings.api_key}
     else:
@@ -179,11 +192,20 @@ def ai(payload: dict, instruction: str) -> dict:
                 fail(502, "AI_EMPTY_RESPONSE", "A IA não retornou conteúdo. Tente reformular a pergunta.")
             candidate = candidates[0]
             if candidate.get("finishReason") not in (None, "STOP"):
-                fail(502, "AI_INCOMPLETE_RESPONSE", "A IA interrompeu a resposta. Envie um texto menor ou reformule a pergunta.")
+                # O motivo (MAX_TOKENS, RECITATION, SAFETY...) aparece na tela; sem ele não dá para diagnosticar.
+                fail(502, "AI_INCOMPLETE_RESPONSE", "A IA interrompeu a resposta. Envie um texto menor ou reformule a pergunta.", str(candidate.get("finishReason")))
             parts = candidate.get("content", {}).get("parts", [])
             text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought"))
         else:
             text = result["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError, AttributeError):
         fail(502, "AI_INVALID_RESPONSE", "O provedor retornou uma estrutura de resposta inesperada.")
-    return decode_output(text)
+    try:
+        return decode_output(text)
+    except HTTPException:
+        # Sem esquema o modelo às vezes devolve JSON quebrado (visto no chat, 1 em ~20 respostas).
+        # Uma segunda chamada costuma vir certa.
+        if not retry:
+            raise
+        logger.warning("provider=%s resposta fora do formato JSON; nova tentativa", settings.provider)
+        return ai(payload, instruction, schema, retry=False)

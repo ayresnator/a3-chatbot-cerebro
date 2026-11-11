@@ -1,9 +1,19 @@
+import logging
+import re
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from .config import settings
 from .models import ChatInput, StudyInput, StudyOutput
 from .providers import ai
+
+logger = logging.getLogger("cerebro.api")
+# Esquema enviado ao provedor: o material já chega no formato que o backend valida.
+# O chat fica sem esquema de propósito: com ele as respostas vinham sem quebras de linha (6 de 7 nos testes).
+STUDY_SCHEMA = StudyOutput.model_json_schema()
+ACCENTS = re.compile("[áàâãéêíóôõúç]", re.IGNORECASE)
 
 app = FastAPI(title="Cérebro API", version="1.1.0")
 app.add_middleware(
@@ -39,10 +49,23 @@ Para short, answer é uma única palavra ou número de correção inequívoca e 
 Não use questões discursivas como short.
 steps contém passos da resolução para matemática. Para outros temas pode ser [].
 Faça cada tópico de resumo independente para permitir selecionar quantos exibir."""
+    payload = data.model_dump()
     try:
-        return StudyOutput.model_validate(ai(data.model_dump(), instruction))
-    except ValueError as exc:
+        material = StudyOutput.model_validate(ai(payload, instruction, STUDY_SCHEMA))
+    except ValidationError as exc:
+        # Registra só o campo e o motivo: o texto gerado pode conter dados do aluno.
+        logger.warning("generate: material rejeitado %s", [
+            (".".join(map(str, e["loc"])), e["msg"])
+            for e in exc.errors(include_input=False, include_url=False, include_context=False)])
         raise HTTPException(502, "O material gerado não passou pela validação. Tente novamente.") from exc
+    # Texto em português sem nenhum acento = o modelo "comeu" a acentuação (4 de 23 respostas nos testes).
+    # Tenta mais uma vez; se a segunda falhar, fica com a primeira (sem acento é melhor que erro).
+    if not ACCENTS.search(material.model_dump_json()):
+        try:
+            material = StudyOutput.model_validate(ai(payload, instruction, STUDY_SCHEMA))
+        except (HTTPException, ValidationError):
+            pass
+    return material
 
 @app.post("/api/chat")
 def chat(data: ChatInput):

@@ -9,7 +9,6 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 PROJECT_DIR = BACKEND_DIR.parent
 ENV_FILE = PROJECT_DIR / ".env"
 # O único arquivo local de credenciais é cerebro/.env.
-# .env.exemple nunca é carregado automaticamente.
 # Variáveis da hospedagem têm prioridade sobre o arquivo local.
 load_dotenv(ENV_FILE, override=False, encoding="utf-8-sig")
 
@@ -35,6 +34,9 @@ def load_settings():
         raise ValueError("Para OpenAI, defina AI_MODEL explicitamente.")
     key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
     key = os.getenv(key_name, "").strip()
+    # Valor de exemplo (o do .env.example e os de modelos antigos) conta como "sem chave".
+    if key in {"sua_chave_aqui", "sua_credencial_privada", "COLE_A_NOVA_CHAVE_AQUI"}:
+        key = ""
     origins = [s.strip() for s in os.getenv(
         "ALLOWED_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
