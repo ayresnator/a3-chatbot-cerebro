@@ -92,7 +92,9 @@ O sistema disponibiliza questões de:
 
 Após cada resposta, é apresentada uma explicação. Ao finalizar o quiz, o estudante visualiza seu aproveitamento e pode refazer somente as questões que errou.
 
-As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto.
+As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
+
+As alternativas de múltipla escolha são embaralhadas a cada material gerado.
 
 ### 5. Dúvidas
 
@@ -103,9 +105,10 @@ Cada solicitação considera:
 - A pergunta realizada;
 - O texto atual;
 - A área selecionada;
-- O nível de conhecimento.
+- O nível de conhecimento;
+- As últimas 6 mensagens da conversa.
 
-Na versão atual, o servidor não mantém memória das conversas.
+O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, e é assim que o assistente entende um pedido como "me dê um exemplo". Recarregar a página apaga a conversa.
 
 ### 6. Desempenho
 
@@ -118,8 +121,8 @@ Entre as informações disponíveis estão:
 - Quantidade de questões respondidas;
 - Sequência de dias com atividade;
 - Evolução dos acertos;
-- Áreas com maior quantidade de erros;
-- Sugestões de revisão.
+- Percentual de acertos por área;
+- Sugestão de revisão: o material com mais erros nos últimos 7 dias.
 
 Os indicadores são calculados com base nas respostas registradas no aplicativo.
 

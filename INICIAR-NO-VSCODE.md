@@ -20,6 +20,7 @@ O backend lê somente cerebro/.env por caminho absoluto; não importa a pasta do
 
 Variáveis de ambiente já definidas no Windows têm prioridade. Se houver valores antigos de GEMINI_API_KEY, AI_PROVIDER ou AI_MODEL, remova-os ou atualize-os.
 Não precisa informar nome nem número do projeto: a chave já está vinculada à conta/projeto do provedor.
+Outro provedor (opcional): AI_PROVIDER=openai, com OPENAI_API_KEY e AI_MODEL (padrão gpt-4o-mini). Esse caminho só tem teste simulado: nunca foi rodado com chave real, e as mensagens de erro citam o Gemini.
 
 ## 2. Terminal do backend
 
@@ -64,6 +65,7 @@ Enter envia a pergunta; Shift+Enter insere uma nova linha no editor.
 - AI_QUOTA_EXCEEDED: cota do projeto atingida. Confira os limites no AI Studio; trocar a chave do mesmo projeto não renova a cota.
 - AI_REQUEST_REJECTED: confira modelo, região e situação do projeto/plano.
 - AI_NETWORK_ERROR: verifique internet, proxy, firewall e certificados HTTPS.
+- AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho. Tente de novo.
 - AI_PROVIDER_UNAVAILABLE: o Gemini está sobrecarregado. O backend já tenta mais duas vezes sozinho; se continuar, aguarde alguns minutos.
 - AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - Erro de proxy sem JSON: confira o terminal do Python e a porta 8000.

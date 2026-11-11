@@ -34,6 +34,15 @@ Ambiente: Windows 11, Python 3.13, Node 24, modelo gemini-3.5-flash-lite (chave 
 - O chat fica sem esquema de propósito: com ele, 6 de 7 respostas vieram sem quebras de linha. Sem esquema, 1 resposta em cerca de 20 veio com JSON quebrado; nesse caso o backend tenta mais uma vez.
 - Erro 503 do provedor: até duas novas tentativas automáticas, com espera de 3 e 6 segundos.
 
+## Ajustes depois da validação (10/11/2026)
+- Chat com memória curta: o navegador envia as últimas 6 mensagens em cada pergunta e o servidor continua sem guardar conversa. Depois de uma explicação de fotossíntese, a pergunta "Me dê um exemplo do dia a dia" foi respondida sobre fotossíntese em 4 de 4 tentativas com a API real (3 direto no backend, 1 pela tela). Sem o histórico, a resposta falou de troco na padaria. A primeira redação da instrução não bastou: o modelo ignorou o histórico e respondeu sobre a área selecionada.
+- Alternativas embaralhadas no backend. Em 400 respostas simuladas, a certa caiu 96 vezes em A, 109 em B, 94 em C e 101 em D. Com o aviso no prompt, o próprio modelo passou a mandar a certa em A (11 de 19 questões); o embaralhamento cobre os dois casos.
+- Resposta curta aceita formas equivalentes separadas por "|". Exemplos que o modelo gerou: "Selic|Taxa Selic" e "Tupla|Registro".
+- Tempo limite por chamada: 45 segundos, com uma segunda tentativa. Só tem teste simulado; não deu para provocar um travamento real.
+- Sugestão de revisão: o material com mais erros nos últimos 7 dias. Conferida no navegador com eventos de teste.
+- Geração real depois dos ajustes: 13 de 14, entre 4 e 15 segundos. A falha foi um material recusado (índice da resposta fora das opções). Por causa dela o backend agora pede o material de novo antes de devolver erro; essa segunda tentativa só tem teste simulado.
+- Testes unitários: 24 de 24.
+
 ## Limite
-A qualidade do conteúdo depende do modelo. Nos 17 materiais conferidos apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações) e a alternativa correta ficou na posição B ou C em 36 de 45 questões de múltipla escolha.
+A qualidade do conteúdo depende do modelo. Nos 17 materiais conferidos apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). A alternativa correta ficava na posição B ou C em 36 de 45 questões de múltipla escolha; por isso o backend passou a embaralhar as alternativas.
 A presença do arquivo de configuração não garante aceitação da chave, acesso ao modelo ou cota no projeto.
