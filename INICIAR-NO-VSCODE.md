@@ -8,16 +8,15 @@ A estrutura deve ser:
 
 ```text
 cerebro/
-  .env             ← crie este arquivo aqui
-  .env.exemple     ← exemplo privado solicitado
+  .env             ← crie este arquivo aqui (fica só no seu computador)
   .env.example     ← modelo público SEM chave
   backend/
   frontend/
 ```
 
-Copie .env.exemple para .env na mesma pasta. Não deixe o arquivo como .env.txt.
+Copie .env.example para .env na mesma pasta e troque `sua_chave_aqui` pela sua chave em GEMINI_API_KEY. Não deixe o arquivo como .env.txt.
+Nunca coloque a chave no .env.example: esse arquivo vai para o GitHub.
 O backend lê somente cerebro/.env por caminho absoluto; não importa a pasta do terminal.
-O exemplo privado não é carregado automaticamente.
 
 Variáveis de ambiente já definidas no Windows têm prioridade. Se houver valores antigos de GEMINI_API_KEY, AI_PROVIDER ou AI_MODEL, remova-os ou atualize-os.
 Não precisa informar nome nem número do projeto: a chave já está vinculada à conta/projeto do provedor.
@@ -52,6 +51,7 @@ npm run dev
 ```
 
 Abra http://localhost:5173. O Vite encaminha /api ao Python na porta 8000.
+O servidor só responde neste computador. Para abrir no celular na mesma rede, use `npm run dev -- --host` e desligue depois: enquanto estiver assim, qualquer pessoa na rede pode usar o chat e gastar a cota da sua chave.
 Não use Live Server nem abra o index.html da raiz para testar IA real: ele é a demonstração estática.
 Se a porta 5173 estiver ocupada, encerre a instância antiga antes de iniciar.
 Enter envia a pergunta; Shift+Enter insere uma nova linha no editor.
@@ -64,6 +64,8 @@ Enter envia a pergunta; Shift+Enter insere uma nova linha no editor.
 - AI_QUOTA_EXCEEDED: cota do projeto atingida. Confira os limites no AI Studio; trocar a chave do mesmo projeto não renova a cota.
 - AI_REQUEST_REJECTED: confira modelo, região e situação do projeto/plano.
 - AI_NETWORK_ERROR: verifique internet, proxy, firewall e certificados HTTPS.
+- AI_PROVIDER_UNAVAILABLE: o Gemini está sobrecarregado. O backend já tenta mais duas vezes sozinho; se continuar, aguarde alguns minutos.
+- AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - Erro de proxy sem JSON: confira o terminal do Python e a porta 8000.
 - content.js com chrome-extension://: teste sem extensões; não desative CSP.
 
@@ -76,12 +78,12 @@ Na pasta backend:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Os testes simulam o provedor e não consomem cota. Não foram executados no Web Sinart.
+Os testes simulam o provedor e não consomem cota. O resultado da última execução está em docs/VALIDACAO.md.
 
 ## Credenciais
 
-.env e .env.exemple estão ignorados pelo Git. Apenas .env.example, vazio, pode ser versionado.
-A chave fornecida no chat já foi exposta: substitua-a por uma nova para uso continuado.
+.env está ignorado pelo Git. Apenas .env.example, sem chave real, é versionado.
+Uma chave colada em chat, e-mail, print ou commit já foi exposta: gere outra no Google AI Studio.
 Não sirva a raiz do repositório como pasta pública, pois ela contém arquivos privados.
 
 ## Modelo não encontrado (404)

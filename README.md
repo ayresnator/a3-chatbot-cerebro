@@ -92,7 +92,7 @@ O sistema disponibiliza questões de:
 
 Após cada resposta, é apresentada uma explicação. Ao finalizar o quiz, o estudante visualiza seu aproveitamento e pode refazer somente as questões que errou.
 
-As respostas curtas são corrigidas por comparação de texto, com normalização de letras maiúsculas e pontuação simples.
+As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto.
 
 ### 5. Dúvidas
 
