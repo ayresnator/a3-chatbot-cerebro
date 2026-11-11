@@ -1,20 +1,3 @@
-/* Controles acessíveis na navegação compacta. */
-@media(max-width:850px) {
-    .settings {
-        display: block;
-        font-size: 0;
-        text-align: center;
-        padding: 14px 8px;
-        margin-top: 18px
-    }
-
-    .settings::after {
-        content: '⚙';
-        font-size: 22px;
-        color: #8b899d
-    }
-}
-
 @media(max-width:550px) {
     .example {
         display: block

@@ -225,15 +225,6 @@ nav b {
     margin-top: 17px
 }
 
-.settings {
-    border: 0;
-    text-align: left;
-    color: #8b899d;
-    background: transparent;
-    font-size: 11px;
-    padding: 15px
-}
-
 .profile {
     border: 0;
     border-top: 1px solid var(--line);
@@ -1322,8 +1313,7 @@ progress {
     .brand-dot,
     .workspace,
     .nav-label,
-    .side-tip,
-    .settings {
+    .side-tip {
         display: none
     }
 
@@ -1409,10 +1399,6 @@ progress {
 
     .stat {
         padding: 20px
-    }
-
-    .side-tip {
-        display: none
     }
 
     .heading h1 {
