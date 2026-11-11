@@ -9,11 +9,17 @@ class StudyInput(BaseModel):
     area: Area
     level: Level
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(max_length=4000)
+
 class ChatInput(BaseModel):
     question: str = Field(min_length=1, max_length=20000)
     content: str = Field(default="", max_length=20000)
     area: Area
     level: Level
+    # Últimas mensagens da conversa. Quem manda é o navegador: o servidor não guarda nada.
+    history: list[ChatTurn] = Field(default_factory=list, max_length=6)
 
 class SummaryItem(BaseModel):
     concept: str

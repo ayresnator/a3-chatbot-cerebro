@@ -18,7 +18,8 @@ class Settings:
     model: str
     api_key: str = field(repr=False)
     allowed_origins: list[str]
-    timeout_seconds: float = 90.0
+    # Resposta normal leva até 22 s. Com a segunda tentativa de providers.request_json, a espera máxima fica perto de 90 s.
+    timeout_seconds: float = 45.0
 
 def load_settings():
     provider = os.getenv("AI_PROVIDER", "gemini").strip().lower()

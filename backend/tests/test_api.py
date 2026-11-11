@@ -81,6 +81,36 @@ class ProviderTests(unittest.TestCase):
         mock_sleep.assert_called_once()
 
     @patch("app.providers.urlopen")
+    def test_timeout_is_retried_once(self, mock_open):
+        # O provedor às vezes trava sem responder: vale uma segunda chamada, depois AI_TIMEOUT.
+        answer = MagicMock()
+        answer.__enter__.return_value = gemini_reply('{"answer":"ok"}')
+        mock_open.side_effect = [TimeoutError("slow"), answer]
+        with patch.object(providers, "settings", CONFIG):
+            self.assertEqual(providers.ai({}, "JSON"), {"answer": "ok"})
+        mock_open.side_effect = [TimeoutError("slow"), URLError(TimeoutError("slow"))]
+        with patch.object(providers, "settings", CONFIG):
+            with self.assertRaises(HTTPException) as ctx:
+                providers.ai({}, "JSON")
+        self.assertEqual(ctx.exception.detail["code"], "AI_TIMEOUT")
+        self.assertEqual(mock_open.call_count, 4)
+
+    @patch("app.providers.urlopen")
+    def test_openai_request_and_output(self, mock_open):
+        # Ramo opcional (AI_PROVIDER=openai). Só este teste simulado o cobre: nunca rodou com chave real.
+        reply = {"choices": [{"message": {"content": '{"answer":"ok"}'}}]}
+        mock_open.return_value.__enter__.return_value = io.StringIO(json.dumps(reply))
+        with patch.object(providers, "settings", replace(CONFIG, provider="openai", model="gpt-4o-mini")):
+            self.assertEqual(providers.ai({"question": "oi"}, "JSON"), {"answer": "ok"})
+        request = mock_open.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(request.get_header("Authorization"), "Bearer fake-test-key")
+        self.assertIsNone(request.get_header("X-goog-api-key"))
+        body = json.loads(request.data)
+        self.assertEqual(body["model"], "gpt-4o-mini")
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+
+    @patch("app.providers.urlopen")
     def test_schema_is_sent_to_gemini(self, mock_open):
         mock_open.return_value.__enter__.return_value = gemini_reply('{"answer":"ok"}')
         with patch.object(providers, "settings", CONFIG):
@@ -183,19 +213,23 @@ class ApiTests(unittest.TestCase):
         "title": "Fotossíntese",
         "summary": [{"concept": "Luz", "text": "A planta usa luz."}],
         "flashcards": [{"question": "O que absorve a luz?", "answer": "Clorofila"}],
-        "quiz": [{"type": "multiple", "question": "Onde ocorre?", "options": ["Raiz", "Cloroplasto", "Flor"],
-                  "answer": "1", "explanation": "No cloroplasto.", "steps": []}],
+        "quiz": [{"type": "multiple", "question": "Onde ocorre?", "options": ["Cloroplasto", "Raiz", "Flor"],
+                  "answer": "0", "explanation": "No cloroplasto.", "steps": []}],
     }
     REQUEST = {"content": "Fotossíntese", "area": "Escolar", "level": "Básico"}
 
     def setUp(self):
         self.client = TestClient(app)
 
+    @patch("app.main.random.shuffle", side_effect=list.reverse)
     @patch("app.main.ai", return_value=MATERIAL)
-    def test_generate_returns_validated_material(self, mock_ai):
+    def test_generate_returns_validated_material(self, mock_ai, _):
         response = self.client.post("/api/generate", json=self.REQUEST)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["quiz"][0]["answer"], 1)
+        # As opções são embaralhadas (aqui, invertidas) e o índice acompanha a alternativa certa.
+        quiz = response.json()["quiz"][0]
+        self.assertEqual(quiz["options"], ["Flor", "Raiz", "Cloroplasto"])
+        self.assertEqual(quiz["answer"], 2)
         # O esquema vai junto para o provedor só gerar o formato aceito.
         self.assertIn("quiz", mock_ai.call_args.args[2]["properties"])
         mock_ai.assert_called_once()
@@ -208,11 +242,15 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["title"], "Fotossíntese")
         self.assertEqual(mock_ai.call_count, 2)
 
-    @patch("app.main.ai", return_value={**MATERIAL, "quiz": []})
-    def test_generate_rejects_incomplete_material(self, _):
-        with self.assertLogs("cerebro.api", level="WARNING"):
-            response = self.client.post("/api/generate", json=self.REQUEST)
-        self.assertEqual(response.status_code, 502)
+    def test_generate_retries_then_rejects_incomplete_material(self):
+        # Material inválido ganha uma segunda chamada; se ela também falhar, 502.
+        bad = {**self.MATERIAL, "quiz": []}
+        for replies, status in (([bad, self.MATERIAL], 200), ([bad, bad], 502)):
+            with patch("app.main.ai", side_effect=replies) as mock_ai:
+                with self.assertLogs("cerebro.api", level="WARNING"):
+                    response = self.client.post("/api/generate", json=self.REQUEST)
+            self.assertEqual(response.status_code, status)
+            self.assertEqual(mock_ai.call_count, 2)
 
     @patch("app.main.ai", return_value={"answer": "Olá!"})
     def test_chat_contract(self, mock_ai):
@@ -222,6 +260,18 @@ class ApiTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"answer": "Olá!"})
+
+    @patch("app.main.ai", return_value={"answer": "Um exemplo: a grama do jardim."})
+    def test_chat_sends_history(self, mock_ai):
+        # O servidor não guarda conversa: o navegador manda as últimas mensagens e elas seguem para o modelo.
+        turns = [{"role": "user", "text": "O que é fotossíntese?"},
+                 {"role": "assistant", "text": "É como a planta faz açúcar."}]
+        body = {"question": "Me dê um exemplo", "area": "Escolar", "level": "Básico", "history": turns}
+        self.assertEqual(self.client.post("/api/chat", json=body).status_code, 200)
+        self.assertEqual(mock_ai.call_args.args[0]["history"], turns)
+        self.assertIn("history", mock_ai.call_args.args[1])
+        # Mais de 6 mensagens é recusado: o histórico não cresce sem limite.
+        self.assertEqual(self.client.post("/api/chat", json={**body, "history": turns * 4}).status_code, 422)
 
     def test_empty_question_rejected(self):
         response = self.client.post("/api/chat", json={

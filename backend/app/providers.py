@@ -75,12 +75,13 @@ def request_json(request: Request) -> dict:
                 time.sleep(3 * (attempt + 1))
                 continue
             provider_error(exc)
-        except TimeoutError:
-            fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
         except (OSError, http.client.HTTPException) as exc:
-            # OSError inclui URLError e conexão derrubada; http.client cobre resposta cortada no meio.
+            # OSError inclui URLError, tempo esgotado e conexão derrubada; http.client cobre resposta cortada no meio.
             # Sem isto a queda virava HTTP 500 em texto puro e a tela culpava o backend.
-            if isinstance(getattr(exc, "reason", None), TimeoutError):
+            if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError):
+                # O provedor às vezes trava sem responder (1 em 38 chamadas nos testes): a segunda chamada costuma passar.
+                if attempt == 0:
+                    continue
                 fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
             fail(503, "AI_NETWORK_ERROR", "O backend não conseguiu acessar a IA. Confira internet, proxy, firewall e certificados HTTPS.")
         except (ValueError, UnicodeError):
