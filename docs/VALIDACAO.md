@@ -43,6 +43,18 @@ Ambiente: Windows 11, Python 3.13, Node 24, modelo gemini-3.5-flash-lite (chave 
 - Geração real depois dos ajustes: 13 de 14, entre 4 e 15 segundos. A falha foi um material recusado (índice da resposta fora das opções). Por causa dela o backend agora pede o material de novo antes de devolver erro; essa segunda tentativa só tem teste simulado.
 - Testes unitários: 24 de 24.
 
+## Correções depois da revisão do código (11/11/2026)
+Três revisores independentes leram os 8 commits anteriores e não acharam defeito grave. O que foi corrigido:
+- Chat: quando a conversa começava pelo editor (Enter ou Enviar no editor), as perguntas seguintes mandavam o texto do editor duas vezes ao modelo (em content e no histórico). Agora vai uma vez. Conferido no navegador com o backend simulado: 2 cópias antes, 1 depois.
+- Chat: pergunta que falha sai da conversa. Antes ela ficava sem resposta na tela e seguia no histórico do pedido seguinte. Se veio da caixa do chat, o texto volta para a caixa, a não ser que o aluno já tenha digitado outra coisa nela; se veio do editor, continua no editor.
+- Resposta curta que tem "|" na própria resposta: digitar a resposta inteira nunca era aceito ("||" não tinha como acertar; em "|x|" só valia digitar x). Agora a resposta inteira vale. Conferido no Node sobre o código do App.jsx: 16 casos fixos, e em 252 combinações de resposta e digitação nada que era aceito passou a ser recusado.
+- 503 e tempo esgotado dividiam um contador: depois de um 503, o primeiro tempo esgotado já devolvia AI_TIMEOUT. Agora o 503 tem duas novas chamadas e o tempo esgotado tem uma, sem um gastar a do outro. Com isso uma ida ao provedor faz até 4 chamadas; antes eram 3.
+- Conexão que cai durante a leitura do corpo de um erro do provedor virava HTTP 500 em texto puro. Agora o erro segue o tratamento normal, pelo código HTTP.
+- Testes unitários: 38 de 38. São 14 novos: 3 cobrem o que mudou no backend (as duas correções e o limite de 4 chamadas por ida) e 11 cobrem regras que já existiam e nenhum teste conferia, entre elas o log sem o texto gerado, o pedido sem Content-Type recusado, a resposta interrompida, o chat sem esquema, os limites do histórico e a regra de que só 503 e tempo esgotado ganham nova chamada. O teste do 503 que já existia passou a conferir as duas novas chamadas e as pausas de 3 e 6 segundos. Para conferir os testes, 42 defeitos foram plantados, um por vez, em uma cópia do código: todos fizeram algum teste falhar.
+- As correções passaram por mais duas rodadas de revisão independente. Elas acharam só pontos pequenos: um caso de canto no chat, frases imprecisas e testes que faltavam. Os ajustes estão nesta versão.
+- Nada disso rodou contra a API real.
+- Continua valendo: um pedido que precisa de várias chamadas seguidas ao Gemini pode passar dos 105 segundos que o navegador espera. O guia explica a mensagem "Tempo de espera esgotado".
+
 ## Limite
 A qualidade do conteúdo depende do modelo. Nos 17 materiais conferidos apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). A alternativa correta ficava na posição B ou C em 36 de 45 questões de múltipla escolha; por isso o backend passou a embaralhar as alternativas.
 A presença do arquivo de configuração não garante aceitação da chave, acesso ao modelo ou cota no projeto.

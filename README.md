@@ -108,7 +108,7 @@ Cada solicitação considera:
 - O nível de conhecimento;
 - As últimas 6 mensagens da conversa.
 
-O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, e é assim que o assistente entende um pedido como "me dê um exemplo". Recarregar a página apaga a conversa.
+O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". Recarregar a página apaga a conversa.
 
 ### 6. Desempenho
 
