@@ -18,7 +18,12 @@ class Settings:
     model: str
     api_key: str = field(repr=False)
     allowed_origins: list[str]
-    # Resposta normal leva até 22 s. Com a segunda tentativa de providers.request_json, a espera máxima fica perto de 90 s.
+    # Resposta normal leva até 22 s. Cada chamada ao provedor desiste depois de 45 s sem resposta, e uma ida
+    # (providers.request_json) faz até 4 chamadas. Duas desistências mais as pausas do 503 já somam 99 s; o tempo
+    # que os 503 levam para chegar entra por fora. Na conta simples, com cada chamada em até 45 s, dá
+    # 4 x 45 + 9 = 189 s, mas não é um teto: o limite vale para cada espera da rede, e uma resposta que chega
+    # aos poucos pode levar mais. Um pedido ainda pode fazer mais de uma ida (catálogo com AI_MODEL=auto, JSON
+    # quebrado, material recusado, falta de acento). Por isso o total pode passar dos 105 s que o navegador espera.
     timeout_seconds: float = 45.0
 
 def load_settings():

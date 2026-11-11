@@ -34,7 +34,8 @@ def provider_error(exc: HTTPError):
                     reason = str(item["reason"])
         if not status:
             status = "HTTP_" + str(exc.code)
-    except (ValueError, AttributeError, TypeError):
+    except (ValueError, AttributeError, TypeError, OSError, http.client.HTTPException):
+        # Corpo ilegível, ou conexão que caiu no meio da leitura: segue só com o código HTTP.
         status = "HTTP_" + str(exc.code)
     # Nunca registrar corpo bruto: ele pode incluir dados do aluno.
     safe_reasons = {"API_KEY_INVALID", "API_KEY_EXPIRED", "API_KEY_SERVICE_BLOCKED",
@@ -62,7 +63,11 @@ def provider_error(exc: HTTPError):
     fail(502, "AI_PROVIDER_ERROR", "Não foi possível concluir a solicitação ao provedor de IA.", status)
 
 def request_json(request: Request) -> dict:
-    for attempt in range(3):
+    # Cada falha tem a sua conta de novas chamadas: um 503 antes não gasta a segunda chamada do tempo esgotado.
+    # São no máximo 4 chamadas (1 + 2 por 503 + 1 por tempo esgotado). O limite do laço e a falha depois dele só seguram
+    # um erro futuro aqui dentro: sem eles, um ramo que deixasse de lançar chamaria o provedor sem parar.
+    overloaded, timed_out = 0, False
+    for _ in range(4):
         try:
             with urlopen(request, timeout=settings.timeout_seconds) as response:
                 result = json.load(response)
@@ -71,8 +76,9 @@ def request_json(request: Request) -> dict:
             return result
         except HTTPError as exc:
             # 503 = modelo sobrecarregado ("high demand"): o provedor pede nova tentativa e costuma passar em segundos.
-            if exc.code == 503 and attempt < 2:
-                time.sleep(3 * (attempt + 1))
+            if exc.code == 503 and overloaded < 2:
+                overloaded += 1
+                time.sleep(3 * overloaded)
                 continue
             provider_error(exc)
         except (OSError, http.client.HTTPException) as exc:
@@ -80,12 +86,14 @@ def request_json(request: Request) -> dict:
             # Sem isto a queda virava HTTP 500 em texto puro e a tela culpava o backend.
             if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError):
                 # O provedor às vezes trava sem responder (1 em 38 chamadas nos testes): a segunda chamada costuma passar.
-                if attempt == 0:
+                if not timed_out:
+                    timed_out = True
                     continue
                 fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
             fail(503, "AI_NETWORK_ERROR", "O backend não conseguiu acessar a IA. Confira internet, proxy, firewall e certificados HTTPS.")
         except (ValueError, UnicodeError):
             fail(502, "AI_INVALID_RESPONSE", "O provedor retornou uma resposta inválida.")
+    fail(502, "AI_PROVIDER_ERROR", "Não foi possível concluir a solicitação ao provedor de IA.")
 
 def decode_output(text: str) -> dict:
     try:
