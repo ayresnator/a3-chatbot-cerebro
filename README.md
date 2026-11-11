@@ -110,6 +110,8 @@ Cada solicitação considera:
 
 O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". Recarregar a página apaga a conversa.
 
+O chat abre com uma saudação do Cérebro. Com a IA ativa, acima da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. A demonstração não mostra sugestões.
+
 ### 6. Desempenho
 
 Apresenta indicadores relacionados à evolução dos estudos.

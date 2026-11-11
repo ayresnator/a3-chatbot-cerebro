@@ -55,6 +55,13 @@ Três revisores independentes leram os 8 commits anteriores e não acharam defei
 - Nada disso rodou contra a API real.
 - Continua valendo: um pedido que precisa de várias chamadas seguidas ao Gemini pode passar dos 105 segundos que o navegador espera. O guia explica a mensagem "Tempo de espera esgotado".
 
+## Saudação e sugestões no chat (11/11/2026)
+- O chat abre com uma saudação fixa do Cérebro, sem chamada à IA e fora do histórico enviado ao modelo.
+- Sugestões de perguntas acima da caixa do chat. Antes da primeira resposta vêm da área ou do texto do editor; depois, o modelo manda até 3 junto com cada resposta, na mesma chamada.
+- A instrução do chat proíbe citar conversa, aula ou estudo anterior que não esteja no histórico. O caso que motivou: uma resposta "com base na nossa conversa anterior" quando só havia a explicação do próprio Cérebro.
+- Testes unitários: 39 de 39. Saudação e sugestões conferidas no navegador com o backend simulado.
+- A instrução nova e o formato das sugestões não rodaram contra a API real: não dá para afirmar que o modelo obedece.
+
 ## Limite
 A qualidade do conteúdo depende do modelo. Nos 17 materiais conferidos apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). A alternativa correta ficava na posição B ou C em 36 de 45 questões de múltipla escolha; por isso o backend passou a embaralhar as alternativas.
 A presença do arquivo de configuração não garante aceitação da chave, acesso ao modelo ou cota no projeto.
