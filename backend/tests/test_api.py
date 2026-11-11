@@ -417,7 +417,20 @@ class ApiTests(unittest.TestCase):
             "area": "Escolar", "level": "Básico",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"answer": "Olá!"})
+        # Sem sugestões do modelo a lista volta vazia, e a tela usa as sugestões fixas.
+        self.assertEqual(response.json(), {"answer": "Olá!", "suggestions": []})
+
+    def test_chat_returns_up_to_three_clean_suggestions(self):
+        # As perguntas sugeridas vêm do modelo, sem esquema. O backend repassa só textos curtos, sem repetição
+        # e sem a pergunta que o aluno acabou de fazer, no máximo 3. Sugestão com defeito nunca derruba a resposta.
+        messy = ["  O que é memória RAM?  ", 7, "", "   ", "O que é memória RAM?", "OI", "Como funciona o processador?",
+                 "a" * 121, "Para que serve o HD?", "E a placa de vídeo?"]
+        clean = ["O que é memória RAM?", "Como funciona o processador?", "Para que serve o HD?"]
+        for raw, expected in ((messy, clean), ("Como funciona o processador?", []), (None, [])):
+            with patch("app.main.ai", return_value={"answer": "ok", "suggestions": raw}):
+                response = self.client.post("/api/chat", json={
+                    "question": "oi", "area": "Tecnologia", "level": "Básico"})
+            self.assertEqual(response.json(), {"answer": "ok", "suggestions": expected})
 
     @patch("app.main.ai", return_value={"answer": "Um exemplo: a grama do jardim."})
     def test_chat_sends_history(self, mock_ai):
@@ -428,6 +441,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/chat", json=body).status_code, 200)
         self.assertEqual(mock_ai.call_args.args[0]["history"], turns)
         self.assertIn("history", mock_ai.call_args.args[1])
+        # A regra contra conversa inventada e o pedido de sugestões moram só nesta instrução.
+        self.assertIn("não cite conversa", mock_ai.call_args.args[1])
+        self.assertIn('"suggestions":[', mock_ai.call_args.args[1])
         # Mais de 6 mensagens é recusado: o histórico não cresce sem limite.
         self.assertEqual(self.client.post("/api/chat", json={**body, "history": turns * 4}).status_code, 422)
 
@@ -448,7 +464,7 @@ class ApiTests(unittest.TestCase):
         with patch.object(providers, "settings", CONFIG):
             response = self.client.post("/api/chat", json={
                 "question": "O que é fotossíntese?", "area": "Escolar", "level": "Básico"})
-        self.assertEqual(response.json(), {"answer": "Olá!"})
+        self.assertEqual(response.json(), {"answer": "Olá!", "suggestions": []})
         sent = json.loads(mock_open.call_args.args[0].data)
         self.assertNotIn("responseJsonSchema", sent["generationConfig"])
 

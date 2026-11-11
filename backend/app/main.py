@@ -83,10 +83,31 @@ Faça cada tópico de resumo independente para permitir selecionar quantos exibi
 
 @app.post("/api/chat")
 def chat(data: ChatInput):
+    # O modelo já respondeu "com base na nossa conversa anterior" quando o histórico só tinha a explicação dele mesmo,
+    # dada segundos antes. Por isso a instrução proíbe citar conversa que não existiu.
     result = ai(data.model_dump(), 'Responda a dúvida com exemplos práticos e passos quando necessário. '
-                'history traz as mensagens anteriores desta conversa, da mais antiga para a mais recente, e a pergunta continua essa conversa. '
-                'Quando a pergunta não disser o assunto (por exemplo "me dê um exemplo"), o assunto é o das mensagens de history, não o da área. '
-                'Formato: {"answer":"resposta em texto simples"}.')
+                'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta continua essa conversa. '
+                'content é o texto que o aluno colou no editor e pode vir vazio. '
+                'Você só conhece o que está em history, em content e na pergunta: não cite conversa, aula ou estudo anterior '
+                'e não afirme que o aluno já estudou, disse ou perguntou algo que não esteja ali. '
+                'Se o aluno citar algo que não aparece em history, não confirme nem negue: peça que ele repita o ponto. '
+                'Se precisar retomar uma explicação sua que está em history, trate-a como algo dito acima nesta conversa '
+                '(por exemplo "como vimos acima"); não comece toda resposta assim. '
+                'Se a pergunta repetir uma que já está em history, responda de novo por inteiro, com outras palavras ou outro exemplo. '
+                'Com history vazio, esta é a primeira mensagem do aluno: a tela já mostrou a sua saudação, então não se apresente; '
+                'se a pergunta não disser o assunto (por exemplo "me introduza ao assunto"), o assunto é o texto de content e, sem content, a área. '
+                'Com history preenchido, quando a pergunta não disser o assunto (por exemplo "me dê um exemplo"), '
+                'o assunto é o das mensagens de history, não o da área. '
+                'Em suggestions, escreva 3 perguntas diferentes, de até 80 caracteres cada, que o aluno poderia fazer em seguida sobre o assunto desta resposta. '
+                'Escreva na voz do aluno (por exemplo "Como uso isso na prática?"), com acentuação correta, sem numeração e sem repetir a pergunta atual. '
+                'As perguntas ficam só em suggestions: não as escreva nem as anuncie em answer. '
+                'Formato: {"answer":"resposta em texto simples","suggestions":["pergunta 1","pergunta 2","pergunta 3"]}.')
     if not isinstance(result.get("answer"), str) or not result["answer"].strip():
         raise HTTPException(502, "Resposta inválida do provedor.")
-    return {"answer": result["answer"]}
+    # As sugestões são um extra para a tela: o que vier fora do formato é descartado, sem derrubar a resposta.
+    # Também saem as repetidas e a que só devolve a pergunta que o aluno acabou de fazer.
+    raw, asked = result.get("suggestions"), data.question.strip().casefold()
+    suggestions = list(dict.fromkeys(
+        s.strip() for s in raw if isinstance(s, str) and 0 < len(s.strip()) <= 120 and s.strip().casefold() != asked
+    ))[:3] if isinstance(raw, list) else []
+    return {"answer": result["answer"], "suggestions": suggestions}
