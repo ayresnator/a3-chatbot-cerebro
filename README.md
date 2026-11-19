@@ -2,7 +2,7 @@
 
 **Assistente inteligente de estudos com inteligência artificial.**
 
-O **Cérebro** é uma aplicação desenvolvida para auxiliar estudantes na compreensão de conteúdos, organização de materiais e revisão do aprendizado. Utilizando inteligência artificial, o sistema transforma textos e dúvidas em explicações, resumos, flashcards e quizzes personalizados.
+O **Cérebro** é uma aplicação desenvolvida para auxiliar estudantes na compreensão de conteúdos, organização de materiais e revisão do aprendizado. A partir de um texto ou de um tema, o sistema gera resumo, flashcards e quiz, responde dúvidas e mostra ao estudante onde ele está errando.
 
 ---
 
@@ -12,9 +12,19 @@ Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo
 
 ## 🤖 Inteligência artificial utilizada
 
-O projeto utiliza a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na configuração utilizada durante o desenvolvimento.
+O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em três situações:
 
-A comunicação com a inteligência artificial acontece por meio do backend desenvolvido em Python. A IA interpreta as solicitações e gera explicações e materiais de estudo, que são apresentados na interface.
+| Uso | O que a IA faz | Rota do backend |
+|---|---|---|
+| Gerar material | Monta resumo, flashcards e quiz a partir do texto ou do tema | `POST /api/generate` |
+| Tirar dúvidas | Responde no chat e explica de outro jeito um tópico ou uma questão | `POST /api/chat` |
+| Revisar resposta curta | Julga o sentido de uma resposta que a comparação de texto marcou como errada | `POST /api/grade` |
+
+O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
+
+O que a IA não faz: corrigir múltipla escolha, calcular o desempenho e montar o caderno de erros. Essas partes são código comum, sem chamada ao modelo.
+
+**Privacidade:** o texto do editor, as perguntas e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar.
 
 **Segurança da API:**
 
@@ -24,7 +34,7 @@ A comunicação com a inteligência artificial acontece por meio do backend dese
 - O arquivo `.env` não deve ser publicado no GitHub.
 - O uso da API está sujeito aos limites e às condições do provedor.
 
-As respostas geradas pela IA podem conter imprecisões. Por isso, recomenda-se conferir as informações, especialmente em conteúdos que exigem maior rigor.
+As respostas geradas pela IA podem conter erros. Confira as informações com o seu material, principalmente em conteúdos que exigem rigor.
 
 ---
 
@@ -46,7 +56,7 @@ O sistema permite selecionar uma das seis áreas de conhecimento:
 - Economia;
 - Matemática;
 - Direito;
-- Matérias escolares.
+- Escolar (matérias escolares).
 
 Também é possível escolher o nível de conhecimento:
 
@@ -56,17 +66,21 @@ Também é possível escolher o nível de conhecimento:
 
 Essas configurações ajudam a IA a adaptar o conteúdo ao nível do estudante.
 
+O texto do editor, o material aberto e a conversa ficam guardados no navegador: recarregar a página ou fechar a aba não apaga o trabalho. O botão "Limpar" esvazia o editor e pode ser desfeito.
+
 ### 2. Resumos
 
 Transformam conteúdos extensos em tópicos organizados, destacando os principais conceitos e informações.
 
 O estudante pode:
 
-- Selecionar a quantidade de tópicos;
-- Visualizar os principais conceitos;
-- Copiar o resumo;
+- Selecionar a quantidade de tópicos, com a contagem "Mostrando N de M tópicos";
+- Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
-- Acessar os flashcards relacionados.
+- Acessar os flashcards relacionados;
+- Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página.
+
+Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. Se só alguns tópicos ficaram com trecho, os outros ganham a etiqueta "Explicação da IA: confira".
 
 ### 3. Flashcards
 
@@ -78,7 +92,7 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 - Errou;
 - Deseja revisar posteriormente.
 
-As respostas registradas contribuem para o acompanhamento do desempenho por área de conhecimento.
+O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
 ### 4. Quizzes
 
@@ -90,11 +104,13 @@ O sistema disponibiliza questões de:
 - Verdadeiro ou falso;
 - Resposta curta.
 
-Após cada resposta, é apresentada uma explicação. Ao finalizar o quiz, o estudante visualiza seu aproveitamento e pode refazer somente as questões que errou.
+Após cada resposta aparecem a explicação e a opção certa, marcada também com texto ("✓ certa", "✗ sua resposta"), não só com cor. Na resposta curta aparece o gabarito e, quando o estudante erra, também o que ele digitou. Ao finalizar o quiz, o estudante vê o aproveitamento e a lista das questões que errou, com a resposta dada, a resposta certa e a explicação, e pode refazer somente essas.
 
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
-As alternativas de múltipla escolha são embaralhadas a cada material gerado.
+Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido.
+
+Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
 
 ### 5. Dúvidas
 
@@ -108,27 +124,38 @@ Cada solicitação considera:
 - O nível de conhecimento;
 - As últimas 6 mensagens da conversa.
 
-O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". Recarregar a página apaga a conversa.
+O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero.
 
 O chat abre com uma saudação do Cérebro. Com a IA ativa, acima da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. A demonstração não mostra sugestões.
 
-### 6. Desempenho
+### 6. Caderno de erros
+
+Reúne as questões que o estudante errou nos quizzes, de todos os materiais.
+
+O estudante pode:
+
+- Ver a resposta certa e a explicação de cada questão;
+- Refazer todas as questões do caderno de uma vez;
+- Tirar uma questão da lista.
+
+A questão sai sozinha quando é acertada em outro dia. Acertar logo depois de ler a explicação não tira a questão do caderno. Ela também sai na hora quando a revisão da IA aceita a resposta.
+
+### 7. Desempenho
 
 Apresenta indicadores relacionados à evolução dos estudos.
 
 Entre as informações disponíveis estão:
 
-- Percentual de acertos;
-- Quantidade de flashcards revisados;
-- Quantidade de questões respondidas;
 - Sequência de dias com atividade;
-- Evolução dos acertos;
-- Percentual de acertos por área;
-- Sugestão de revisão: o material com mais erros nos últimos 7 dias.
+- Quantidade de questões respondidas e percentual de acerto no quiz;
+- Autoavaliação nos flashcards, separada do quiz;
+- Respostas e acertos dos últimos 7 dias;
+- Acerto por área;
+- Sugestão de revisão: o material com a maior taxa de erro nos últimos 7 dias.
 
-Os indicadores são calculados com base nas respostas registradas no aplicativo.
+O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número.
 
-### 7. Biblioteca
+### 8. Biblioteca
 
 Reúne os materiais salvos para consulta posterior.
 
@@ -137,7 +164,11 @@ O estudante pode:
 - Pesquisar por palavras-chave;
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
-- Excluir materiais.
+- Excluir materiais, com a opção de desfazer;
+- Exportar a biblioteca, o desempenho e o caderno de erros para um arquivo;
+- Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe.
+
+Ao gerar um material novo, o anterior que ainda não tinha sido salvo é guardado na biblioteca.
 
 ---
 
@@ -148,11 +179,14 @@ O estudante pode:
 | React | Construção da interface e controle das interações |
 | Vite | Ambiente de desenvolvimento e geração do frontend |
 | CSS | Estilização e adaptação da interface |
+| Motion | Animações e transições da interface |
 | Python | Implementação do backend |
 | FastAPI | Criação das rotas de comunicação |
 | Pydantic | Validação dos dados recebidos e dos materiais gerados |
 | Google Gemini API | Geração de explicações e materiais de estudo |
 | localStorage | Armazenamento de dados no navegador |
+| unittest e node:test | Testes automáticos do backend e do frontend |
+| GitHub Actions | Execução dos testes a cada envio ao repositório |
 
 ---
 
@@ -162,19 +196,19 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 
 1. O aluno informa uma pergunta ou conteúdo na interface React.
 2. O frontend envia a solicitação ao backend FastAPI.
-3. O backend lê a configuração privada e encaminha a solicitação ao Gemini.
-4. A inteligência artificial gera uma resposta conforme as instruções do assistente.
-5. O backend valida os materiais estruturados antes de devolvê-los.
+3. O backend confere a entrada, lê a configuração privada e encaminha a solicitação ao Gemini.
+4. A inteligência artificial gera uma resposta em JSON, conforme as instruções do assistente.
+5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local e os registros de desempenho ficam armazenados no navegador, utilizando `localStorage`. Esses dados não são armazenados em um banco de dados no servidor.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`. Esses dados não são armazenados em um banco de dados no servidor.
 
 ---
 
 ## 📁 Estrutura do projeto
 
 ```text
-cerebro/
+a3-chatbot-cerebro/
 ├── backend/
 │   ├── app/
 │   │   ├── config.py
@@ -182,19 +216,44 @@ cerebro/
 │   │   ├── models.py
 │   │   ├── prompts.py
 │   │   ├── main.py
-│   │   └── check.py
+│   │   ├── check.py
+│   │   └── avalia.py
 │   ├── tests/
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── requirements-dev.txt
 │
 ├── frontend/
 │   ├── src/
+│   │   ├── App.jsx
+│   │   ├── Biblioteca.jsx
+│   │   ├── Desempenho.jsx
+│   │   ├── Perfil.jsx
+│   │   ├── ui.jsx
+│   │   ├── icons.jsx
+│   │   ├── marks.jsx
+│   │   ├── anim.js
+│   │   ├── lib.js
+│   │   ├── styles.css
+│   │   └── mobile.css
+│   ├── tests/
 │   ├── public/
+│   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
 │
 ├── docs/
+│   ├── IA.md
+│   ├── ROTEIRO.md
+│   ├── VALIDACAO.md
+│   ├── avaliacao-2026-11-17.json
+│   └── avaliacao-2026-11-17-2.json
+├── .github/workflows/testes.yml
 ├── .env.example
 ├── .gitignore
+├── AGENTS.md
+├── CLAUDE.md
+├── GEMINI.md
+├── iniciar.ps1
 ├── INICIAR-NO-VSCODE.md
 └── README.md
 ```
@@ -204,15 +263,27 @@ cerebro/
 | Arquivo/Pasta | Descrição |
 |---|---|
 | `backend/app/config.py` | Configurações e leitura do `.env` |
-| `backend/app/providers.py` | Comunicação com o provedor de IA |
-| `backend/app/models.py` | Validação dos dados |
+| `backend/app/providers.py` | Comunicação com o provedor de IA, novas tentativas e tratamento dos erros |
+| `backend/app/models.py` | Validação da entrada e de cada item gerado pela IA |
 | `backend/app/prompts.py` | Instruções do assistente |
-| `backend/app/main.py` | Rotas da API |
+| `backend/app/main.py` | Rotas da API e as conferências feitas depois da resposta do modelo |
 | `backend/app/check.py` | Diagnóstico da integração |
+| `backend/app/avalia.py` | Rodada de avaliação da IA com casos fixos |
 | `backend/tests/` | Testes com chamadas simuladas |
-| `frontend/src/` | Interface React e estilos |
+| `frontend/src/App.jsx` | Interface React: tela principal e estado do app |
+| `frontend/src/Biblioteca.jsx`, `Desempenho.jsx` e `Perfil.jsx` | Páginas Biblioteca e Desempenho e formulário do perfil, carregados à parte |
+| `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
+| `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
+| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
+| `frontend/tests/` | Testes das regras de `lib.js` |
 | `frontend/public/` | Arquivos públicos |
-| `docs/` | Documentação de validação |
+| `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
+| `docs/ROTEIRO.md` | Roteiro da apresentação |
+| `docs/VALIDACAO.md` | Registro dos testes e das validações |
+| `docs/avaliacao-2026-11-17.json` e `avaliacao-2026-11-17-2.json` | Respostas gravadas da rodada de avaliação de 17/11/2026 |
+| `.github/workflows/testes.yml` | Testes automáticos a cada envio |
+| `iniciar.ps1` | Abre o backend, o frontend e o navegador com um comando, depois da primeira instalação (Windows) |
+| `AGENTS.md` | Regras do grupo para issues e pull requests, lidas também pelos agentes de IA (`CLAUDE.md` e `GEMINI.md` só importam este arquivo) |
 
 ---
 
@@ -228,22 +299,50 @@ Para executar a aplicação:
 4. Instale as dependências do frontend.
 5. Inicie o backend e o frontend em terminais separados.
 
+Depois da primeira instalação, no Windows, o `iniciar.ps1`, na raiz do projeto, abre o backend, o frontend e o navegador com um comando só.
+
 A interface local ficará disponível em:
 
 **http://localhost:5173**
 
+Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA.
+
 Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
+
+---
+
+## 🧪 Testes e validação
+
+Os testes simulam o provedor de IA: não precisam de chave e não gastam cota.
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+
+cd ..\frontend
+npm test
+npm run build
+```
+
+O GitHub Actions roda os mesmos comandos a cada envio ao repositório.
+
+A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 24 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
+
+O número de testes, o resultado da última execução e o que ainda não rodou na API real estão em [docs/VALIDACAO.md](docs/VALIDACAO.md).
 
 ---
 
 ## ⚠️ Limitações atuais
 
 - O perfil é local, sem autenticação real ou login com Google.
-- Não há sincronização entre dispositivos.
-- Limpar os dados do navegador pode apagar materiais e informações de desempenho.
+- Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar e Importar na Biblioteca.
+- Limpar os dados do navegador apaga materiais, desempenho e caderno de erros que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
-- A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor.
-- A entrada estática da raiz é uma demonstração que organiza frases, sem consultar a IA.
+- A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
+- O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
+- A revisão de resposta curta feita pela IA também pode errar.
+- A demonstração (`?demo`) organiza frases, sem consultar a IA.
 - O backend precisa de autenticação e controle de chamadas antes de ser disponibilizado para acesso público amplo.
 
 ---
@@ -258,7 +357,9 @@ Algumas recomendações importantes para manter o projeto seguro:
 - Utilize o `.env.example` apenas como modelo de configuração, sem credenciais reais.
 - Evite inserir dados pessoais ou informações confidenciais nos conteúdos enviados à inteligência artificial.
 
-As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa.
+As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa. O servidor não guarda o texto do aluno, e o registro de erros do backend anota o campo e o motivo, nunca o conteúdo.
+
+A interface carrega as fontes do Google Fonts: ao abrir o aplicativo, o navegador faz um pedido aos servidores do Google.
 
 ---
 
