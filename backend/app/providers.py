@@ -2,28 +2,52 @@
 import http.client
 import json
 import logging
+import math
 import re
+import threading
 import time
+from datetime import date
 from functools import lru_cache
 from urllib.parse import urlencode
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from fastapi import HTTPException
 
 from .config import settings
 from .prompts import SYSTEM
 
-logger = logging.getLogger("cerebro.ai")
+class NoRedirect(HTTPRedirectHandler):
+    # O urllib segue 301, 302 e 303 (no GET do catálogo, também 307 e 308) levando a chave, que vai no cabeçalho, para o
+    # novo endereço. A API não redireciona: quem redireciona é um filtro de rede. Sem seguir, o 30x vira erro do provedor (HTTP_302).
+    def redirect_request(self, *args, **kwargs):
+        return None
 
-def fail(status: int, code: str, message: str, provider_status: str = ""):
-    raise HTTPException(status_code=status, detail={
-        "code": code, "message": message, "provider_status": provider_status,
-    })
+urlopen = build_opener(NoRedirect).open
+logger = logging.getLogger("cerebro.ai")
+# Chamadas HTTP feitas ao provedor no dia (data local), para o cabeçalho da tela. A conta fica só na memória:
+# zera quando o dia vira e quando o backend reinicia. A trava existe porque as rotas rodam em várias threads.
+calls = {"day": None, "count": 0}
+calls_lock = threading.Lock()
+
+def calls_today(add: int = 0) -> int:
+    with calls_lock:
+        today = date.today()
+        if calls["day"] != today:
+            calls.update(day=today, count=0)
+        calls["count"] += add
+        return calls["count"]
+
+def fail(status: int, code: str, message: str, provider_status: str = "", retry_after: int | None = None):
+    detail = {"code": code, "message": message, "provider_status": provider_status}
+    if retry_after is not None:
+        detail["retry_after"] = retry_after
+    raise HTTPException(status_code=status, detail=detail)
 
 def provider_error(exc: HTTPError):
     status = ""
     reason = ""
+    wait, daily = 0.0, False
     try:
         body = json.loads(exc.read(32768).decode("utf-8"))
         error = body.get("error", {})
@@ -32,9 +56,16 @@ def provider_error(exc: HTTPError):
             for item in error.get("details", []):
                 if isinstance(item, dict) and item.get("reason"):
                     reason = str(item["reason"])
+                # RetryInfo: quanto o provedor manda esperar, como "21s" ou "21.4s".
+                if isinstance(item, dict) and re.fullmatch(r"\d+(\.\d+)?s", str(item.get("retryDelay"))):
+                    wait = float(item["retryDelay"][:-1])
+                # QuotaFailure: o quotaId diz qual limite estourou ("...PerDay..." ou "...PerMinute...").
+                # A cota do dia também pode vir com espera curta, e aí esperar não resolve.
+                if isinstance(item, dict) and "PerDay" in str(item.get("violations")):
+                    daily = True
         if not status:
             status = "HTTP_" + str(exc.code)
-    except (ValueError, AttributeError, TypeError, OSError, http.client.HTTPException):
+    except (ValueError, AttributeError, TypeError, OSError, http.client.HTTPException, RecursionError):
         # Corpo ilegível, ou conexão que caiu no meio da leitura: segue só com o código HTTP.
         status = "HTTP_" + str(exc.code)
     # Nunca registrar corpo bruto: ele pode incluir dados do aluno.
@@ -51,7 +82,12 @@ def provider_error(exc: HTTPError):
     logger.warning("provider=%s http=%s status=%s reason=%s",
                    settings.provider, exc.code, status, reason)
     if exc.code == 429:
-        fail(429, "AI_QUOTA_EXCEEDED", "A cota ou o limite de chamadas da IA foi atingido. Confira os limites do projeto no provedor e tente mais tarde.", status)
+        # Espera curta = limite por minuto: basta aguardar. Espera longa ou ausente, ou quotaId do dia = cota do dia
+        # ou limite do projeto. Sem nova chamada automática aqui: ela gastaria a cota.
+        if 0 < wait <= 90 and not daily:
+            seconds = math.ceil(wait)
+            fail(429, "AI_RATE_LIMITED", f"Limite de chamadas por minuto atingido. Tente de novo em {seconds} segundo{'s' if seconds > 1 else ''}.", status, retry_after=seconds)
+        fail(429, "AI_QUOTA_EXCEEDED", "A cota de chamadas da IA acabou ou o limite do projeto foi atingido. Confira os limites no provedor e tente mais tarde.", status)
     if exc.code in (401, 403) or reason.startswith("API_KEY_"):
         fail(502, "AI_AUTH_ERROR", "O provedor recusou a credencial ou suas permissões. Gere uma chave válida, confira as restrições da Gemini API e reinicie o backend.", reason or status)
     if exc.code == 404:
@@ -68,6 +104,8 @@ def request_json(request: Request) -> dict:
     # um erro futuro aqui dentro: sem eles, um ramo que deixasse de lançar chamaria o provedor sem parar.
     overloaded, timed_out = 0, False
     for _ in range(4):
+        # Toda chamada entra na conta do dia, também as repetidas e as que terminam em erro.
+        calls_today(1)
         try:
             with urlopen(request, timeout=settings.timeout_seconds) as response:
                 result = json.load(response)
@@ -91,17 +129,20 @@ def request_json(request: Request) -> dict:
                     continue
                 fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
             fail(503, "AI_NETWORK_ERROR", "O backend não conseguiu acessar a IA. Confira internet, proxy, firewall e certificados HTTPS.")
-        except (ValueError, UnicodeError):
+        except (ValueError, UnicodeError, RecursionError):
+            # RecursionError: JSON com milhares de níveis estoura o json.load e não é ValueError; virava HTTP 500 em texto puro.
             fail(502, "AI_INVALID_RESPONSE", "O provedor retornou uma resposta inválida.")
     fail(502, "AI_PROVIDER_ERROR", "Não foi possível concluir a solicitação ao provedor de IA.")
 
 def decode_output(text: str) -> dict:
     try:
-        result = json.loads(text)
+        # Meio emoji ("\ud83d" sem o par) passa pelo json.loads, mas não pode ser escrito em UTF-8: no chat virava
+        # HTTP 500 em texto puro. O "ignore" tira só o caractere quebrado, sem nova chamada.
+        result = json.loads(json.dumps(json.loads(text), ensure_ascii=False).encode("utf-8", "ignore"))
         if not isinstance(result, dict):
             raise ValueError("Expected object")
         return result
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         fail(502, "AI_INVALID_JSON", "A IA não retornou um objeto JSON válido. Tente novamente.")
 
 
@@ -109,7 +150,8 @@ def text_model_names(models: list) -> list[str]:
     """A lista da API não informa se há cota gratuita ou acesso de faturamento."""
     names = set()
     for model in models:
-        if not isinstance(model, dict) or "generateContent" not in model.get("supportedGenerationMethods", []):
+        # O campo pode vir nulo no catálogo: "or []" evita o TypeError, que virava HTTP 500 em texto puro.
+        if not isinstance(model, dict) or "generateContent" not in (model.get("supportedGenerationMethods") or []):
             continue
         name = str(model.get("name", "")).removeprefix("models/")
         if not re.fullmatch(r"gemini-[A-Za-z0-9._-]+", name):
@@ -198,11 +240,18 @@ def ai(payload: dict, instruction: str, schema: dict | None = None, retry: bool 
         if settings.provider == "gemini":
             candidates = result.get("candidates", [])
             if not candidates:
-                fail(502, "AI_EMPTY_RESPONSE", "A IA não retornou conteúdo. Tente reformular a pergunta.")
+                # Pedido bloqueado volta sem candidato. O motivo aparece na tela, como o finishReason abaixo;
+                # só os motivos conhecidos, para nunca repassar texto solto do corpo da resposta.
+                blocked = (result.get("promptFeedback") or {}).get("blockReason")
+                fail(502, "AI_EMPTY_RESPONSE", "A IA não retornou conteúdo. Tente reformular a pergunta.",
+                     blocked if blocked in ("SAFETY", "OTHER", "BLOCKLIST", "PROHIBITED_CONTENT", "IMAGE_SAFETY") else "")
             candidate = candidates[0]
-            if candidate.get("finishReason") not in (None, "STOP"):
+            reason = candidate.get("finishReason")
+            if reason not in (None, "STOP"):
                 # O motivo (MAX_TOKENS, RECITATION, SAFETY...) aparece na tela; sem ele não dá para diagnosticar.
-                fail(502, "AI_INCOMPLETE_RESPONSE", "A IA interrompeu a resposta. Envie um texto menor ou reformule a pergunta.", str(candidate.get("finishReason")))
+                # Só o que tem forma de nome de motivo (maiúsculas e "_"): texto solto do corpo da resposta não é repassado.
+                fail(502, "AI_INCOMPLETE_RESPONSE", "A IA interrompeu a resposta. Envie um texto menor ou reformule a pergunta.",
+                     reason if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,40}", reason) else "")
             parts = candidate.get("content", {}).get("parts", [])
             text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought"))
         else:
