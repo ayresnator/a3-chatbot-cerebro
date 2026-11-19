@@ -1441,7 +1441,15 @@ function App() {
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
-                                    submit(e.target.elements.response.value);
+                                    const field = e.target.elements.response;
+                                    // Só espaços vale como campo vazio: limpo, o campo mostra o aviso do required.
+                                    // Enviado, virava erro gravado no desempenho e no caderno de erros.
+                                    if (!field.value.trim()) {
+                                      field.value = '';
+                                      field.reportValidity();
+                                      return;
+                                    }
+                                    submit(field.value);
                                   }}
                                 >
                                   <input
