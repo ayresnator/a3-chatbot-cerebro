@@ -1,114 +1,2077 @@
-import React, { useState as state } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { animate } from 'motion/mini';
+import {
+  AnimatePresence, LazyMotion, MotionConfig, domAnimation, m, usePresence, useReducedMotion,
+} from 'motion/react';
+import { BrandMark, Icon } from './icons.jsx';
+import { Pen } from './marks.jsx';
+import {
+  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, EASE_IN, EASE_OUT,
+  byKeyboard, appear, reduced, enter, flipList, leave,
+} from './anim.js';
+import {
+  Stat, UndoRow, Wait, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
+  PerfilSkeleton,
+} from './ui.jsx';
+import {
+  AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
+  shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
+  matches, hints, hello, healthLabel, errorText, dictate, dictationError,
+  localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote,
+} from './lib.js';
+
 const CONFIG = window.CEREBRO_CONFIG || {};
-const DEMO = CONFIG.demo === true;
+// ?demo no endereço abre a demonstração pelo Vite (http://localhost:5173/?demo),
+// sem servir a raiz do repositório, onde fica o .env.
+const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
+// Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
+const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// O que estava aberto antes de um F5 (editor, material, conversa), lido uma vez na abertura.
+const DRAFT = readDraft();
 
 // Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa.
-async function requestAPI(path, payload) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 105000);
+// stop é o sinal do botão "Cancelar" da espera: o pedido para na hora e o erro sai marcado com cancelled, para a tela
+// não mostrar uma falha que o aluno pediu.
+async function requestAPI(path, payload, stop) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 105000);
+  const cancel = () => controller.abort();
+  stop?.addEventListener('abort', cancel);
+  try {
+    const response = await fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let data;
     try {
-        const response = await fetch(API_BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
-        const raw = await response.text(); let data;
-        try { data = JSON.parse(raw) } catch {
-            throw Error('O backend não retornou JSON (HTTP ' + response.status + '). Confira se o Python está rodando em http://127.0.0.1:8000 e reinicie o Vite.');
-        }
-        if (!response.ok) {
-            const detail = data.detail;
-            const message = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(d => d.msg).join('; ') : detail?.message;
-            const code = detail?.code;
-            const provider = detail?.provider_status;
-            throw Error((message || 'Falha no backend (HTTP ' + response.status + ').') + (code ? ' [' + code + (provider ? ' · ' + provider : '') + ']' : ''));
-        }
-        return data;
-    } catch (error) {
-        if (error.name === 'AbortError') throw Error('Tempo de espera esgotado. Verifique o terminal do backend e tente novamente.');
-        if (error instanceof TypeError) throw Error('Não foi possível conectar ao backend. Confira se o Python está iniciado e se a URL e o proxy estão corretos.');
-        throw error;
-    } finally { clearTimeout(timer) }
+      data = JSON.parse(raw);
+    } catch {
+      throw Error(
+        'O backend não retornou JSON (HTTP ' + response.status +
+        '). Confira se o Python está rodando em http://127.0.0.1:8000 e reinicie o Vite.'
+      );
+    }
+    if (!response.ok) {
+      throw Error(errorText(data?.detail, response.status));
+    }
+    return data;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      if (stop?.aborted) throw Object.assign(Error('Pedido cancelado.'), { cancelled: true });
+      throw Error('Tempo de espera esgotado. Verifique o terminal do backend e tente novamente.');
+    }
+    if (error instanceof TypeError) {
+      throw Error('Não foi possível conectar ao backend. Confira se o Python está iniciado e se a URL e o proxy estão corretos.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    stop?.removeEventListener('abort', cancel);
+  }
 }
 
-const AREAS = ['Tecnologia', 'Administração', 'Economia', 'Matemática', 'Direito', 'Escolar'];
-// Perguntas de partida de cada área: aparecem como sugestão no chat antes da primeira resposta, sem chamar a IA.
-const STARTERS = { Tecnologia: ['O que são hardware e software?', 'Como a internet funciona?'], Administração: ['O que faz um administrador?', 'O que é fluxo de caixa?'], Economia: ['O que é inflação?', 'Como funcionam oferta e demanda?'], Matemática: ['Como calcular porcentagem?', 'Como resolver uma equação do 1º grau?'], Direito: ['O que é a Constituição Federal?', 'O que são direitos fundamentais?'], Escolar: ['Como estudar melhor para uma prova?', 'Como fazer um bom resumo?'] };
-const EXAMPLE = 'A fotossíntese é o processo pelo qual plantas transformam energia luminosa em energia química. A clorofila absorve a luz solar nos cloroplastos. Na fase clara, a água é decomposta, liberando oxigênio e produzindo ATP e NADPH. No ciclo de Calvin, o gás carbônico é fixado para produzir açúcares. Esse processo sustenta as cadeias alimentares e ajuda a regular o carbono na atmosfera.';
-const icons = { Estudar: '✦', Resumos: '≡', Flashcards: '▱', Quizzes: '✓', Desempenho: '▥', Biblioteca: '▤' };
-function read(k, d) { try { return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d } catch { return d } }
-// Dia no fuso do aluno. toISOString() dá o dia em UTC: no Brasil o estudo depois das 21h caía no dia seguinte.
-function localDay(date) { const d = new Date(date); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
-// Compara texto sem ligar para maiúsculas e acentos ("fotossintese" vale como "Fotossíntese").
-function fold(text) { return String(text).toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[̀-ͯ]/g, '') }
-// Resposta curta: tira só a pontuação do fim e lê vírgula decimal como ponto. Apagar todo ponto e vírgula fazia "2,5" valer "25".
-function norm(text) { return fold(text).trim().replace(/[.!?,;:]+$/, '').replace(/(\d),(?=\d)/g, '$1.') }
+// As oito seções, na ordem do menu: a página e o nome do ícone e da cor da divisória (styles.css, --tab-*).
+const SECTIONS = [
+  ['Estudar', 'estudar'], ['Dúvidas', 'duvidas'], ['Resumos', 'resumos'], ['Flashcards', 'flashcards'],
+  ['Quizzes', 'quizzes'], ['Erros', 'erros'], ['Desempenho', 'desempenho'], ['Biblioteca', 'biblioteca'],
+];
+const SLUG = Object.fromEntries(SECTIONS);
+// No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e Erros) e "Mais", uma
+// folha com as outras três seções e o perfil. Na barra, "Quizzes" vai como "Quiz": os seis nomes cabem em 320 px.
+const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n, SLUG[n]]);
+const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
+const SHORT = { Quizzes: 'Quiz' };
+const TITLES = { Erros: 'Caderno de erros' };
+// As ações de gerar, na ordem do grupo: Resumir é a principal; Tirar dúvidas só abre a página.
+const ACTIONS = [
+  ['resumo', 'resumos', 'Resumir'],
+  ['flashcards', 'flashcards', 'Criar flashcards'],
+  ['quiz', 'quizzes', 'Fazer quiz'],
+  ['chat', 'duvidas', 'Tirar dúvidas'],
+];
+const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
+
+// Aviso fixo onde há texto escrito pela IA. A demonstração não usa IA e não mostra.
+const aiNote = API_BASE && <p className="ai-note">Gerado por IA. Pode conter erros: confira com o seu material.</p>;
+
 // O modelo às vezes devolve **negrito** em Markdown: mostra em negrito em vez de asteriscos soltos.
 // Só casa um par colado ao texto, para não mexer em código como "a ** 2" ou "x**2".
-function rich(text) { return String(text).split(/(^|[^\w*])\*\*(?=\S)(.*?\S)\*\*(?![\w*])/).map((part, i) => i % 3 === 2 ? <strong key={i}>{part}</strong> : part) }
-// Última geração: texto, área e nível usados, e quais botões já mostraram esse material.
-let made = { key: '', kinds: [] };
-function App() {
-    const [page, P] = state('Estudar'), [user, U] = state(read('user', null)), [login, L] = state(false), [name, N] = state(user?.name || ''), [area, A] = state(AREAS.includes(user?.area) ? user.area : 'Tecnologia'), [level, V] = state('Básico'), [input, I] = state(''), [result, R] = state(null), [busy, B] = state(false), [error, E] = state(''), [size, Z] = state('Médio'), [saved, S] = state(read('saved', [])), [events, H] = state(read('events', [])), [idx, J] = state(0), [flip, F] = state(false), [answer, Q] = state(null), [answers, QS] = state([]), [done, D] = state(false), [query, G] = state(''), [filter, GF] = state('Todas'), [chartArea, CA] = state('Todas'), [question, K] = state(''), [chat, C] = state([]), [notice, NOTICE] = state(''), [retry, RT] = state(null), [tips, T] = state({ key: '', list: [] });
-    // Volta ao início do baralho ou do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
-    function restart(list = null) { J(0); D(false); F(false); Q(null); QS([]); RT(list) }
-    function persist(k, v) { try { localStorage.setItem('cerebro-' + k, JSON.stringify(v)); return true } catch { toast('Não foi possível salvar no navegador. Verifique o espaço e as permissões.'); return false } }
-    function toast(m) { NOTICE(m); setTimeout(() => NOTICE(''), 3200) }
-    function event(kind, ok, topic = area) { const next = [...events, { kind, ok, area: topic, title: result?.title, date: new Date().toISOString() }]; H(next); persist('events', next) }
-    function demo(text) { const sentences = text.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) || [text]; const pieces = sentences.slice(0, 8); return { title: text.split(/\s+/).slice(0, 7).join(' '), summary: pieces.map(s => ({ concept: s.split(' ').slice(0, 3).join(' '), text: s })), flashcards: pieces.map((s, i) => ({ question: 'Complete o trecho ' + (i + 1) + ': ' + s.split(' ').slice(0, 4).join(' ') + '…', answer: s })), quiz: pieces.slice(0, 5).map((s, i) => ({ type: i % 3 === 0 ? 'short' : i % 3 === 1 ? 'boolean' : 'multiple', question: i % 3 === 0 ? 'Qual palavra inicia este trecho: “…' + s.split(' ').slice(1, 8).join(' ') + '”?' : i % 3 === 1 ? 'Verdadeiro ou falso: ' + s : 'Qual trecho faz parte do material fornecido?', options: i % 3 === 1 ? ['Verdadeiro', 'Falso'] : [s, 'O texto não apresenta nenhuma informação.', 'Nenhuma das alternativas.'], answer: i % 3 === 0 ? s.split(' ')[0] : 0, explanation: 'Trecho do material: ' + s, steps: [] })) } }
-    async function generate(kind = 'resumo') {
-        if (busy) return;
-        E(''); if (input.trim().length < (API_BASE ? 3 : 30)) { E('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).'); return }
-        B(true); try {
-            // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
-            // O mesmo botão de novo gera material novo.
-            const key = JSON.stringify([input, area, level]), reuse = result && made.key === key && !made.kinds.includes(kind);
-            let data; if (reuse) data = result; else if (API_BASE) { data = await requestAPI('/api/generate', { content: input, area, level }) } else data = demo(input);
-            if (!data.title || !data.summary?.length || !data.flashcards?.length || !data.quiz?.length) throw Error('Material incompleto recebido do backend'); R({ ...data, area, level }); made = { key, kinds: reuse ? [...made.kinds, kind] : [kind] }; P(kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes'); restart();
-        } catch (e) { E('Não foi possível gerar: ' + e.message) } finally { B(false) }
-    }
-    // Não duplica o que já está salvo e só avisa "salvo" quando o navegador gravou de verdade.
-    function save() { if (!result) return; if (result.id && saved.some(s => s.id === result.id)) { toast('Este material já está na biblioteca'); return } const entry = { ...result, id: Date.now(), date: new Date().toISOString() }; const next = [entry, ...saved]; if (!persist('saved', next)) return; S(next); R(entry); toast('Material salvo na biblioteca') }
-    function cardNext(ok) { event('flashcard', ok, result.area); F(false); if (idx + 1 >= result.flashcards.length) { D(true) } else J(idx + 1) }
-    // Resposta curta pode ter formas equivalentes separadas por "|" ("PIB|Produto Interno Bruto"): qualquer uma vale.
-    // A resposta inteira também vale: sem isso, digitar inteira uma resposta que tem "|" ("||", "|x|") nunca era aceito.
-    function submit(value) { if (answer !== null) return; const q = quizList[idx]; const ok = q.type === 'short' ? !!norm(value) && [q.answer, ...String(q.answer).split('|')].some(a => norm(a) === norm(value)) : value === q.answer; Q({ value, ok }); QS([...answers, { ...q, ok }]); event('quiz', ok, result.area) }
-    // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo.
-    // O servidor não guarda conversa: as 6 últimas mensagens vão junto, para ele entender um "me dê um exemplo".
-    // O texto do editor já vai em content (ou é a própria pergunta), então a cópia dele fica fora do histórico.
-    // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
-    // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
-    async function ask(message = question) { if (busy || !message.trim()) return; const msg = message.trim(), mine = { role: 'user', text: msg }; E(''); if (message === question) K(''); C(c => [...c, mine]); if (!API_BASE) { C(c => [...c, { role: 'assistant', text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (input || EXAMPLE).slice(0, 450) }]); return } B(true); try { const data = await requestAPI('/api/chat', { question: msg, content: msg === input.trim() ? '' : input, area, level, history: chat.filter(m => m.text !== input.trim()).slice(-6).map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') })) }); C(c => [...c, { role: 'assistant', text: data.answer }]); T({ key: JSON.stringify([input, area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] }) } catch (e) { E(e.message); C(c => c.filter(m => m !== mine)); if (message === question) K(q => q || msg) } finally { B(false) } }
-    const quizList = retry || result?.quiz || [], quiz = quizList[idx], card = result?.flashcards?.[idx], correct = events.filter(e => e.ok).length, rate = events.length ? Math.round(correct / events.length * 100) : 0;
-    const days = new Set(events.map(e => localDay(e.date))); let streak = 0; const today = new Date(); if (!days.has(localDay(today))) today.setDate(today.getDate() - 1); while (days.has(localDay(today))) { streak++; today.setDate(today.getDate() - 1) }
-    const topics = result?.summary?.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99) || [];
-    // Busca só no texto do material: JSON.stringify também casava nomes de campo ("quiz", "answer") e datas.
-    const shown = saved.filter(s => (filter === 'Todas' || s.area === filter) && fold([s.title, ...s.summary.flatMap(x => [x.concept, x.text]), ...s.flashcards.flatMap(c => [c.question, c.answer]), ...s.quiz.map(q => q.question)].join(' ')).includes(fold(query)));
-    // Ponto fraco: o material com mais erros nos últimos 7 dias, os mesmos do gráfico. Erro antigo não manda na revisão de hoje.
-    // Evento gravado antes desta versão não tem título e cai no nome da área.
-    const weekStart = new Date(); weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - 6);
-    const misses = new Map(); for (const e of events) if (!e.ok && new Date(e.date) >= weekStart) { const k = e.title || e.area; misses.set(k, (misses.get(k) || 0) + 1) }
-    const weak = [...misses].sort((a, b) => b[1] - a[1])[0];
-    // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (texto do editor ou área) até a primeira resposta;
-    // depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
-    // As da IA só valem enquanto o texto do editor e a área são os da resposta: se o aluno muda de assunto, voltam as fixas.
-    const hints = !chat.some(m => m.role === 'assistant') ? ['Me introduza ao assunto', ...(input.trim() ? ['Quais são os pontos principais do texto?', 'Faça uma pergunta sobre o texto para eu praticar'] : STARTERS[area])] : tips.key === JSON.stringify([input, area]) && tips.list.length ? tips.list : ['Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar'];
-    // Saudação fixa: o Cérebro fala primeiro sem gastar chamada da IA. Não entra em chat, então não vai no histórico do pedido.
-    const hello = 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' + (area === 'Escolar' ? 'das matérias escolares' : 'de ' + area) + ' no nível ' + level + '. ' + (API_BASE ? 'Pergunte o que quiser ou escolha uma das sugestões abaixo. ' + (input.trim() ? 'Vou considerar o texto que está no editor.' : 'Se colar um texto no editor, respondo com base nele.') : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
-    return <div className="app"><aside><a className="brand" href="#" onClick={e => { e.preventDefault(); P('Estudar') }}><span className="logo">✺</span> cérebro<span className="brand-dot">.</span></a><div className="workspace"><span className="mini-logo">c</span><div>Meu espaço de estudos<small>Seu conhecimento, conectado</small></div></div><div className="nav-label">APRENDER</div><nav>{Object.keys(icons).map(n => <button key={n} className={page === n ? 'active' : ''} onClick={() => { P(n); restart() }}><span>{icons[n]}</span>{n}{n === 'Estudar' && <b>+</b>}</button>)}</nav><div className="side-tip"><span>✧</span><strong>Um pouco todo dia.<br />Um mundo de diferença.</strong><p>Seu próximo aprendizado começa com uma pergunta.</p><div className="tiny-dots">● ● ● ● ○</div></div><button className="profile" onClick={() => L(true)}><span className="avatar">{(user?.name || 'V')[0].toUpperCase()}</span><span>{user?.name || 'Visitante'}<small>{user ? 'Perfil local' : 'Entrar no meu espaço'}</small></span><span>⌄</span></button></aside>
-        <main><header><div><span className="breadcrumb">Meu espaço</span><span className="slash">/</span>{page}</div><div className="header-right"><span className="status-dot"></span>{API_BASE ? 'Assistente de estudos' : 'Modo demonstração'}<span className="divider"></span><span>◷</span> No seu ritmo</div></header><div className="content"><div className="heading"><div className="eyebrow">SEU ESPAÇO PARA IR ALÉM</div><h1>{page === 'Estudar' ? 'Uma ideia. Muitas descobertas.' : page === 'Desempenho' ? 'Cada passo conta.' : page === 'Biblioteca' ? 'Conhecimento para revisitar.' : page === 'Dúvidas' ? 'Vamos entender juntos.' : page}</h1><p>{page === 'Estudar' ? 'Transforme qualquer conteúdo em conhecimento que fica.' : 'Continue construindo o seu próximo aprendizado.'}</p></div>
-            {error && <div role="alert" className="error">{error}</div>}
-            {page === 'Estudar' && <><div className="study-grid"><section className="panel composer"><div className="panel-title"><span className="purple-icon">✦</span><div><h2>O que vamos aprender hoje?</h2><p>Você traz o conteúdo. O Cérebro conecta as ideias.</p></div><span className="pill">SEU PONTO DE PARTIDA</span></div><div className="input-wrap"><textarea aria-label="Conteúdo ou pergunta para o Cérebro" aria-describedby="composer-keyboard-hint" maxLength={20000} value={input} onChange={e => I(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) { e.preventDefault(); if (!busy && !e.repeat && input.trim()) { P('Dúvidas'); ask(input) } } }} placeholder={'Cole seu texto, anotações ou digite uma matéria…\n\nPode ser aquele capítulo difícil, um conceito novo ou o conteúdo da próxima prova.'} /><div className="textarea-bottom"><button onClick={() => { const Speech = window.SpeechRecognition || window.webkitSpeechRecognition; if (!Speech) { toast('Ditado indisponível neste navegador. Use Chrome e permita o microfone.'); return } const recognition = new Speech(); recognition.lang = 'pt-BR'; recognition.onresult = e => I(s => (s + ' ' + e.results[0][0].transcript).trim()); recognition.onerror = () => toast('Não foi possível ouvir. Verifique a permissão do microfone.'); recognition.start(); toast('Ouvindo…') }}>♩ <span>Falar conteúdo</span></button><span>{input.length.toLocaleString('pt-BR')} / 20.000</span><button className="primary" disabled={busy || !input.trim()} onClick={() => { P('Dúvidas'); ask(input) }}>Enviar ↗</button></div></div><p id="composer-keyboard-hint" style={{ fontSize: 10, color: "#8b879f", margin: "10px 0" }}>Enter para perguntar ao Cérebro · Shift+Enter para nova linha</p><div className="selectors"><label>ÁREA DE CONHECIMENTO<select value={area} onChange={e => A(e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label><label>NÍVEL DE APRENDIZADO<select value={level} onChange={e => V(e.target.value)}>{['Básico', 'Intermediário', 'Avançado'].map(a => <option key={a}>{a}</option>)}</select></label></div><div className="action-grid">{[['resumo', '≡', 'Resumir', 'Só o essencial'], ['flashcards', '▱', 'Criar flashcards', 'Para fixar de verdade'], ['quiz', '✓', 'Fazer quiz', 'Teste o que aprendeu'], ['chat', '☏', 'Tirar dúvidas', 'Entenda cada detalhe']].map(([k, ic, title, sub]) => <button key={k} disabled={busy} onClick={() => k === 'chat' ? P('Dúvidas') : generate(k)}><span>{ic}</span><strong>{title}</strong><small>{sub}</small><b>↗</b></button>)}</div><div className="composer-footer"><span>♧</span> {API_BASE ? 'Conteúdo enviado ao backend configurado.' : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}</div></section><div className="right-column"><section className="inspiration"><div className="orbit one"></div><div className="orbit two"></div><span className="floating star">✧</span><span className="floating dot">+</span><div className="brain-art">✺</div><span className="small-tag">APRENDER É CONECTAR</span><h2>Grandes ideias<br />começam com<br /><em>curiosidade.</em></h2><p>Um conceito de cada vez.<br />No seu tempo, do seu jeito.</p></section><section className="example"><span className="purple-icon">☼</span><h3>Sem saber por onde começar?</h3><p>Experimente um conteúdo e descubra o que o Cérebro pode fazer.</p><button onClick={() => { I(EXAMPLE); A('Escolar'); toast('Exemplo de fotossíntese adicionado') }}>Usar um exemplo <span>↗</span></button></section></div></div><div className="section-line"><h3>Seu aprendizado em movimento</h3><button onClick={() => P('Desempenho')}>Ver meu desempenho ↗</button></div><div className="stats"><Stat icon="♨" value={streak + (streak === 1 ? ' dia' : ' dias')} label="de constância" color="orange" /><Stat icon="▱" value={events.filter(e => e.kind === 'flashcard').length} label="flashcards revisados" color="purple" /><Stat icon="✓" value={events.filter(e => e.kind === 'quiz').length} label="questões respondidas" color="green" /><Stat icon="↗" value={rate + '%'} label="de aproveitamento" color="blue" /></div><div className="bottom-note">✧ &nbsp; Aprender não é saber tudo. É descobrir um pouco mais, todos os dias.</div></>}
-            {['Resumos', 'Flashcards', 'Quizzes'].includes(page) && (!result ? <section className="panel empty"><span>✧</span><h2>Seu próximo aprendizado está por aqui.</h2><p>Adicione um texto para criar seu material de estudo.</p><button className="primary" onClick={() => P('Estudar')}>Adicionar conteúdo</button></section> : <section className="panel results"><div className="result-header"><div><span className="eyebrow">{result.area} · {result.level}</span><h2>{result.title}</h2></div><button onClick={save}>▤ Salvar material</button></div><div className="tabs">{[['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']].map(([p, l]) => <button className={page === p ? 'selected' : ''} key={p} onClick={() => { P(p); restart() }}>{l}</button>)}</div>
-                {page === 'Resumos' && <><div className="row"><label>Tamanho <select value={size} onChange={e => Z(e.target.value)}>{['Curto', 'Médio', 'Detalhado'].map(s => <option key={s}>{s}</option>)}</select></label><button onClick={async () => { try { await navigator.clipboard.writeText(topics.map(s => s.concept + ': ' + s.text).join('\n')); toast('Resumo copiado') } catch { toast('Cópia indisponível neste navegador') } }}>Copiar</button></div><div className="summary">{topics.map((s, i) => <article key={i}><span>{String(i + 1).padStart(2, '0')}</span><div><strong>{s.concept}</strong><p>{s.text}</p></div></article>)}</div><button className="primary" onClick={() => { P('Flashcards'); J(0); D(false); F(false) }}>Estudar flashcards deste resumo →</button></>}
-                {page === 'Flashcards' && (done ? <div className="empty"><h2>Baralho concluído ✨</h2><p>Suas respostas já estão no desempenho.</p><button className="primary" onClick={() => { J(0); D(false); F(false) }}>Revisar novamente</button></div> : card && <><div className="progress-label">Cartão {idx + 1} de {result.flashcards.length}<span>{flip ? 'RESPOSTA' : 'PERGUNTA'}</span></div><progress value={idx} max={result.flashcards.length} /><button className={'flashcard ' + (flip ? 'flipped' : '')} onClick={() => F(!flip)}><small>{flip ? 'CONECTE AS IDEIAS' : 'PUXE PELA MEMÓRIA'}</small><h2>{flip ? card.answer : card.question}</h2><span>Clique para {flip ? 'ver a pergunta' : 'revelar a resposta'} ↻</span></button><div className="row center"><button disabled={!flip} onClick={() => cardNext(false)}>Errei</button><button onClick={() => { const cards = [...result.flashcards]; cards.push(cards.splice(idx, 1)[0]); R({ ...result, flashcards: cards }); F(false); toast('Cartão movido para o final do baralho') }}>Revisar depois</button><button className="primary" disabled={!flip} onClick={() => cardNext(true)}>Acertei ✓</button></div></>)}
-                {page === 'Quizzes' && (done ? <div className="empty"><h2>{Math.round(answers.filter(a => a.ok).length / Math.max(1, answers.length) * 100)}% de aproveitamento</h2><p>{answers.filter(a => a.ok).length} de {answers.length} respostas corretas.</p><button className="primary" onClick={() => { const wrong = answers.filter(a => !a.ok); if (!wrong.length) { toast('Você acertou todas!'); return } restart(wrong) }}>Refazer apenas as que errei</button></div> : quiz && <><div className="progress-label">Questão {idx + 1} de {quizList.length}<span>{quiz.type === 'short' ? 'RESPOSTA CURTA' : quiz.type === 'boolean' ? 'VERDADEIRO OU FALSO' : 'MÚLTIPLA ESCOLHA'}</span></div><progress value={idx} max={quizList.length} /><h2 className="quiz-question">{quiz.question}</h2>{quiz.type === 'short' ? <form key={idx} onSubmit={e => { e.preventDefault(); submit(e.target.elements.response.value) }}><input name="response" required placeholder="Sua resposta" disabled={answer !== null} /><button disabled={answer !== null} className="primary">Responder</button></form> : <div className="options">{quiz.options.map((o, i) => <button key={i} disabled={answer !== null} className={answer && i === quiz.answer ? 'correct' : answer?.value === i ? 'wrong' : ''} onClick={() => submit(i)}><b>{String.fromCharCode(65 + i)}</b>{o}</button>)}</div>}{answer && <div className={'feedback ' + (answer.ok ? 'good' : 'bad')}><strong>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong><p>{quiz.explanation}</p>{quiz.steps?.length > 0 && <ol>{quiz.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}<button className="primary" onClick={() => { if (idx + 1 >= quizList.length) D(true); else { J(idx + 1); Q(null) } }}>{idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão →'}</button></div>}</>)}
-            </section>)}
-            {page === 'Dúvidas' && <section className="panel"><h2>Seu espaço para perguntar</h2><p>Área: {area} · Nível: {level}. As respostas consideram o conteúdo no editor.</p><div className="chat"><div className="message assistant"><small>Cérebro</small><p>{hello}</p></div>{chat.map((m, i) => <div key={i} className={'message ' + m.role}><small>{m.role === 'user' ? 'Você' : 'Cérebro'}</small><p>{m.role === 'user' ? m.text : rich(m.text)}</p></div>)}</div>{API_BASE && <div className="suggestions" role="group" aria-label="Sugestões de perguntas">{hints.map((h, i) => <button key={i} type="button" disabled={busy} onClick={() => ask(h)}>{h}</button>)}</div>}<form className="row" onSubmit={e => { e.preventDefault(); ask() }}><input aria-label="Sua dúvida" onKeyDown={e => { if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229 || e.repeat)) e.preventDefault() }} value={question} onChange={e => K(e.target.value)} placeholder="O que você quer entender?" maxLength={4000} required /><button type="submit" className="primary" disabled={busy || !question.trim()}>Enviar ↗</button></form></section>}
-            {page === 'Desempenho' && <><div className="stats"><Stat icon="♨" value={streak} label={streak === 1 ? 'dia de sequência' : 'dias de sequência'} /><Stat icon="✓" value={events.length} label="respostas registradas" /><Stat icon="↗" value={rate + '%'} label="aproveitamento" /></div><section className="panel"><h2>Acertos nos últimos 7 dias</h2><div className="chart">{Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - 6 + i); const day = localDay(d), es = events.filter(e => localDay(e.date) === day && (chartArea === 'Todas' || e.area === chartArea)), r = es.length ? Math.round(es.filter(e => e.ok).length / es.length * 100) : 0; return <div key={day}><span>{es.length ? r + '%' : '—'}</span><div className="bar" style={{ height: Math.max(3, r * 1.5) }}></div><small>{d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</small></div> })}</div><select aria-label="Área do gráfico" value={chartArea} onChange={e => CA(e.target.value)}>{['Todas', ...AREAS].map(a => <option key={a}>{a}</option>)}</select></section><section className="panel"><h2>Seu próximo passo</h2><p>{weak ? 'Revise ' + weak[0] + ' hoje: ' + weak[1] + (weak[1] === 1 ? ' erro' : ' erros') + ' nos últimos 7 dias.' :'Responda flashcards e quizzes para descobrir seus pontos de revisão.'}</p>{AREAS.map(a => { const es = events.filter(e => e.area === a); return <div className="subject" key={a}><strong>{a}</strong><span>{es.length ? Math.round(es.filter(e => e.ok).length / es.length * 100) + '% de acertos · ' + es.length + ' respostas' : 'Sem registros ainda'}</span></div> })}</section></>}
-            {page === 'Biblioteca' && <section className="panel"><div className="row"><input placeholder="Buscar materiais…" aria-label="Buscar materiais" value={query} onChange={e => G(e.target.value)} /><select aria-label="Filtrar área" value={filter} onChange={e => GF(e.target.value)}>{['Todas', ...AREAS].map(a => <option key={a}>{a}</option>)}</select></div>{shown.map(s => <article className="library-item" key={s.id}><span className="purple-icon">▤</span><div><small>{s.area} · {new Date(s.date).toLocaleDateString('pt-BR')}</small><h3>{s.title}</h3><p>Resumo · {s.flashcards.length} flashcards · {s.quiz.length} questões</p></div><button onClick={() => { made = { key: '', kinds: [] }; R(s); P('Resumos'); restart() }}>Abrir ↗</button><button aria-label={'Excluir ' + s.title} onClick={() => { const next = saved.filter(x => x.id !== s.id); S(next); persist('saved', next) }}>×</button></article>)}{!shown.length && <div className="empty"><h2>Nenhum material encontrado</h2><p>Salve um material gerado para estudar novamente depois.</p></div>}</section>}
-            <footer><span>cérebro<span className="brand-dot">.</span> <span>Feito para mentes curiosas.</span></span><span>Aprenda. Conecte. Evolua. ✧</span></footer></div></main>
-        {busy && <div className="busy" role="status">✦ Conectando ideias…</div>}{notice && <div className="toast" role="status">{notice}</div>}
-        {login && <div className="overlay"><form className="modal" onSubmit={e => { e.preventDefault(); const u = { name: name.trim() || 'Estudante', area }; U(u); L(false); if (persist('user', u)) toast('Seu espaço está pronto') }}><button type="button" className="close" onClick={() => L(false)}>×</button><span className="logo">✺</span><h2>Seu próximo aprendizado começa aqui.</h2><p>Crie um perfil local neste navegador. Não é uma conta com autenticação.</p><label>Como podemos te chamar?<input value={name} onChange={e => N(e.target.value)} required maxLength={50} autoComplete="given-name" /></label><label>Sua área principal<select value={area} onChange={e => A(e.target.value)}>{AREAS.map(a => <option key={a}>{a}</option>)}</select></label><button className="primary">Começar a estudar →</button></form></div>}
-    </div>
+function rich(text) {
+  return String(text)
+    .split(/(^|[^\w*])\*\*(?=\S)(.*?\S)\*\*(?![\w*])/)
+    .map((part, i) => i % 3 === 2 ? <strong key={i}>{part}</strong> : part);
 }
-function Stat({ icon, value, label, color = 'purple' }) { return <div className="stat"><span className={'stat-icon ' + color}>{icon}</span><div><strong>{value}</strong><p>{label}</p></div></div> }
-createRoot(document.getElementById('root')).render(<App />);
+
+// Páginas carregadas à parte (React.lazy): o código de cada uma só vem quando o aluno chega nela, ou antes, quando o
+// navegador fica livre (preload, no App). Já carregada, a página desenha direto, sem passar pelo esqueleto do
+// Suspense. A escolha vale para a montagem inteira: trocar no meio recriaria a página e refaria a entrada dela.
+function lazyView(load) {
+  let View = null;
+  const preload = () => load().then(mod => (View = mod.default));
+  const Lazy = lazy(() => preload().then(() => ({ default: View })));
+  function Page(props) {
+    const [Ready] = useState(() => View);
+    return Ready ? <Ready {...props} /> : <Lazy {...props} />;
+  }
+  Page.preload = preload;
+  return Page;
+}
+const Desempenho = lazyView(() => import('./Desempenho.jsx'));
+const Biblioteca = lazyView(() => import('./Biblioteca.jsx'));
+const Perfil = lazyView(() => import('./Perfil.jsx'));
+// As três partes do material. Enquanto a IA gera, cada uma mostra o esqueleto dela: uma chamada traz as três.
+const MATERIAL = TABS.map(([p]) => p);
+
+function App() {
+  const [page, setPage] = useState('Estudar');
+  const [user, setUser] = useState(readUser);
+  const [login, setLogin] = useState(false);
+  // Folha "Mais" da barra de baixo, no celular.
+  const [more, setMore] = useState(false);
+  const [name, setName] = useState(user?.name || '');
+  const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
+  const [level, setLevel] = useState(DRAFT.level || 'Básico');
+  const [input, setInput] = useState(DRAFT.input);
+  const [result, setResult] = useState(DRAFT.result);
+  // Espera de um pedido à IA fora do chat: { kind, label, since }. kind é o botão que pediu (resumo, flashcards, quiz,
+  // why, review), para a espera aparecer nele; label vai na espera; since é a hora do pedido, para os segundos.
+  // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState('');
+  const [size, setSize] = useState('Médio');
+  // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
+  const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
+  const [events, setEvents] = useState(() => readList('events').filter(validEvent));
+  const [idx, setIdx] = useState(0);
+  const [flip, setFlip] = useState(false);
+  const [answer, setAnswer] = useState(null);
+  const [answers, setAnswers] = useState([]);
+  const [done, setDone] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('Todas');
+  const [chartArea, setChartArea] = useState('Todas');
+  const [question, setQuestion] = useState('');
+  const [chat, setChat] = useState(DRAFT.chat);
+  // Aviso na tela: { text, action }. action = { label, run } põe um botão no aviso (desfazer, abrir).
+  const [notice, setNotice] = useState(null);
+  // Desfazer sem prazo: { kind, text, run, focus }. O aviso some sozinho; este botão fica onde a ação aconteceu
+  // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno) até o aluno trocar de página ou desfazer.
+  const [undo, setUndo] = useState(null);
+  const [retry, setRetry] = useState(null);
+  const [tips, setTips] = useState(DRAFT.tips);
+  // Espera da resposta do chat, mostrada dentro da conversa: a hora do pedido, ou false. busy é a espera dos outros
+  // pedidos à IA: a geração do material, a explicação pedida de dentro do estudo e a revisão de uma resposta.
+  const [asking, setAsking] = useState(false);
+  // Resposta de /api/health: null enquanto não chegou, false se a consulta falhou.
+  const [health, setHealth] = useState(null);
+  // Baralho da sessão de flashcards: a fila de cartões e a posição nela (lib.js). null = todos os cartões, na ordem.
+  const [deck, setDeck] = useState(null);
+  // Caderno de erros: as questões erradas de todos os materiais (lib.js). Como a biblioteca, o que está estragado
+  // fica fora da tela e continua gravado.
+  const [mistakes, setMistakes] = useState(() => readList('erros').filter(validMistake));
+  // Material que estava aberto quando o quiz do caderno de erros tomou o lugar dele. Só vale enquanto result é o
+  // material temporário do caderno (result.virtual).
+  const [parked, setParked] = useState(null);
+  // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
+  // Só com item, a resposta ainda não chegou.
+  const [why, setWhy] = useState(null);
+  // Ditado em andamento: o botão vira "Parar ditado".
+  const [listening, setListening] = useState(false);
+  // Última geração: texto, área e nível usados, e quais botões já mostraram esse material.
+  const made = useRef(DRAFT.made);
+  // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
+  const opened = result?.virtual ? parked : result;
+  // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
+  // clique.
+  const latest = useRef({});
+  latest.current = { page, result: opened };
+  const noticeTimer = useRef(null);
+  const chatEnd = useRef(null);
+  // Pedido à IA em andamento (AbortController): o botão "Cancelar" da espera o interrompe.
+  const pending = useRef(null);
+  const recognition = useRef(null);
+  // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
+  const draft = useRef(null);
+  const viewed = useRef(false);
+  // A página da vez (Resumos, Flashcards e Quizzes são a mesma, a do material) e a hora em que ela abriu, gravadas
+  // depois de cada troca (useLayoutEffect abaixo). live: a página já estava na tela antes deste desenho, então o que
+  // monta agora dentro dela anima à parte; o que vem junto com ela não, a entrada é a da página. cut: outra troca antes
+  // de ela assentar (0,35 s): o aluno passou direto, e a troca corta para a nova, sem entrada nem saída.
+  const viewKey = MATERIAL.includes(page) ? 'material' : page;
+  const viewAt = useRef({ key: null, at: -Infinity });
+  const live = viewAt.current.key === viewKey;
+  const cut = !live && performance.now() - viewAt.current.at < 350;
+  // Variantes do Motion (anim.js): com movimento reduzido, só a opacidade. A primeira página (a abertura do app) entra
+  // na mola de 0,45 s, bloco a bloco; as trocas de seção, na de 0,3 s.
+  const calm = useReducedMotion();
+  const { view: viewIn, title: titleIn, rise } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
+  const pop = calm ? POP_CALM : POP;
+  const focusIn = calm ? FOCUS_CALM : FOCUS;
+  const errorBox = useRef(null);
+  const cardText = useRef(null);
+  // Movimento pedido para o próximo desenho do cartão (virar ou passar para o seguinte).
+  const cardMotion = useRef(null);
+  // Marcas do caderno de erros já mostradas (chave e data do erro): na volta ao caderno só a de um erro novo desde a
+  // última visita se desenha, as outras aparecem prontas. As que já estavam no caderno na abertura contam como vistas.
+  const [penned] = useState(() => new Set(mistakes.map(m => m.key + m.date)));
+  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva].
+  const focusAfter = useRef(null);
+
+  // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário do caderno de erros
+  // não entra: no lugar dele vai o que estava aberto.
+  // Gravação que falha fica sem aviso: aqui seria um aviso por tecla.
+  // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
+  // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
+  useEffect(() => {
+    draft.current = { input, area, level, result: opened, made: made.current, chat, tips };
+    const timer = setTimeout(saveDraft, 400);
+    return () => clearTimeout(timer);
+  }, [input, area, level, opened, chat, tips]);
+
+  useEffect(() => {
+    const hidden = () => document.visibilityState === 'hidden' && saveDraft();
+    window.addEventListener('pagehide', saveDraft);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('pagehide', saveDraft);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (API_BASE) checkHealth();
+  }, []);
+
+  // O código das páginas carregadas à parte vem quando o navegador fica livre: na hora do clique ele já está aqui e
+  // o esqueleto do Suspense não pisca.
+  useEffect(() => {
+    const load = () => [Desempenho, Biblioteca, Perfil].forEach(page => page.preload().catch(() => {}));
+    if (!window.requestIdleCallback) {
+      const timer = setTimeout(load, 1500);
+      return () => clearTimeout(timer);
+    }
+    const id = requestIdleCallback(load, { timeout: 4000 });
+    return () => cancelIdleCallback(id);
+  }, []);
+
+  // A conversa ocupa a página, com a caixa de pergunta presa embaixo: sem isto a resposta nova chegava fora da vista.
+  useEffect(() => {
+    if (page === 'Dúvidas') chatEnd.current?.scrollIntoView({ block: 'end' });
+  }, [chat, asking, page]);
+
+  // A página nova começa do topo; a entrada dela é a do m.div da página (key, anim.js: ROUTINE).
+  useLayoutEffect(() => {
+    document.title = page + ' · Cérebro';
+    if (!viewed.current) {
+      viewed.current = true;
+      return;
+    }
+    window.scrollTo(0, 0);
+  }, [page]);
+
+  useLayoutEffect(() => {
+    viewAt.current = { key: viewKey, at: performance.now() };
+  }, [viewKey]);
+
+  // O caderno mostrou estas marcas: na próxima visita elas aparecem prontas.
+  useEffect(() => {
+    if (page === 'Erros') mistakes.forEach(m => penned.add(m.key + m.date));
+  }, [page, mistakes]);
+
+  // O desfazer que fica na tela é da página onde a ação aconteceu: trocar de página encerra a chance.
+  useEffect(() => setUndo(null), [page]);
+
+  // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
+  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
+  useEffect(() => setError(''), [input]);
+
+  // O texto do cartão virado ou do seguinte muda com movimento, em 0,16 s, e a folha fica parada: o aluno faz isso
+  // muitas vezes (anim.js, enter).
+  useLayoutEffect(() => {
+    if (cardMotion.current) enter(cardText.current, cardMotion.current);
+    cardMotion.current = null;
+  });
+
+  useEffect(() => {
+    if (!focusAfter.current) return;
+    const [selector, fallback, show] = focusAfter.current;
+    focusAfter.current = null;
+    (document.querySelector(selector) || (fallback && document.querySelector(fallback)))?.focus();
+    // show: o último elemento que casa rola até a vista. No celular a margem dele (mobile.css) desconta a barra de baixo
+    // e o "Próxima questão" preso: as marcas ✓ e ✗ com a nota ficam acima deles, não por baixo.
+    if (show) [...document.querySelectorAll(show)].pop()?.scrollIntoView({ block: 'nearest' });
+  });
+
+  // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
+  useEffect(() => {
+    if (error) errorBox.current?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+  }, [error]);
+
+  // O material temporário do caderno de erros só vale na página do quiz: sair dela por qualquer caminho (menu,
+  // logotipo, botão de um aviso) traz de volta o material que estava aberto, com o quiz no início.
+  // Mudar o estado durante o desenho faz o React refazer o desenho na hora: a página nova nunca aparece com o
+  // material temporário.
+  if (result?.virtual && page !== 'Quizzes') {
+    setResult(parked);
+    restart();
+  }
+
+  function saveDraft() {
+    if (!draft.current) return;
+    try {
+      localStorage.setItem('cerebro-rascunho', JSON.stringify(draft.current));
+    } catch {}
+  }
+
+  // Volta ao início do baralho ou do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
+  function restart(list = null) {
+    setIdx(0);
+    setDone(false);
+    setFlip(false);
+    setAnswer(null);
+    setAnswers([]);
+    setRetry(list);
+    setDeck(null);
+    setWhy(null);
+  }
+
+  function persist(k, v) {
+    try {
+      localStorage.setItem('cerebro-' + k, JSON.stringify(v));
+      return true;
+    } catch {
+      toast('Não foi possível salvar no navegador. Verifique o espaço e as permissões.');
+      return false;
+    }
+  }
+
+  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some enquanto o mouse ou o foco estão nele.
+  // O temporizador do aviso anterior é cancelado: ele apagava o aviso novo antes da hora.
+  function toast(text, action) {
+    clearTimeout(noticeTimer.current);
+    setNotice({ text, action });
+    noticeTimer.current = setTimeout(() => setNotice(null), action ? 10000 : 3200);
+  }
+
+  function holdNotice() {
+    clearTimeout(noticeTimer.current);
+  }
+
+  function releaseNotice() {
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 4000);
+  }
+
+  // Ação desfeita pelo aviso ou pelo botão que ficou na tela. focus é para onde vai o foco depois.
+  function offerUndo(kind, text, run, focus) {
+    const entry = { kind, text, run, focus };
+    setUndo(entry);
+    toast(text, { label: 'Desfazer', run: () => undoNow(entry) });
+  }
+
+  // O que volta para a lista entra com flipList() (anim.js): os itens abrem o vão em vez de pular. A linha do Desfazer
+  // sai do fluxo no mesmo desenho (popLayout), então a medida já é a da lista final e nada pula no fim da saída dela.
+  function undoNow(entry) {
+    clearTimeout(noticeTimer.current);
+    if (entry.focus) focusAfter.current = entry.focus;
+    flipList(document.querySelector('main .panel'), () => {
+      setUndo(u => (u === entry ? null : u));
+      setNotice(null);
+      entry.run();
+    });
+  }
+
+  // O cabeçalho mostra o estado real da IA. A consulta não chama o provedor.
+  async function checkHealth() {
+    try {
+      const response = await fetch(API_BASE + '/api/health', { signal: AbortSignal.timeout(5000) });
+      setHealth((response.ok && await response.json()) || false);
+    } catch {
+      setHealth(false);
+    }
+  }
+
+  // Todo pedido à IA termina com uma consulta nova: o contador de chamadas anda e um backend que caiu aparece na hora.
+  async function callAI(path, payload) {
+    const stop = new AbortController();
+    pending.current = stop;
+    try {
+      return await requestAPI(path, payload, stop.signal);
+    } finally {
+      if (pending.current === stop) pending.current = null;
+      checkHealth();
+    }
+  }
+
+  // "Cancelar" na espera: o pedido em andamento para e a tela volta ao que estava, sem aviso de erro.
+  function cancelAI() {
+    pending.current?.abort();
+  }
+
+  // Outra aba pode ter gravado depois que esta abriu: a lista nova parte do que está no navegador, não da cópia
+  // desta aba, que apagaria o que a outra gravou. Se o navegador recusar a gravação, o evento fica só nesta tela.
+  // q é o enunciado da questão do quiz: com ele o desempenho conta só a primeira resposta de cada questão no dia.
+  function event(kind, ok, topic = area, q, title = result?.title) {
+    const entry = { kind, ok, area: topic, title, q, date: new Date().toISOString() };
+    const next = [...readList('events'), entry];
+    setEvents(persist('events', next) ? next.filter(validEvent) : [...events, entry]);
+  }
+
+  // Muda o caderno de erros a partir da lista do navegador, como event(). Se o navegador recusar a gravação, a
+  // mudança vale só nesta tela. Devolve true se gravou.
+  function notebook(change) {
+    const next = change(readList('erros'));
+    const stored = persist('erros', next);
+    setMistakes(stored ? next.filter(validMistake) : change);
+    return stored;
+  }
+
+  // De onde vem a questão ou o tópico: o material aberto ou, no quiz do caderno de erros, o material e a área que
+  // a questão traz. Área e nível vão nos pedidos à IA, que só aceita os das listas: material antigo ou importado
+  // pode não ter (e o do caderno não tem nível), e aí valem a área do editor e o nível Básico.
+  function origin(item) {
+    const from = result.virtual ? item : result;
+    return {
+      title: from.title,
+      area: AREAS.includes(from.area) ? from.area : area,
+      level: LEVELS.includes(result.level) ? result.level : 'Básico',
+    };
+  }
+
+  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página.
+  function go(next) {
+    if (result?.virtual) setResult(parked);
+    setPage(next);
+    // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
+    setError('');
+    restart();
+    setMore(false);
+  }
+
+  async function generate(kind = 'resumo') {
+    if (busy || asking) return;
+    setError('');
+    if (input.trim().length < (API_BASE ? 3 : 30)) {
+      setError('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
+      return;
+    }
+    // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
+    // O mesmo botão de novo gera material novo.
+    const key = JSON.stringify([input, area, level]);
+    const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
+    const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
+    // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
+    // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
+    const wait = !reuse && !!API_BASE;
+    setBusy({ kind, label: 'Gerando o material…', since: Date.now(), prior: result });
+    if (wait) {
+      setPage(target);
+      restart();
+    }
+    try {
+      let data;
+      if (reuse) {
+        data = result;
+      } else if (API_BASE) {
+        data = await callAI('/api/generate', { content: input, area, level });
+      } else {
+        data = demo(input);
+      }
+      // A mesma conferência do rascunho e da biblioteca: o que abre aqui também volta depois de um F5.
+      if (!validMaterial(data)) {
+        throw Error('Material incompleto recebido do backend');
+      }
+      // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
+      // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
+      // material do mesmo texto.
+      const previous = latest.current.result;
+      const kept = !!previous && !sameMaterial(previous, data) && keep(previous);
+      setResult({ ...data, area, level });
+      made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
+      restart();
+      const at = latest.current.page;
+      if (at === 'Estudar' || MATERIAL.includes(at)) {
+        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
+        if (at === 'Estudar') setPage(target);
+        if (kept) toast('O material anterior foi guardado na biblioteca');
+      } else {
+        // O aluno saiu para outra página enquanto esperava: fica onde está e abre o material quando quiser.
+        toast('Material pronto' + (kept ? '. O anterior foi guardado na biblioteca' : ''), {
+          label: 'Abrir',
+          run: () => {
+            setPage(target);
+            restart();
+          },
+        });
+      }
+    } catch (e) {
+      // Cancelado ou com erro, o aluno volta do esqueleto para o editor: o aviso de erro fica junto dos botões de gerar.
+      // Se nesse meio-tempo ele abriu outro material, fica nele.
+      if (wait && MATERIAL.includes(latest.current.page) && latest.current.result === result) setPage('Estudar');
+      if (e.cancelled) toast('Pedido cancelado');
+      else setError('Não foi possível gerar: ' + e.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Grava o material no topo da biblioteca e devolve a cópia gravada, ou null se o navegador recusou.
+  // Parte da lista do navegador, não da cópia desta aba: outra aba pode ter salvo algo depois que esta abriu.
+  function store(material) {
+    const entry = { ...material, id: Date.now(), date: new Date().toISOString() };
+    const next = [entry, ...readList('saved')];
+    if (!persist('saved', next)) return null;
+    setSaved(next.filter(validMaterial));
+    return entry;
+  }
+
+  // Não duplica o que já está salvo e só avisa "salvo" quando o navegador gravou de verdade.
+  function save() {
+    if (!result) return;
+    const stored = readList('saved');
+    if (result.id && stored.some(s => s?.id === result.id)) {
+      setSaved(stored.filter(validMaterial));
+      toast('Este material já está na biblioteca');
+      return;
+    }
+    const entry = store(result);
+    if (!entry) return;
+    setResult(entry);
+    toast('Material salvo na biblioteca');
+  }
+
+  // Material aberto que ainda não foi para a biblioteca é guardado antes de outro tomar o lugar: ele custou uma
+  // chamada de IA. Quem já tem id foi salvo ou veio de lá. Devolve true se guardou.
+  function keep(previous) {
+    return !!previous && !previous.id && !!store(previous);
+  }
+
+  // Exclui na hora, sem perguntar, e deixa desfazer: o material volta ao mesmo lugar da lista.
+  // O botão de excluir sai da tela com o material: o foco vai para o "Desfazer" que fica no topo da lista.
+  function remove(material) {
+    const stored = readList('saved');
+    const at = stored.findIndex(s => s?.id === material.id);
+    const next = stored.filter(s => s?.id !== material.id);
+    if (!persist('saved', next)) return;
+    setSaved(next.filter(validMaterial));
+    focusAfter.current = ['.undo-row button', '#busca'];
+    offerUndo('material', 'Material excluído: ' + material.title, () => {
+      const back = readList('saved');
+      if (!back.some(s => s?.id === material.id)) back.splice(Math.max(at, 0), 0, material);
+      if (persist('saved', back)) setSaved(back.filter(validMaterial));
+    }, ['[data-id="' + material.id + '"] .open', '#busca']);
+  }
+
+  // Exportar: um arquivo com tudo o que este navegador guarda (biblioteca, desempenho, caderno de erros e perfil),
+  // para levar a outro computador. Parte do que está gravado, não das listas desta aba.
+  function exportBackup() {
+    const backup = {
+      versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
+    };
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
+    link.download = 'cerebro-backup-' + localDay(new Date()) + '.json';
+    link.click();
+    // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+  }
+
+  // Importar: junta o arquivo ao que já está gravado, sem duplicar (lib.js). O arquivo vem de fora: o que não passa
+  // na conferência fica de fora, e um arquivo que não é backup não muda nada.
+  async function importBackup(e) {
+    const file = e.target.files?.[0];
+    // Sem esvaziar o campo, escolher o mesmo arquivo de novo não dispararia o onChange.
+    e.target.value = '';
+    if (!file) return;
+    // Um backup cabe em poucos megabytes, o limite do armazenamento do navegador: arquivo maior não é um.
+    const backup = file.size > 20e6 ? null : readBackup(await file.text().catch(() => ''));
+    if (!backup) {
+      toast('Este arquivo não é um backup do Cérebro.');
+      return;
+    }
+    const before = { saved: readList('saved'), events: readList('events'), erros: readList('erros') };
+    const after = mergeBackup(before, backup);
+    if (!persist('saved', after.saved)) return;
+    setSaved(after.saved.filter(validMaterial));
+    if (!persist('events', after.events)) return;
+    setEvents(after.events.filter(validEvent));
+    if (!persist('erros', after.erros)) return;
+    setMistakes(after.erros.filter(validMistake));
+    toast(backupNote(before, after));
+  }
+
+  // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados.
+  // Os dois botões ficam desabilitados no cartão novo (ainda não virado): o foco passa para o cartão.
+  function cardNext(ok) {
+    event('flashcard', ok, result.area);
+    setFlip(false);
+    setDeck(ok ? deckRight(session) : deckWrong(session));
+    cardMotion.current = 'translateX(12px)';
+    focusAfter.current = ['.flashcard', '.deck-done .primary'];
+  }
+
+  // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa.
+  // A questão errada entra no caderno de erros; a certa sai dele, se o erro guardado é de outro dia (lib.js).
+  // As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
+  function submit(value) {
+    if (answer !== null) return;
+    const q = quizList[idx];
+    const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
+    const from = origin(q);
+    const now = new Date();
+    setAnswer({ value, ok });
+    setAnswers([...answers, { ...q, ok, given: value }]);
+    event('quiz', ok, from.area, fold(q.question), from.title);
+    notebook(list => (ok
+      ? clearMistake(list, mistakeKey(from.title, q.question), now)
+      : addMistake(list, q, from.title, from.area, now)));
+    // Depois do foco, a página rola até a última linha com marca da caneta (ou o próprio retorno) ficar à vista.
+    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line'];
+  }
+
+  // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
+  // curta; no celular não, para o teclado não abrir sozinho) ou para o título do resultado.
+  function nextQuestion() {
+    setWhy(null);
+    if (idx + 1 >= quizList.length) {
+      setDone(true);
+      focusAfter.current = ['.quiz-done h2'];
+    } else {
+      setIdx(idx + 1);
+      setAnswer(null);
+      focusAfter.current = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
+    }
+  }
+
+  // "Refazer meus erros": o quiz abre num material temporário com as questões do caderno, cada uma com o material
+  // e a área de onde veio. O material que estava aberto fica guardado e volta quando o aluno sai do quiz.
+  function redoMistakes() {
+    setParked(opened);
+    setResult({
+      virtual: true,
+      title: 'Caderno de erros',
+      area: '',
+      level: '',
+      summary: [],
+      flashcards: [],
+      quiz: mistakes.map(m => ({ ...m.item, title: m.title, area: m.area })),
+    });
+    setPage('Quizzes');
+    restart();
+    // Um aviso ainda na tela com o botão "Abrir" (material pronto) reiniciaria este quiz em vez de abrir o material.
+    setNotice(null);
+  }
+
+  // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
+  function drop(mistake) {
+    if (!notebook(list => removeMistake(list, mistake.key))) return;
+    focusAfter.current = ['.undo-row button'];
+    offerUndo('erro', 'Questão tirada do caderno', () =>
+      notebook(list => (list.some(e => e?.key === mistake.key) ? list : [...list, mistake])),
+    ['[data-key="' + CSS.escape(mistake.key) + '"] .drop', '.erros-head .primary']);
+  }
+
+  // "Não entendi, me explique": o tutor responde no lugar do pedido, sem entrar na conversa da página Dúvidas.
+  // item é a questão ou o tópico do pedido: a resposta só é desenhada nele, então a que chega depois de o aluno
+  // seguir adiante não aparece em outro lugar.
+  async function explain(item, text, content) {
+    if (waiting) return;
+    const from = origin(item);
+    setWhy({ item });
+    setBusy({ kind: 'why', label: 'Esperando a explicação…', since: Date.now() });
+    try {
+      const data = await callAI('/api/chat', {
+        question: text, content, area: from.area, level: from.level, history: [],
+      });
+      setWhy({ item, text: data.answer });
+    } catch (e) {
+      setWhy(e.cancelled ? null : { item, error: e.message });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // "Pedir revisão da IA": a comparação de texto marca errado quem escreve o certo com outras palavras.
+  // Se a IA aceita a resposta, ela passa a valer como certa na tela (answer e answers), no evento já gravado e no
+  // caderno de erros. "parcial" e "incorreta" só são mostrados. A revisão fica guardada na própria resposta.
+  async function review() {
+    if (waiting) return;
+    const q = quiz;
+    const mine = answer;
+    const counted = answers[answers.length - 1];
+    const from = origin(q);
+    // O aluno pode seguir adiante, ou refazer a questão, enquanto espera: só muda a resposta que foi revista.
+    // Na tela ela é reconhecida pelo próprio objeto; no que está gravado, por ser anterior a este pedido.
+    const asked = new Date().toISOString();
+    setBusy({ kind: 'review', label: 'Esperando a revisão…', since: Date.now(), answer: mine });
+    try {
+      const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
+      if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
+        throw Error('Revisão incompleta recebida do backend');
+      }
+      const accepted = data.verdict === 'correta';
+      setAnswer(a => (a === mine ? { ...a, ok: accepted, review: data } : a));
+      if (accepted) {
+        setAnswers(list => list.map(a => (a === counted ? { ...a, ok: true } : a)));
+        const fix = list => fixLastQuizEvent(list, from.title, fold(q.question), asked);
+        const next = fix(readList('events'));
+        setEvents(persist('events', next) ? next.filter(validEvent) : fix);
+        notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
+      }
+    } catch (e) {
+      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e.message } } : a));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo.
+  // O servidor não guarda conversa: as 6 últimas mensagens vão junto, para ele entender um "me dê um exemplo".
+  // O texto do editor já vai em content (ou é a própria pergunta), então a cópia dele fica fora do histórico.
+  // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
+  // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
+  async function ask(message = question) {
+    if (busy || asking || !message.trim()) return;
+    const msg = message.trim();
+    const mine = { role: 'user', text: msg };
+    setError('');
+    if (message === question) setQuestion('');
+    setChat(c => [...c, mine]);
+    if (!API_BASE) {
+      setChat(c => [...c, {
+        role: 'assistant',
+        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (input || EXAMPLE).slice(0, 450),
+      }]);
+      return;
+    }
+    setAsking(Date.now());
+    try {
+      const data = await callAI('/api/chat', {
+        question: msg,
+        content: msg === input.trim() ? '' : input,
+        area,
+        level,
+        history: chat
+          .filter(m => m.text !== input.trim())
+          .slice(-6)
+          .map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') })),
+      });
+      setChat(c => [...c, { role: 'assistant', text: data.answer }]);
+      setTips({ key: JSON.stringify([input, area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
+    } catch (e) {
+      if (!e.cancelled) setError(e.message);
+      setChat(c => c.filter(m => m !== mine));
+      if (message === question) setQuestion(q => q || msg);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  // Ditado em pt-BR pelo navegador. Clicar de novo enquanto ouve para o ditado.
+  function dictation() {
+    if (listening) {
+      recognition.current?.stop();
+      return;
+    }
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Speech) {
+      toast('Ditado indisponível neste navegador. Use Chrome e permita o microfone.');
+      return;
+    }
+    const speech = new Speech();
+    speech.lang = 'pt-BR';
+    speech.onresult = e => setInput(s => dictate(s, e.results[0][0].transcript));
+    speech.onerror = e => toast(dictationError(e.error));
+    speech.onend = () => setListening(false);
+    recognition.current = speech;
+    speech.start();
+    setListening(true);
+    toast('Ouvindo…');
+  }
+
+  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
+  function tabKeys(e) {
+    const at = TABS.findIndex(([p]) => p === page);
+    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const [next] = TABS[(to + TABS.length) % TABS.length];
+    setPage(next);
+    restart();
+    // A aba dentro desta mesma faixa: a do esqueleto da geração não tem id.
+    e.currentTarget.querySelector('[data-tab=' + SLUG[next] + ']')?.focus();
+  }
+
+  // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
+  function openSaved(material) {
+    if (keep(result)) toast('O material anterior foi guardado na biblioteca');
+    made.current = { key: '', kinds: [] };
+    setResult(material);
+    setPage('Resumos');
+    restart();
+  }
+
+  // Perfil confirmado na janela (Perfil.jsx).
+  function saveProfile(profile) {
+    setArea(profile.area);
+    setUser(profile);
+    setLogin(false);
+    if (persist('user', profile)) toast('Seu espaço está pronto');
+  }
+
+  const quizList = retry || result?.quiz || [];
+  const quiz = quizList[idx];
+  const wrong = answers.filter(a => !a.ok);
+  const right = answers.length - wrong.length;
+  const session = deck || deckStart(result?.flashcards?.length || 0);
+  const card = result?.flashcards?.[session.queue[session.pos]];
+  const today = localDay(new Date());
+  // Os números do desempenho só mudam com as respostas (ou na virada do dia), não a cada tecla no editor.
+  // Quiz e cartões são números separados: nos cartões é o aluno quem diz se acertou.
+  const { quizzes, cards, streakDays, studied, weakest } = useMemo(() => {
+    const now = new Date();
+    return {
+      quizzes: quizRate(events),
+      cards: cardRate(events),
+      streakDays: streak(events, now),
+      studied: lastDays(events, 5, now),
+      weakest: weakSpot(events, now),
+    };
+  }, [events, today]);
+  const days = useMemo(() => chartDays(events, chartArea, new Date()), [events, chartArea, today]);
+  // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
+  const percent = r => (r.total ? r.rate + '%' : '—');
+  const summary = result?.summary || [];
+  const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
+  // Material com algum trecho de origem: nele, o tópico que não tem trecho ganha a etiqueta de explicação da IA.
+  const sourced = summary.some(s => s.source?.trim());
+  // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
+  const shown = useMemo(
+    () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
+    [page, saved, query, filter]
+  );
+  const busiest = Math.max(1, ...days.map(d => d.total));
+  const chatHints = hints({ chat, input, area, tips });
+  const greeting = hello({ user, area, level, input, api: !!API_BASE });
+  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas.
+  const waiting = !!busy || asking;
+  const isSaved = !!result?.id && saved.some(s => s.id === result.id);
+  const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
+  const slug = SLUG[page];
+  const inMore = MORE.some(([n]) => n === page);
+  // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
+  // do clique (o aluno pode abrir outro da biblioteca enquanto espera).
+  const making = !!busy && ['resumo', 'flashcards', 'quiz'].includes(busy.kind) && result === busy.prior;
+  // A espera de busy fica no lugar da resposta quando esse lugar está na tela (o esqueleto do material, a explicação
+  // do tópico ou da questão aberta, a revisão no retorno); senão, na faixa de cima. Decidido aqui, não no CSS: a faixa
+  // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
+  const waitInline = making ? MATERIAL.includes(page)
+    : busy?.kind === 'why' ? (page === 'Resumos' && topics.includes(why?.item)) || (page === 'Quizzes' && !done && why?.item === quiz)
+    : busy?.kind === 'review' && page === 'Quizzes' && !done && answer === busy.answer;
+  // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
+  // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
+  const still = byKeyboard() || window.scrollY > 80 || cut;
+  const errorBanner = (
+    <AnimatePresence custom={byKeyboard()}>
+      {error && (
+        <m.div key="erro" ref={errorBox} role="alert" className="error" variants={pop} initial={appear()} animate="show" exit="exit">
+          <Icon name="alerta" />
+          <p>{error}</p>
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+  // Abas Resumo, Flashcards e Quiz. No esqueleto da geração (wait) elas trocam a parte que espera, sem ids: os do
+  // material pronto não se repetem enquanto um esmaece por cima do outro.
+  const tablist = wait => (
+    <div className="tabs" role="tablist" aria-label="Partes do material" onKeyDown={tabKeys}>
+      {TABS.map(([p, l]) => (
+        <button
+          key={p}
+          type="button"
+          role="tab"
+          id={wait ? undefined : 'aba-' + SLUG[p]}
+          data-tab={SLUG[p]}
+          aria-selected={page === p}
+          aria-controls={wait ? undefined : 'material-painel'}
+          tabIndex={page === p ? 0 : -1}
+          onClick={() => {
+            setPage(p);
+            restart();
+          }}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+
+  const navButton = ([n, s], className, short = false) => (
+    <button
+      key={n}
+      type="button"
+      className={className}
+      data-tab={s}
+      aria-current={page === n ? 'page' : undefined}
+      onClick={() => go(n)}
+    >
+      <Icon name={s} />
+      <span>{(short && SHORT[n]) || n}</span>
+    </button>
+  );
+
+  const profileButton = onClick => (
+    <button type="button" className="profile" onClick={onClick}>
+      <span className="avatar" aria-hidden="true">{(user?.name || 'V')[0].toUpperCase()}</span>
+      <span className="profile-text">
+        {user?.name || 'Visitante'}
+        <small>{user ? 'Perfil local' : 'Criar perfil local'}</small>
+      </span>
+      <Icon name="abaixo" />
+    </button>
+  );
+
+  // LazyMotion com domAnimation: só a parte da Motion que estas animações usam (sem arrastar nem layout). MotionConfig
+  // com reducedMotion="user" é a rede de segurança: com movimento reduzido, nenhum deslocamento passa.
+  return (
+    <MotionConfig reducedMotion="user">
+    <LazyMotion features={domAnimation} strict>
+    <div className="app">
+      <div className="rail">
+        <div className="rail-inner">
+          <a
+            className="brand"
+            href="#"
+            onClick={e => {
+              e.preventDefault();
+              setPage('Estudar');
+            }}
+          >
+            <BrandMark />
+            <span>Cérebro</span>
+          </a>
+          <nav aria-label="Seções">{SECTIONS.map(s => navButton(s, 'nav-item'))}</nav>
+          {profileButton(() => setLogin(true))}
+        </div>
+      </div>
+      <div className="shell">
+        <header className="topbar">
+          {/* No celular, sem o menu da esquerda, a barra de cima mostra a marca e o nome do app: o título logo abaixo
+              já diz a página (mobile.css). */}
+          <p className="crumbs">
+            <BrandMark />
+            <span className="crumb-brand">Cérebro</span>
+            <span className="crumb-root">Meu espaço</span>
+            <span className="crumb-sep" aria-hidden="true">/</span>
+            <span className="crumb-page">{page}</span>
+          </p>
+          {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
+          {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
+          <p className="ai-status" data-tone={status.tone}>
+            <span className="status-dot" aria-hidden="true"></span>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
+                {status.text}
+              </m.span>
+            </AnimatePresence>
+          </p>
+        </header>
+        {/* data-instant: a página que sai some sem movimento (styles.css). */}
+        <main style={{ '--sec': 'var(--tab-' + slug + ')' }} data-instant={calm || still || undefined}>
+          {/* Cada página é um m.div novo (key): a entrada roda quando ela abre e só então. Os filhos com
+              variants={rise} são os blocos que existem desde a abertura; o resto entra sem animação.
+              Resumos, Flashcards e Quizzes são abas do mesmo material: a mesma key, então trocar de aba não refaz a
+              entrada e a aba que tem o foco do teclado continua na tela (com uma key por página ela era recriada e o
+              foco caía na página).
+              A página que sai (popLayout) sai do fluxo na hora e esmaece por cima da nova, sem receber clique. Numa
+              troca no meio de outra (cut) a nova aparece parada e a do meio some na hora. */}
+          <AnimatePresence mode="popLayout" custom={still}>
+            <m.div
+              key={viewKey}
+              className="view"
+              variants={viewIn}
+              initial={cut ? false : appear()}
+              animate="show"
+              exit="exit"
+            >
+              <m.div className="page-head" variants={titleIn}>
+                <h1 className="page-title">{TITLES[page] || page}</h1>
+                {page === 'Estudar' && (
+                  <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                )}
+              </m.div>
+              {/* No Estudar o erro aparece junto dos botões de gerar; no Dúvidas, junto da caixa de pergunta. */}
+              {page !== 'Estudar' && page !== 'Dúvidas' && errorBanner}
+              {page === 'Estudar' && (
+                <>
+                  <m.div variants={rise}>
+                    <div className="editor">
+                      <textarea
+                        aria-label="Conteúdo ou pergunta para o Cérebro"
+                        aria-describedby="composer-keyboard-hint"
+                        maxLength={20000}
+                        value={input}
+                        onChange={e => {
+                          setInput(e.target.value);
+                          if (undo?.kind === 'texto') setUndo(null);
+                        }}
+                        onKeyDown={e => {
+                          if (
+                            !TOUCH && e.key === 'Enter' && !e.shiftKey &&
+                            !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229
+                          ) {
+                            e.preventDefault();
+                            if (!waiting && !e.repeat && input.trim()) {
+                              setPage('Dúvidas');
+                              ask(input);
+                            }
+                          }
+                        }}
+                        placeholder={'Cole seu texto, anotações ou digite uma matéria…\n\nPode ser aquele capítulo difícil, um conceito novo ou o conteúdo da próxima prova.'}
+                      />
+                      <div className="editor-tools">
+                        {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
+                        <button type="button" className="tool" onClick={dictation}>
+                          <Icon name="falar" />
+                          <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
+                          <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="tool"
+                          onClick={() => {
+                            // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás.
+                            const before = input.trim() ? { input, area } : null;
+                            setInput(EXAMPLE);
+                            setArea('Escolar');
+                            if (!before) {
+                              toast('Exemplo de fotossíntese adicionado');
+                              return;
+                            }
+                            offerUndo('texto', 'Exemplo de fotossíntese adicionado', () => {
+                              setInput(before.input);
+                              setArea(before.area);
+                            });
+                          }}
+                        >
+                          <Icon name="exemplo" />
+                          <span className="full">Usar um exemplo</span>
+                          <span className="short" aria-hidden="true">Exemplo</span>
+                        </button>
+                        {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
+                            voltar a escrever: o foco fica no botão e a chance de voltar não some com o aviso. */}
+                        {undo?.kind === 'texto' ? (
+                          <button type="button" className="tool" onClick={() => undoNow(undo)}>
+                            <Icon name="desfazer" />
+                            <span>Desfazer</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="tool"
+                            disabled={!input}
+                            onClick={() => {
+                              const before = input;
+                              setInput('');
+                              offerUndo('texto', 'Texto apagado', () => setInput(before));
+                            }}
+                          >
+                            <Icon name="limpar" />
+                            <span>Limpar</span>
+                          </button>
+                        )}
+                        <span className="counter">{input.length.toLocaleString('pt-BR')} / 20.000</span>
+                        <button
+                          type="button"
+                          className="ask"
+                          disabled={waiting || !input.trim()}
+                          onClick={() => {
+                            setPage('Dúvidas');
+                            ask(input);
+                          }}
+                        >
+                          {/* Em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome inteiro continua no botão. */}
+                          <span className="full">Perguntar ao Cérebro</span>
+                          <span className="short" aria-hidden="true">Perguntar</span>
+                          <Icon name="seta" />
+                        </button>
+                      </div>
+                    </div>
+                    <p id="composer-keyboard-hint" className="hint">
+                      {TOUCH
+                        ? 'Use o botão para perguntar ao Cérebro'
+                        : 'Enter para perguntar ao Cérebro · Shift+Enter para nova linha'}
+                    </p>
+                  </m.div>
+                  <m.div variants={rise}>
+                    <div className="selectors">
+                      <label>
+                        Área de conhecimento
+                        <select value={area} onChange={e => setArea(e.target.value)}>
+                          {AREAS.map(a => <option key={a}>{a}</option>)}
+                        </select>
+                      </label>
+                      <label>
+                        Nível de aprendizado
+                        <select value={level} onChange={e => setLevel(e.target.value)}>
+                          {LEVELS.map(a => <option key={a}>{a}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <p className="note">
+                      <Icon name={API_BASE ? 'privacidade' : 'info'} />
+                      {API_BASE
+                        ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
+                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
+                    </p>
+                    <div className="actions" role="group" aria-label="Gerar material">
+                      {ACTIONS.map(([k, s, title]) => (
+                        <button
+                          key={k}
+                          type="button"
+                          className={'action' + (k === 'resumo' ? ' primary' : '')}
+                          data-tab={s}
+                          disabled={waiting}
+                          aria-busy={busy?.kind === k || undefined}
+                          onClick={() => (k === 'chat' ? setPage('Dúvidas') : generate(k))}
+                        >
+                          {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
+                              cima: aqui o botão só diz que está gerando. */}
+                          <Icon name={s} />
+                          {busy?.kind === k ? 'Gerando…' : title}
+                        </button>
+                      ))}
+                    </div>
+                  </m.div>
+                  {errorBanner}
+                  <m.section className="progress" aria-labelledby="progresso" variants={rise}>
+                    <div className="progress-head">
+                      <h2 id="progresso">Seu progresso</h2>
+                      {mistakes.length > 0 && (
+                        <button type="button" className="link" onClick={() => setPage('Erros')}>
+                          {mistakes.length + (mistakes.length === 1 ? ' questão para rever' : ' questões para rever')}
+                        </button>
+                      )}
+                      <button type="button" className="link" onClick={() => setPage('Desempenho')}>
+                        Ver meu desempenho
+                        <Icon name="seta" />
+                      </button>
+                    </div>
+                    <div className="stats">
+                      <Stat value={streakDays + (streakDays === 1 ? ' dia' : ' dias')} label="de constância" />
+                      <Stat value={cards.total} label="flashcards revisados" />
+                      <Stat value={quizzes.total} label="questões respondidas" />
+                      <Stat value={percent(quizzes)} label="de acerto no quiz" />
+                      {/* Os dias de estudo da semana, com a mesma caneta: ✓ dia com estudo, ○ dia sem. */}
+                      <div
+                        className="stat days"
+                        role="img"
+                        aria-label={'Dias com estudo nos últimos 5: ' + studied.filter(Boolean).length}
+                      >
+                        <span className="day-marks">
+                          {studied.map((day, i) => <Pen key={i} kind={day ? 'certo' : 'novo'} />)}
+                        </span>
+                        <span>últimos 5 dias</span>
+                      </div>
+                    </div>
+                  </m.section>
+                </>
+              )}
+              {MATERIAL.includes(page) && (
+                <m.div variants={rise}>
+                  {/* Esqueleto, vazio ou material: a troca entre eles esmaece no lugar (popLayout tira do fluxo o que
+                      sai). Na abertura da página nada disso anima à parte (live false: a entrada é a da página). O
+                      initial fica em cada folha e não no AnimatePresence: lá ele valeria para tudo o que monta depois
+                      dentro da folha (o fim do baralho e do quiz, a explicação), que então entraria sem movimento. */}
+                  <AnimatePresence mode="popLayout" custom={byKeyboard()}>
+                    {making ? (
+                      <m.section
+                        key="espera"
+                        className="panel material material-wait"
+                        aria-busy="true"
+                        variants={focusIn}
+                        initial={live && appear()}
+                        animate="show"
+                        exit="exit"
+                      >
+                        {/* O fio da espera corre na borda de cima da folha; o Cancelar fica onde fica o Salvar. */}
+                        <div className="result-header">
+                          <div>
+                            <Sk w="55%" className="sk-title" />
+                            <div role="status">
+                              <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
+                            </div>
+                          </div>
+                        </div>
+                        {tablist(true)}
+                        <div role="tabpanel" aria-label={TABS.find(([p]) => p === page)?.[1]}>
+                          {page === 'Resumos' ? <SummarySkeleton /> : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
+                        </div>
+                      </m.section>
+                    ) : !result ? (
+                      <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
+                        <h2>Seu próximo aprendizado está por aqui.</h2>
+                        <p>Adicione um texto para criar seu material de estudo.</p>
+                        <button type="button" className="primary" onClick={() => setPage('Estudar')}>Adicionar conteúdo</button>
+                      </m.section>
+                    ) : (
+                      <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
+                        {/* O material temporário do caderno de erros só tem quiz: sem o botão de salvar e sem as abas. */}
+                        <div className="result-header">
+                          <div>
+                            <h2>{result.title}</h2>
+                            <p className="meta">
+                              {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
+                            </p>
+                            {aiNote}
+                          </div>
+                          {!result.virtual && (
+                            <button type="button" disabled={isSaved} onClick={save}>
+                              <Icon name={isSaved ? 'check' : 'salvar'} />
+                              {isSaved ? 'Salvo' : 'Salvar material'}
+                            </button>
+                          )}
+                        </div>
+                        {!result.virtual && tablist(false)}
+                        <div
+                          id="material-painel"
+                          role={result.virtual ? undefined : 'tabpanel'}
+                          aria-labelledby={result.virtual ? undefined : 'aba-' + slug}
+                        >
+                          {page === 'Resumos' && (
+                            <>
+                              <div className="row summary-tools">
+                                <label className="inline-field">
+                                  Tamanho
+                                  <select value={size} onChange={e => setSize(e.target.value)}>
+                                    {['Curto', 'Médio', 'Detalhado'].map(s => <option key={s}>{s}</option>)}
+                                  </select>
+                                </label>
+                                <span className="topic-count">
+                                  {'Mostrando ' + topics.length + ' de ' + summary.length +
+                                    (summary.length === 1 ? ' tópico' : ' tópicos')}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      // Copia o resumo inteiro, não só os tópicos que o tamanho escolhido mostra.
+                                      await navigator.clipboard.writeText(summary.map(s => s.concept + ': ' + s.text).join('\n'));
+                                      toast('Resumo copiado');
+                                    } catch {
+                                      toast('Cópia indisponível neste navegador');
+                                    }
+                                  }}
+                                >
+                                  <Icon name="copiar" />
+                                  Copiar
+                                </button>
+                              </div>
+                              <ol className="summary" role="list">
+                                {topics.map((s, i) => (
+                                  <li key={i}>
+                                    <span className="topic-n" aria-hidden="true">{i + 1}</span>
+                                    <div>
+                                      <h3>{s.concept}</h3>
+                                      <p>{s.text}</p>
+                                      {s.source?.trim()
+                                        ? <p className="source">{'No seu texto: "' + s.source.trim() + '"'}</p>
+                                        : sourced && <span className="ai-tag">Explicação da IA: confira</span>}
+                                      {API_BASE && (
+                                        <div className="ai-ask">
+                                          <button
+                                            type="button"
+                                            disabled={waiting}
+                                            onClick={() => explain(s, whyTopic(s.concept), s.text)}
+                                          >
+                                            Não entendi, me explique <small>1 chamada de IA</small>
+                                          </button>
+                                        </div>
+                                      )}
+                                      {why?.item === s && <Why {...why} wait={busy} onCancel={cancelAI} pop={pop} focusIn={focusIn} />}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ol>
+                              <button
+                                type="button"
+                                className="primary"
+                                onClick={() => {
+                                  setPage('Flashcards');
+                                  restart();
+                                }}
+                              >
+                                Estudar flashcards deste resumo
+                                <Icon name="seta" />
+                              </button>
+                            </>
+                          )}
+                          {page === 'Flashcards' && (session.pos >= session.queue.length ? (
+                            // Fim do baralho (Jhey): a folha sobe com um balanço curto e a caneta passa por cada cartão.
+                            <m.div className="empty deck-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
+                              <h2>Baralho concluído</h2>
+                              <p>{deckSummary(session)}</p>
+                              <DeckMarks session={session} finale />
+                              <div className="row center">
+                                <button type="button" className="primary" onClick={() => setDeck(null)}>Revisar novamente</button>
+                                {deckMissed(session).length > 0 && (
+                                  <button type="button" onClick={() => setDeck(deckRedo(session))}>
+                                    <Icon name="refazer" />
+                                    Refazer só os que errei
+                                  </button>
+                                )}
+                              </div>
+                            </m.div>
+                          ) : card && (
+                            <>
+                              <div className="study-head">
+                                <span>Cartão {session.pos + 1} de {session.queue.length}</span>
+                                <span className="tag">{flip ? 'Resposta' : 'Pergunta'}</span>
+                              </div>
+                              <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
+                              <DeckMarks session={session} fresh />
+                              <button
+                                type="button"
+                                className={'flashcard' + (flip ? ' flipped' : '')}
+                                onClick={() => {
+                                  setFlip(!flip);
+                                  cardMotion.current = 'perspective(900px) rotateX(-10deg)';
+                                }}
+                              >
+                                <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
+                                <span className="face-hint">
+                                  <Icon name="refazer" />
+                                  {(TOUCH ? 'Toque' : 'Clique') + ' para ' + (flip ? 'ver a pergunta' : 'revelar a resposta')}
+                                </span>
+                              </button>
+                              <div className="row center verdicts">
+                                <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
+                                  <Icon name="fechar" />
+                                  Errei
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={session.pos + 1 >= session.queue.length}
+                                  onClick={() => {
+                                    setDeck(deckLater(session));
+                                    setFlip(false);
+                                    cardMotion.current = 'translateX(12px)';
+                                    toast('Cartão movido para o final do baralho');
+                                  }}
+                                >
+                                  <Icon name="refazer" />
+                                  Revisar depois
+                                </button>
+                                <button type="button" className="primary" disabled={!flip} onClick={() => cardNext(true)}>
+                                  <Icon name="check" />
+                                  Acertei
+                                </button>
+                              </div>
+                            </>
+                          ))}
+                          {page === 'Quizzes' && (done ? (
+                            // Fim do quiz (Jhey): a folha sobe com um balanço curto e a caneta marca cada erro, em fila.
+                            <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
+                              <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
+                              <p>{right} de {answers.length} respostas corretas.</p>
+                              {wrong.length > 0 ? (
+                                <ol className="review" role="list">
+                                  {wrong.map((q, i) => (
+                                    <li key={i}>
+                                      <Pen kind="errei" draw delay={0.3 + Math.min(i, 8) * 0.08} />
+                                      <div>
+                                        <strong>{q.question}</strong>
+                                        <span>Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}</span>
+                                        <span>Resposta certa: {expectedText(q)}</span>
+                                        {q.explanation && <span>{q.explanation}</span>}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p>Você acertou todas!</p>
+                              )}
+                              <div className="row center">
+                                {wrong.length > 0 && (
+                                  <button type="button" className="primary" onClick={() => restart(wrong)}>
+                                    <Icon name="refazer" />
+                                    Refazer as que errei
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => restart()}>Refazer o quiz todo</button>
+                                {result.virtual ? (
+                                  <button type="button" onClick={() => setPage('Erros')}>Voltar ao caderno</button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPage('Flashcards');
+                                      restart();
+                                    }}
+                                  >
+                                    Ir para os flashcards
+                                  </button>
+                                )}
+                              </div>
+                            </m.div>
+                          ) : quiz && (
+                            <>
+                              <div className="study-head">
+                                <span>Questão {idx + 1} de {quizList.length}</span>
+                                <span className="tag">
+                                  {quiz.type === 'short' ? 'Resposta curta'
+                                    : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
+                                    : 'Múltipla escolha'}
+                                </span>
+                              </div>
+                              <Meter value={answers.length} max={quizList.length} label="Questões respondidas" />
+                              <QuizMarks total={quizList.length} answers={answers} idx={idx} />
+                              {result.virtual && <p className="hint">Do material: {quiz.title}</p>}
+                              <h2 className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
+                              {quiz.type === 'short' ? (
+                                <form
+                                  key={idx}
+                                  className="quiz-form"
+                                  onSubmit={e => {
+                                    e.preventDefault();
+                                    submit(e.target.elements.response.value);
+                                  }}
+                                >
+                                  <input
+                                    name="response"
+                                    aria-label="Sua resposta"
+                                    required
+                                    maxLength={500}
+                                    placeholder="Sua resposta"
+                                    disabled={answer !== null}
+                                  />
+                                  <button disabled={answer !== null} className="primary">Responder</button>
+                                </form>
+                              ) : (
+                                <div className="options">
+                                  {quiz.options.map((o, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      disabled={answer !== null}
+                                      className={'option' + (answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
+                                      onClick={() => submit(i)}
+                                    >
+                                      <span className="letter">{String.fromCharCode(65 + i)}</span>
+                                      <span className="option-text">{o}</span>
+                                      {/* Certo e errado também em texto: a cor sozinha não serve a quem não a distingue. */}
+                                      {answer && i === quiz.answer && <Pen kind="certo" note="certa" draw />}
+                                      {answer?.value === i && i !== quiz.answer && <Pen kind="errei" note="sua resposta" draw />}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              {/* O retorno entra em 0,35 s e sai na hora, junto com a questão: o aluno passa de questão a
+                                  cada uma (com saída, ele pulava 132 px e ficava legível embaixo da questão nova). */}
+                              {answer && (
+                                <m.div
+                                  key={'retorno-' + idx}
+                                  className={'feedback ' + (answer.ok ? 'good' : 'bad')}
+                                  role="status"
+                                  variants={pop}
+                                  initial={appear()}
+                                  animate="show"
+                                >
+                                  <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  {quiz.type === 'short' && (
+                                    <p className="answer-line">
+                                      Resposta esperada: {expectedText(quiz)} <Pen kind="certo" note="certa" draw />
+                                    </p>
+                                  )}
+                                  {quiz.type === 'short' && !answer.ok && (
+                                    <p className="answer-line">
+                                      Você respondeu: {answer.value} <Pen kind="errei" note="sua resposta" draw delay={0.2} />
+                                    </p>
+                                  )}
+                                  <p>{quiz.explanation}</p>
+                                  {quiz.steps?.length > 0 && <ol>{quiz.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}
+                                  {/* A revisão pedida espera no lugar onde o veredito vai entrar. */}
+                                  {busy?.kind === 'review' && busy.answer === answer && (
+                                    <div className="review-wait">
+                                      <Sk className="sk-read" />
+                                      <Sk w="72%" className="sk-read" />
+                                      <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
+                                    </div>
+                                  )}
+                                  {answer.review?.verdict && (
+                                    <m.div variants={focusIn} initial={appear()} animate="show">
+                                      <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
+                                      <p>{answer.review.feedback}</p>
+                                      <p className="hint">Revisão feita por IA: pode errar.</p>
+                                    </m.div>
+                                  )}
+                                  {answer.review?.error && <p role="alert" className="error">{answer.review.error}</p>}
+                                  {API_BASE && (
+                                    <div className="ai-ask">
+                                      <button
+                                        type="button"
+                                        disabled={waiting}
+                                        onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation)}
+                                      >
+                                        Não entendi, me explique <small>1 chamada de IA</small>
+                                      </button>
+                                      {/* Só a resposta curta é comparada por texto. Uma revisão por resposta: com o */}
+                                      {/* veredito o botão fica desabilitado (se sumisse, o foco do teclado se perdia). */}
+                                      {quiz.type === 'short' && answer.value.trim() && (!answer.ok || answer.review?.verdict) && (
+                                        <button
+                                          type="button"
+                                          disabled={waiting || !!answer.review?.verdict}
+                                          aria-busy={busy?.kind === 'review' || undefined}
+                                          onClick={review}
+                                        >
+                                          Pedir revisão da IA <small>1 chamada de IA</small>
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* No celular o botão fica preso acima da barra de baixo: o retorno pode ser longo. */}
+                                  <div className="next-row">
+                                    <button type="button" className="primary" onClick={nextQuestion}>
+                                      {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
+                                      <Icon name="seta" />
+                                    </button>
+                                  </div>
+                                </m.div>
+                              )}
+                              {why?.item === quiz && <Why {...why} wait={busy} onCancel={cancelAI} pop={pop} focusIn={focusIn} />}
+                            </>
+                          ))}
+                        </div>
+                      </m.section>
+                    )}
+                  </AnimatePresence>
+                </m.div>
+              )}
+              {page === 'Dúvidas' && (
+                <m.section className="panel chat-panel" variants={rise}>
+                  <div className="chat-head">
+                    <p>Área: {area} · Nível: {level}. As respostas consideram o conteúdo no editor.</p>
+                    <button
+                      type="button"
+                      disabled={!chat.length || asking}
+                      onClick={() => {
+                        setChat([]);
+                        setTips({ key: '', list: [] });
+                      }}
+                    >
+                      Nova conversa
+                    </button>
+                  </div>
+                  <div className="chat" role="log" aria-live="polite">
+                    <div className="message assistant">
+                      <small>Cérebro</small>
+                      <p>{greeting}</p>
+                    </div>
+                    {/* Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam
+                        na conversa quando a página abriu não animam à parte (initial false). A pergunta enviada pelo
+                        teclado aparece parada. A resposta toma o lugar do balão de espera, que esmaece por cima dela. */}
+                    <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
+                      {chat.map((msg, i) => (
+                        <m.div
+                          key={i}
+                          className={'message ' + msg.role}
+                          variants={pop}
+                          initial={msg.role === 'user' ? appear() : 'hidden'}
+                          animate="show"
+                        >
+                          <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
+                          <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
+                        </m.div>
+                      ))}
+                      {asking && (
+                        <m.div
+                          key="espera"
+                          className="message assistant thinking"
+                          variants={pop}
+                          initial={appear()}
+                          animate="show"
+                          exit="exit"
+                        >
+                          <small>Cérebro</small>
+                          <span className="sk-lines">
+                            <Sk className="sk-read" />
+                            <Sk w="86%" className="sk-read" />
+                            <Sk w="54%" className="sk-read" />
+                          </span>
+                          <Wait label="Cérebro está escrevendo…" since={asking} onCancel={cancelAI} />
+                        </m.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  {/* Uma só rolagem, a da página: a caixa de pergunta fica presa embaixo (acima da barra, no celular). */}
+                  <div className="dock">
+                    {aiNote}
+                    {API_BASE && (
+                      <div className="suggestions" role="group" aria-label="Sugestões de perguntas">
+                        {chatHints.map((h, i) => (
+                          <button key={i} type="button" disabled={waiting} onClick={() => ask(h)}>{h}</button>
+                        ))}
+                      </div>
+                    )}
+                    {errorBanner}
+                    <form
+                      className="ask-form"
+                      onSubmit={e => {
+                        e.preventDefault();
+                        ask();
+                      }}
+                    >
+                      <input
+                        aria-label="Sua dúvida"
+                        onKeyDown={e => {
+                          if (
+                            e.key === 'Enter' &&
+                            (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229 || e.repeat)
+                          ) {
+                            e.preventDefault();
+                          }
+                        }}
+                        value={question}
+                        onChange={e => setQuestion(e.target.value)}
+                        placeholder="O que você quer entender?"
+                        maxLength={4000}
+                        required
+                      />
+                      <button type="submit" className="primary" disabled={waiting || !question.trim()}>
+                        <span>Enviar</span>
+                        <Icon name="seta" />
+                      </button>
+                    </form>
+                  </div>
+                  <div ref={chatEnd} className="chat-end"></div>
+                </m.section>
+              )}
+              {page === 'Erros' && (
+                <m.section className="panel" variants={rise}>
+                  {mistakes.length === 0 ? (
+                    <div className="empty">
+                      <h2>Nenhuma questão para rever.</h2>
+                      <p className="hint">As que você errar nos quizzes aparecem aqui.</p>
+                      <button type="button" className="primary" onClick={() => setPage(result ? 'Quizzes' : 'Estudar')}>
+                        {result ? 'Fazer o quiz do material aberto' : 'Gerar um material'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="erros-head">
+                        <p className="hint">
+                          Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
+                        </p>
+                        <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
+                          <li><Pen kind="novo" /> novo</li>
+                          <li><Pen kind="errei" /> errei</li>
+                          <li><Pen kind="refazer" /> refazer</li>
+                          <li><Pen kind="certo" /> certo em outro dia</li>
+                        </ol>
+                        <button type="button" className="primary" onClick={redoMistakes}>
+                          <Icon name="refazer" />
+                          Refazer meus erros ({mistakes.length})
+                        </button>
+                      </div>
+                      {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (undoNow, flipList). */}
+                      <AnimatePresence mode="popLayout" custom={byKeyboard()}>
+                        {undo?.kind === 'erro' && <UndoRow key="desfazer" undo={undo} onUndo={undoNow} pop={pop} />}
+                      </AnimatePresence>
+                      {/* data-flip: os blocos que deslizam para fechar o vão de uma questão tirada (anim.js, leave). */}
+                      {byMaterial(mistakes).map(([title, list]) => (
+                        <section className="mistakes" key={title}>
+                          <h2 data-flip>{title}</h2>
+                          {/* role="list": sem ele, uma lista sem marcadores deixa de ser lida como lista no Safari. */}
+                          <ul role="list">
+                            {list.map((m, i) => {
+                              // Errada hoje: ✗. De outro dia: ↻, já dá para refazer e tirar do caderno acertando.
+                              const fresh = localDay(m.date) === today;
+                              return (
+                                <li key={m.key} data-key={m.key} data-flip>
+                                  {/* Só a marca de um erro novo desde a última visita se desenha (penned), depois que a
+                                      página assenta (~0,35 s); as outras o aluno já viu e aparecem prontas. */}
+                                  <Pen
+                                    kind={fresh ? 'errei' : 'refazer'}
+                                    note={fresh ? 'errei hoje' : 'refazer'}
+                                    draw={!penned.has(m.key + m.date)}
+                                    delay={0.3 + Math.min(i, 6) * 0.06}
+                                  />
+                                  <strong>{m.item.question}</strong>
+                                  <details>
+                                    <summary>
+                                      <Icon name="abaixo" />
+                                      Ver resposta
+                                    </summary>
+                                    <p>Resposta certa: {expectedText(m.item)}</p>
+                                    {m.item.explanation && <p>{m.item.explanation}</p>}
+                                  </details>
+                                  <button
+                                    type="button"
+                                    className="drop"
+                                    aria-label={'Tirar do caderno: ' + m.item.question}
+                                    onClick={e => leave(e.currentTarget.closest('li'), () => drop(m))}
+                                  >
+                                    Tirar do caderno
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </section>
+                      ))}
+                    </>
+                  )}
+                </m.section>
+              )}
+              {/* Desempenho e Biblioteca chegam à parte (lazyView): enquanto o código não vem, o esqueleto delas
+                  segura o lugar e entra junto com a página. */}
+              {page === 'Desempenho' && (
+                <Suspense fallback={<DesempenhoSkeleton rise={rise} />}>
+                  <Desempenho
+                    rise={rise}
+                    streakDays={streakDays}
+                    quizzes={quizzes}
+                    cards={cards}
+                    percent={percent}
+                    chartArea={chartArea}
+                    setChartArea={setChartArea}
+                    days={days}
+                    busiest={busiest}
+                    weakest={weakest}
+                    mistakes={mistakes}
+                    redoMistakes={redoMistakes}
+                    events={events}
+                  />
+                </Suspense>
+              )}
+              {page === 'Biblioteca' && (
+                <Suspense fallback={<BibliotecaSkeleton rise={rise} />}>
+                  <Biblioteca
+                    rise={rise}
+                    pop={pop}
+                    query={query}
+                    setQuery={setQuery}
+                    filter={filter}
+                    setFilter={setFilter}
+                    shown={shown}
+                    saved={saved}
+                    undo={undo}
+                    onUndo={undoNow}
+                    onExport={exportBackup}
+                    onImport={importBackup}
+                    onOpen={openSaved}
+                    onRemove={(material, item) => leave(item, () => remove(material))}
+                  />
+                </Suspense>
+              )}
+            </m.div>
+          </AnimatePresence>
+        </main>
+      </div>
+      <nav className="tabbar" aria-label="Seções">
+        {BAR.map(s => navButton(s, 'tab-item', true))}
+        {/* Com a página aberta dentro da folha, "Mais" leva a cor dela. */}
+        <button
+          type="button"
+          className="tab-item"
+          data-tab={inMore ? slug : 'mais'}
+          data-current={inMore || undefined}
+          aria-haspopup="dialog"
+          aria-expanded={more}
+          aria-label={inMore ? 'Mais, você está em ' + page : undefined}
+          onClick={() => setMore(true)}
+        >
+          <Icon name="mais" />
+          <span>Mais</span>
+        </button>
+      </nav>
+      {/* Espera de um pedido à IA longe do lugar da resposta (o aluno saiu da página dela): a faixa de cima, com o fio,
+          os segundos e o Cancelar; o estado da IA esmaece por baixo dela (styles.css). Com a espera no lugar da resposta
+          (waitInline) a faixa não existe, e sai na hora quando a espera volta para lá. */}
+      <AnimatePresence custom={byKeyboard() || waitInline}>
+        {busy && !waitInline && (
+          <m.div key="espera" className="busy" role="status" variants={pop} initial={appear()} animate="show" exit="exit">
+            <Wait label={busy.label} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
+          </m.div>
+        )}
+      </AnimatePresence>
+      <div className="toast-region" role="status">
+        {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
+            (o cartão movido de novo) só renova o tempo, sem piscar. */}
+        {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
+        <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
+          {notice && (
+            <m.div
+              key={notice.text}
+              className="toast"
+              variants={pop}
+              initial={appear()}
+              animate="show"
+              exit="exit"
+              onMouseEnter={holdNotice}
+              onMouseLeave={releaseNotice}
+              onFocus={holdNotice}
+              onBlur={releaseNotice}
+            >
+                <span>{notice.text}</span>
+                {notice.action && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearTimeout(noticeTimer.current);
+                      setNotice(null);
+                      notice.action.run();
+                    }}
+                  >
+                    {notice.action.label}
+                  </button>
+                )}
+            </m.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <AnimatePresence>
+        {more && (
+          <Modal key="mais" className="sheet" sheet labelledBy="mais-titulo" onClose={() => setMore(false)}>
+            <div className="dialog-body">
+              <div className="sheet-head">
+                <h2 id="mais-titulo">Mais seções</h2>
+                <button type="button" className="icon-button" aria-label="Fechar" onClick={() => setMore(false)}>
+                  <Icon name="fechar" />
+                </button>
+              </div>
+              <nav aria-label="Mais seções" className="sheet-nav">
+                {MORE.map(s => navButton(s, 'nav-item'))}
+              </nav>
+              {profileButton(() => {
+                setMore(false);
+                setLogin(true);
+              })}
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+      {/* O formulário da janela do perfil chega à parte (Perfil.jsx). A janela abre na hora, com o Fechar, o título e o
+          texto; enquanto o código não vem, o esqueleto do formulário fica no tamanho dele e a janela não muda. */}
+      <AnimatePresence>
+        {login && (
+          <Modal
+            key="perfil"
+            className="profile-dialog"
+            labelledBy="profile-title"
+            back=".tabbar [aria-haspopup=dialog]"
+            onClose={() => setLogin(false)}
+          >
+            <div className="dialog-body">
+              <button type="button" className="icon-button close" aria-label="Fechar" onClick={() => setLogin(false)}>
+                <Icon name="fechar" />
+              </button>
+              <BrandMark />
+              <h2 id="profile-title">Seu próximo aprendizado começa aqui.</h2>
+              <p>Crie um perfil local neste navegador. Não é uma conta com autenticação.</p>
+              <Suspense fallback={<PerfilSkeleton />}>
+                <Perfil name={name} setName={setName} area={area} onSave={saveProfile} />
+              </Suspense>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </div>
+    </LazyMotion>
+    </MotionConfig>
+  );
+}
+
+// Margem do baralho: um ✓ ou ✗ da caneta para cada cartão já avaliado nesta sessão. O cartão errado volta para o fim
+// da fila (lib.js): o que aparece de novo mais adiante na fila foi o errado. Com fresh, a marca mais nova se desenha,
+// com a nota ao lado; "Revisar depois" só muda a ordem e não deixa marca. Com finale (fim do baralho), a caneta passa
+// por todas, uma depois da outra.
+function DeckMarks({ session, fresh = false, finale = false }) {
+  const marks = session.queue.slice(0, session.pos).map((card, i) => session.queue.indexOf(card, i + 1) < 0);
+  if (!marks.length) return null;
+  const right = marks.filter(Boolean).length;
+  const missed = marks.length - right;
+  return (
+    <div
+      className="marks"
+      role="img"
+      aria-label={'Cartões avaliados: ' + right + (right === 1 ? ' acerto, ' : ' acertos, ') +
+        missed + (missed === 1 ? ' erro' : ' erros')}
+    >
+      {marks.map((ok, i) => {
+        const last = fresh && i === marks.length - 1;
+        return (
+          <Pen
+            key={i}
+            kind={ok ? 'certo' : 'errei'}
+            draw={last || finale}
+            delay={finale ? 0.25 + Math.min(i, 12) * 0.05 : 0}
+            note={last ? (ok ? 'acertei' : 'errei') : undefined}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// Uma marca por questão do quiz, na ordem: ○ ainda sem resposta, ✓ certa, ✗ errada. A atual fica sublinhada.
+function QuizMarks({ total, answers, idx }) {
+  const right = answers.filter(a => a.ok).length;
+  const missed = answers.length - right;
+  return (
+    <div
+      className="marks"
+      role="img"
+      aria-label={'Até aqui: ' + right + (right === 1 ? ' certa, ' : ' certas, ') + missed + (missed === 1 ? ' errada' : ' erradas')}
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <Pen
+          key={i}
+          kind={!answers[i] ? 'novo' : answers[i].ok ? 'certo' : 'errei'}
+          className={i === idx ? 'current' : ''}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Fio de progresso de verdade: cartões já avaliados no baralho, questões já respondidas no quiz. O preenchimento
+// anda por transform (styles.css, .meter), em 0,2 s; pelo teclado, na hora.
+function Meter({ value, max, label }) {
+  return (
+    <div className="meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
+      <span style={{ '--p': max ? value / max : 0 }}></span>
+    </div>
+  );
+}
+
+// Janela modal nativa (<dialog> com showModal): o navegador prende o foco nela, deixa o resto da página inerte e
+// fecha no Esc. Clicar no fundo escuro também fecha. Ao fechar, o foco volta ao botão que a abriu, ou a back quando
+// ele saiu da tela (o perfil aberto de dentro da folha "Mais").
+// Movimento: a janela nasce do botão que a abriu (transform-origin no centro dele) e a folha sobe da barra de baixo;
+// a saída é mais curta, com o fundo escuro esmaecendo junto (styles.css, [data-closing]). Pelo teclado (Enter, Esc)
+// ela abre e fecha parada. Fica dentro de um AnimatePresence: a saída roda antes de ela sair da árvore.
+function Modal({ className, labelledBy, back, sheet = false, onClose, children }) {
+  const box = useRef(null);
+  const [present, safeToRemove] = usePresence();
+  useLayoutEffect(() => {
+    const dialog = box.current;
+    const opener = document.activeElement;
+    dialog.showModal();
+    if (!byKeyboard()) {
+      if (reduced()) {
+        animate(dialog, { opacity: [0, 1] }, { duration: 0.15 });
+      } else if (sheet) {
+        // A curva da folha do iOS: sai rápido da barra e assenta devagar.
+        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: 0.3, ease: [0.32, 0.72, 0, 1] });
+      } else {
+        const o = opener?.getBoundingClientRect?.();
+        const d = dialog.getBoundingClientRect();
+        if (o?.width) dialog.style.transformOrigin = (o.left + o.width / 2 - d.left) + 'px ' + (o.top + o.height / 2 - d.top) + 'px';
+        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: 0.24, ease: EASE_OUT })
+          .then(() => (dialog.style.filter = ''));
+      }
+    }
+    return () => {
+      if (dialog.open) dialog.close();
+      const to = opener?.isConnected ? opener : back && document.querySelector(back);
+      if (!document.querySelector('dialog[open]')) to?.focus?.({ preventScroll: true });
+    };
+  }, []);
+  useEffect(() => {
+    const dialog = box.current;
+    if (present) {
+      // Reaberta no meio da saída: volta ao normal.
+      if ('closing' in dialog.dataset) {
+        delete dialog.dataset.closing;
+        animate(dialog, { opacity: 1, transform: 'none' }, { duration: 0.12, ease: EASE_OUT });
+      }
+      return;
+    }
+    // Do teclado, ou com outra janela aberta por cima (a folha "Mais" passando para o perfil), sai na hora.
+    if (byKeyboard() || document.querySelectorAll('dialog[open]').length > 1) {
+      safeToRemove();
+      return;
+    }
+    dialog.dataset.closing = '';
+    const exit = reduced() ? { opacity: 0 } : sheet ? { transform: 'translateY(100%)' } : { opacity: 0, transform: 'scale(0.98)' };
+    animate(dialog, exit, { duration: reduced() ? 0.1 : sheet ? 0.2 : 0.14, ease: EASE_IN }).then(safeToRemove);
+  }, [present]);
+  return (
+    <dialog
+      ref={box}
+      className={className}
+      aria-labelledby={labelledBy}
+      onCancel={e => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={e => e.target === box.current && onClose()}
+    >
+      {children}
+    </dialog>
+  );
+}
+
+// Resposta do tutor a um "Não entendi, me explique", mostrada no lugar do pedido (retorno do quiz, tópico do
+// resumo). Sem texto e sem erro, a resposta ainda não chegou: o esqueleto de três linhas e a espera (wait = busy)
+// ficam onde ela vai entrar, e ela entra em foco no lugar deles.
+function Why({ text, error, wait, onCancel, pop, focusIn }) {
+  const box = useRef(null);
+  // A resposta entra abaixo do botão do pedido: sem isto podia ficar fora da vista, como na conversa.
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: 'nearest' });
+  }, [text, error]);
+  if (error) {
+    return <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">{error}</m.div>;
+  }
+  return (
+    <m.div ref={box} className="why" role="status" variants={pop} initial={appear()} animate="show">
+      <small>Cérebro</small>
+      {text ? (
+        <m.div variants={focusIn} initial={appear()} animate="show">
+          <p>{rich(text)}</p>
+          {aiNote}
+        </m.div>
+      ) : (
+        <>
+          <span className="sk-lines">
+            <Sk className="sk-read" />
+            <Sk w="90%" className="sk-read" />
+            <Sk w="62%" className="sk-read" />
+          </span>
+          {wait?.kind === 'why' && <Wait label={wait.label} since={wait.since} onCancel={onCancel} />}
+        </>
+      )}
+    </m.div>
+  );
+}
+
+// Erro ao desenhar derrubava a árvore inteira do React e a tela ficava branca.
+// Aqui o aluno vê o que houve e tem como sair.
+class ErrorBoundary extends React.Component {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="panel empty" role="alert">
+        <h2>Algo quebrou nesta tela.</h2>
+        <button className="primary" onClick={() => window.location.reload()}>Recarregar a página</button>
+      </section>
+    );
+  }
+}
+
+createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);

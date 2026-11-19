@@ -1,1622 +1,2368 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Cérebro, app de estudo: o caderno de folhas pretas como ferramenta de trabalho.
+   Do caderno vêm só a paleta, os tipos, a densidade e a caneta vermelha que corrige (marks.jsx); o menu, as abas e os
+   controles são os de um app web comum. As fontes vêm do index.html. mobile.css (carregado depois) cuida das telas
+   estreitas e das janelas baixas. Toda cor, tamanho e raio sai das variáveis abaixo. */
 
 :root {
-    font-family: 'DM Sans', sans-serif;
-    color: #27283b;
-    background: #f8f9fc;
-    font-synthesis: none;
-    --purple: #6251df;
-    --muted: #8a8b9c;
-    --line: #ececf3
+    color-scheme: dark;
+
+    /* Superfícies */
+    --ground: #0c0c10;
+    --paper: #101116;
+    /* Base sob o grão (--grain): o grão clareia uns 10 níveis em média, e a folha com grão fica em #101116-#111216
+       medido nos pixels, a mesma folha preta das superfícies lisas. Sobre --paper ela subia para #1a1b20. */
+    --paper-under: #06070c;
+    --raised: #16171e;
+    --raised-2: #1c1d26;
+    --field: #0a0a0d;
+    --ok-bg: #0f1a14;
+    --err-bg: #1f1214;
+    --warn-bg: #1d170e;
+    --veil: rgb(5 5 8 / .74);
+    --shadow: 0 2px 4px rgb(0 0 0 / .45), 0 12px 32px rgb(0 0 0 / .5);
+
+    /* Linhas. --line-strong é a borda dos campos: 3,6:1 ou mais sobre todas as superfícies. */
+    --line: #262836;
+    --line-strong: #6b6e86;
+    --rule-line: rgb(236 235 227 / .075);
+
+    /* Tinta (medido sobre --paper): 15,8:1, 7,9:1 e 5,7:1. A mais fraca ainda passa de 5:1 em --raised-2. */
+    --ink: #ecebe3;
+    --ink-2: #a9a89f;
+    --ink-3: #8f8e86;
+
+    /* Estados */
+    --violet: #6251df;
+    --violet-hover: #6d5ee6;
+    --violet-press: #5546c9;
+    --violet-off: #2b2858;
+    --on-violet: #ffffff;
+    --focus: #9d92ff;
+    /* Anel de foco: espessura e afastamento. */
+    --ring: 2px;
+    --pen: #e5483a;
+    --pen-text: #ec5b4e;
+    --ok: #74c295;
+    --warn: #f0a04b;
+
+    /* Divisórias coloridas das seções: marca de 4 px no menu e sublinhado do título */
+    --tab-estudar: #6251df;
+    --tab-duvidas: #e497bd;
+    --tab-resumos: #f2c84b;
+    --tab-flashcards: #74c295;
+    --tab-quizzes: #7cb0e6;
+    --tab-erros: #e5483a;
+    --tab-desempenho: #f0a04b;
+    --tab-biblioteca: #c8a27a;
+    --tab-mais: #8f8e86;
+
+    /* Brilho do topo da coluna principal (pedido do dono, 18/11/2026): pêssego, rosa e lavanda bem fracos, unidos ao
+       violeta, apagando no fundo da noite. Fica só atrás do título da página (main::before), nunca atrás de texto
+       corrido, e nunca vira cor de letra. */
+    --peach: #ffdab9;
+    --pink: #ffb6c1;
+    --lavender: #e0bbe4;
+    --glow:
+        radial-gradient(40% 120% at 10% 0%, color-mix(in srgb, var(--violet) 38%, transparent), transparent),
+        radial-gradient(32% 110% at 33% 0%, color-mix(in srgb, var(--pink) 10%, transparent), transparent),
+        radial-gradient(32% 110% at 55% 0%, color-mix(in srgb, var(--peach) 8%, transparent), transparent),
+        radial-gradient(34% 120% at 77% 0%, color-mix(in srgb, var(--lavender) 9%, transparent), transparent);
+
+    /* Tipos: Atkinson Hyperlegible Next para tudo, Bricolage Grotesque condensada nos títulos de página, Kalam só
+       nas notas da caneta. */
+    --font-ui: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-title: 'Bricolage Grotesque', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+    --font-pen: 'Kalam', 'Segoe Print', 'Bradley Hand', cursive;
+    /* --fs-0 só nos nomes da barra de baixo em telefone de 360 a 380 px. */
+    --fs-0: .75rem;
+    --fs-1: .8125rem;
+    --fs-2: .875rem;
+    --fs-3: 1rem;
+    --fs-4: 1.125rem;
+    --fs-5: 1.375rem;
+    --fs-6: 2.25rem;
+    --lh-ui: 1.45;
+    --lh-read: 1.65;
+    /* Pauta do editor: uma linha de texto, e a linha de base da Atkinson a 16 px dentro dela (19 px, medido no Chrome):
+       o fio da pauta fica ali, embaixo das letras. */
+    --rule: 1.75rem;
+    --rule-base: 1.1875rem;
+    /* Medida de leitura: 33em dão de 65 a 75 caracteres por linha na Atkinson (medido no resumo). Em ch passava de
+       90: o "0" dela é largo. */
+    --measure: 33em;
+    /* Largura da frase de abertura (.lead, 33em a 16 px): o aviso logo abaixo dos seletores (.note), em letra menor,
+       termina na mesma margem. Com a medida dele, 33em a 14 px, ele quebrava em uns 410 px numa coluna de 1024. */
+    --lead-w: 33rem;
+
+    /* Espaço */
+    --sp-0: .125rem;
+    --sp-1: .25rem;
+    --sp-2: .5rem;
+    --sp-3: .75rem;
+    --sp-4: 1rem;
+    --sp-5: 1.5rem;
+    --sp-6: 2rem;
+    --sp-7: 3rem;
+
+    /* Raios. --r-0 é o canto das abas coloridas (--tab-mark de espessura). */
+    --r-0: 2px;
+    --r-1: 6px;
+    --r-2: 10px;
+    --r-3: 14px;
+    --r-round: 999px;
+
+    /* Medidas do app */
+    --rail-w: 15.5rem;
+    --top-h: 3.5rem;
+    --tabbar-h: 0rem;
+    --content-w: 64rem;
+    --control-h: 2.75rem;
+    --mark: 1.5rem;
+    /* Faixa de espera da IA (.busy): o botão Cancelar, o respiro e o fio. Ela fica centrada na altura da barra de cima. */
+    --busy-h: calc(2.25rem + var(--sp-1) * 2 + var(--hair) * 2);
+    /* Espessura da aba colorida da seção (menu, barra de baixo, abas do material, sublinhado do título). */
+    --tab-mark: 4px;
+    /* Fio: bordas, divisões e a pauta do editor. */
+    --hair: 1px;
+    /* Marca da questão atual: sublinhado de 2 px, 3 px abaixo dela. Barra do gráfico num dia sem resposta: 3 px. */
+    --underline: 2px;
+    --underline-gap: 3px;
+    --bar-min: 3px;
+    /* Respiro de cima e dos lados da coluna principal, e a distância do título ao sublinhado: o brilho do topo
+       (main::before) termina no sublinhado, antes de qualquer texto. */
+    --main-top: var(--sp-6);
+    --main-x: var(--sp-6);
+    --title-gap: var(--sp-3);
+
+    /* Movimento (anim.js tem o mesmo em JS): chegada com --ease, saída com --ease-in, mais curta. Pressão do botão
+       em 100 ms, retorno de 120 a 200 ms, troca de página numa mola de 0,3 s (0,45 s na abertura do app), caneta em
+       0,52 s (marks.jsx). Nada do que o teclado dispara se move ([data-input=teclado], anim.js). */
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ease-in: cubic-bezier(.55, 0, 1, .45);
+    --t-fast: 160ms;
+    --t-press: 100ms;
+    --press: .97;
+    /* Esqueleto: tinta a 7% por cima de qualquer superfície, parado. Fio da espera: o violeta do foco. */
+    --sk: rgb(236 235 227 / .07);
+    --wait-track: rgb(157 146 255 / .16);
+
+    /* Seta das listas de opções (select): o "abaixo" de icons.jsx, traço de 1,75 px em --ink-2. Vai como imagem
+       porque o select não aceita filho; sem ela ficava a seta do sistema. */
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a9a89f' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 10l5 5 5-5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+    --chevron-w: 1.25rem;
+
+    /* Grão de fibra da folha preta: ruído branco a ~4%. */
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85 .28' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .085 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
 }
 
-* {
+/* Cor de cada seção, para a marca do menu, a aba e o botão de gerar. */
+[data-tab=estudar] { --tab: var(--tab-estudar) }
+[data-tab=duvidas] { --tab: var(--tab-duvidas) }
+[data-tab=resumos] { --tab: var(--tab-resumos) }
+[data-tab=flashcards] { --tab: var(--tab-flashcards) }
+[data-tab=quizzes] { --tab: var(--tab-quizzes) }
+[data-tab=erros] { --tab: var(--tab-erros) }
+[data-tab=desempenho] { --tab: var(--tab-desempenho) }
+[data-tab=biblioteca] { --tab: var(--tab-biblioteca) }
+[data-tab=mais] { --tab: var(--tab-mais) }
+
+*,
+*::before,
+*::after {
     box-sizing: border-box
 }
 
+html {
+    background: var(--ground);
+    scrollbar-color: var(--line-strong) var(--ground);
+    -webkit-text-size-adjust: 100%
+}
+
 body {
-    margin: 0
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: var(--fs-3);
+    line-height: var(--lh-ui);
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    /* Palavra sem espaço (endereço, código, nome químico) quebra em vez de empurrar a página para o lado. */
+    overflow-wrap: break-word
 }
 
-button,
-input,
-textarea,
-select {
-    font: inherit
-}
-
-button,
-a,
-select {
-    -webkit-tap-highlight-color: transparent
-}
-
-button {
-    cursor: pointer;
-    border: 1px solid var(--line);
-    background: white;
-    border-radius: 9px;
-    padding: 11px 16px;
-    color: inherit;
-    transition: background .18s, transform .18s
-}
-
-button:hover {
-    background: #f2f0ff;
-    border-color: #cfc8fa
-}
-
-button:disabled {
-    opacity: .5;
-    cursor: default
-}
-
-button:focus-visible,
-a:focus-visible {
-    outline: 3px solid #ab9aff;
-    outline-offset: 3px
-}
-
-input,
-textarea,
-select {
-    border: 1px solid #e8e8ef;
-    border-radius: 9px;
-    padding: 12px;
-    color: #39384d;
-    background: white;
-    outline: none
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-    border-color: var(--purple);
-    box-shadow: 0 0 0 3px #6251df12
-}
-
-input {
-    min-width: 0
-}
-
-.app {
-    display: flex;
-    min-height: 100vh
-}
-
-aside {
-    position: fixed;
-    width: 242px;
-    height: 100vh;
-    background: white;
-    border-right: 1px solid var(--line);
-    padding: 33px 20px 0;
-    display: flex;
-    flex-direction: column;
-    z-index: 20
-}
-
-.brand {
-    font-family: Manrope, sans-serif;
-    font-size: 30px;
-    letter-spacing: -1.3px;
-    font-weight: 800;
-    text-decoration: none;
-    color: #29273f;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 10px
-}
-
-.logo {
-    font-size: 40px;
-    color: var(--purple);
-    line-height: 1
-}
-
-.brand-dot {
-    color: var(--purple);
-    margin-left: -9px
-}
-
-.workspace {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 37px 0 29px;
-    padding: 13px 8px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600
-}
-
-.workspace small {
-    display: block;
-    font-size: 9px;
-    color: #9999a9;
-    margin-top: 5px;
-    font-weight: 400
-}
-
-.mini-logo {
-    background: #f2efff;
-    border: 1px solid #e6e0fc;
-    color: var(--purple);
-    border-radius: 7px;
-    padding: 5px 9px;
-    font-size: 20px
-}
-
-.nav-label {
-    font-size: 9px;
-    color: #9c9baa;
-    letter-spacing: 1.8px;
-    padding: 0 14px;
-    margin-bottom: 13px
-}
-
-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 7px
-}
-
-nav button {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    border: none;
-    background: transparent;
-    text-align: left;
-    font-size: 12px;
-    padding: 13px 15px;
-    color: #737385
-}
-
-nav button>span {
-    font-size: 20px;
-    width: 21px
-}
-
-nav button.active {
-    background: #eeebfc;
-    color: var(--purple);
-    font-weight: 700
-}
-
-nav b {
-    margin-left: auto;
-    font-size: 18px;
-    font-weight: 400
-}
-
-.side-tip {
-    margin: auto 7px 23px;
-    border: 1px solid #eeeafc;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #f9f7ff, #fdfcff);
-    padding: 18px 16px
-}
-
-.side-tip>span {
-    font-size: 30px;
-    color: var(--purple);
-    display: block;
-    margin-bottom: 8px
-}
-
-.side-tip strong {
-    font-size: 12px;
-    line-height: 1.7
-}
-
-.side-tip p {
-    font-size: 10px;
-    color: #9490a7;
-    line-height: 1.8
-}
-
-.tiny-dots {
-    font-size: 9px;
-    letter-spacing: 3px;
-    color: #a79ae9;
-    margin-top: 17px
-}
-
-.profile {
-    border: 0;
-    border-top: 1px solid var(--line);
-    border-radius: 0;
-    padding: 20px 0;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    text-align: left;
-    font-size: 12px
-}
-
-.profile small {
-    display: block;
-    color: #9695a5;
-    font-size: 10px;
-    margin-top: 5px
-}
-
-.profile>span:last-child {
-    margin-left: auto
-}
-
-.avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: #f1e8df;
-    color: #ad7e51;
-    display: grid;
-    place-items: center
-}
-
-main {
-    margin-left: 242px;
-    width: calc(100% - 242px)
-}
-
-header {
-    height: 77px;
-    border-bottom: 1px solid var(--line);
-    background: #ffffffb0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 42px;
-    font-size: 11px
-}
-
-.breadcrumb {
-    color: #aaa9b6
-}
-
-.slash {
-    margin: 0 16px;
-    color: #cccbd5
-}
-
-.header-right {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    color: #9694a6;
-    font-size: 10px
-}
-
-.status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #80b899
-}
-
-.divider {
-    height: 15px;
-    border-left: 1px solid #e7e5ee;
-    margin: 0 9px
-}
-
-.content {
-    max-width: 1400px;
-    margin: auto;
-    padding: 37px 42px 0
-}
-
-.eyebrow {
-    font-size: 9px;
-    letter-spacing: 1.9px;
-    font-weight: 700;
-    color: #8f83c8
+::selection {
+    background: var(--violet);
+    color: var(--on-violet)
 }
 
 h1,
 h2,
 h3 {
-    font-family: Manrope, sans-serif
-}
-
-h1 {
-    font-size: 30px;
-    letter-spacing: -1.2px;
-    margin: 12px 0 9px;
-    font-weight: 800
-}
-
-.heading>p {
-    color: #9593a6;
-    font-size: 12px;
-    margin: 0 0 30px
-}
-
-.study-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 254px;
-    gap: 22px
-}
-
-.panel {
-    background: white;
-    border: 1px solid #e8e8f0;
-    border-radius: 14px;
-    padding: 25px;
-    margin-bottom: 22px
-}
-
-.composer {
     margin: 0;
-    padding: 24px
-}
-
-.panel-title {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    margin-bottom: 23px
-}
-
-.purple-icon {
-    display: inline-grid;
-    place-items: center;
-    background: #f2efff;
-    border-radius: 9px;
-    width: 37px;
-    height: 37px;
-    color: var(--purple);
-    font-size: 22px;
-    flex-shrink: 0
+    line-height: 1.25;
+    text-wrap: balance
 }
 
 h2 {
-    font-size: 16px;
-    letter-spacing: -.35px;
-    margin: 0 0 7px
+    font-size: var(--fs-4);
+    font-weight: 700
 }
 
 h3 {
-    font-size: 13px;
+    font-size: var(--fs-3);
+    font-weight: 700
+}
+
+p {
     margin: 0
 }
 
-.panel-title p {
-    margin: 0;
-    font-size: 10px;
-    color: #a09dac
+a {
+    color: inherit;
+    text-underline-offset: .2em
 }
 
-.pill {
-    margin-left: auto;
-    font-size: 7px;
-    letter-spacing: .7px;
-    border: 1px solid #eeebf7;
-    border-radius: 5px;
-    padding: 6px;
-    color: #a29ab8;
-    white-space: nowrap
+small {
+    font-size: var(--fs-1)
 }
 
-.input-wrap {
-    border: 1px solid #e8e6ef;
-    border-radius: 10px;
+.icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
+.icon path {
+    vector-effect: non-scaling-stroke
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
-    background: #fdfdff
-}
-
-.input-wrap textarea {
-    width: 100%;
-    height: 204px;
-    resize: vertical;
-    border: 0;
-    background: transparent;
-    padding: 20px 17px;
-    font-size: 12px;
-    line-height: 1.9;
-    display: block;
-    box-shadow: none
-}
-
-.input-wrap textarea::placeholder {
-    color: #aaa6b9
-}
-
-.textarea-bottom {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px 12px;
-    color: #b6b0c2;
-    font-size: 9px
-}
-
-.textarea-bottom button {
-    font-size: 11px;
-    padding: 7px 9px;
-    border-color: #ece9f3;
-    color: #8c839e
-}
-
-.textarea-bottom button:first-letter {
-    font-size: 18px
-}
-
-.selectors {
-    display: flex;
-    gap: 14px;
-    margin: 20px 0
-}
-
-.selectors label {
-    flex: 1;
-    color: #8b879f;
-    font-size: 8px;
-    letter-spacing: 1px;
-    font-weight: 600
-}
-
-select {
-    display: block;
-    width: 100%;
-    margin-top: 9px;
-    font-size: 11px;
-    height: 40px;
-    letter-spacing: 0
-}
-
-.action-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 9px
-}
-
-.action-grid button {
-    position: relative;
-    text-align: left;
-    padding: 14px 10px;
-    border-color: #eae6f8;
-    background: #fdfcff
-}
-
-.action-grid button:first-child {
-    background: #6251df;
-    color: white;
-    border-color: #6251df
-}
-
-.action-grid button>span {
-    display: block;
-    font-size: 21px;
-    color: #8e7ed7;
-    margin-bottom: 13px
-}
-
-.action-grid button:first-child>span {
-    color: #d3cafa
-}
-
-.action-grid strong {
-    font-size: 10px;
-    display: block;
+    clip-path: inset(50%);
     white-space: nowrap
 }
 
-.action-grid small {
-    display: block;
-    font-size: 8px;
-    color: #a199b1;
-    margin-top: 6px;
-    white-space: nowrap
+/* ---------- Controles ---------- */
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit
 }
 
-.action-grid button:first-child small {
-    color: #d2cbf4
-}
-
-.action-grid b {
-    position: absolute;
-    right: 10px;
-    top: 14px;
-    color: #b5aad8;
-    font-size: 12px;
-    font-weight: 400
-}
-
-.composer-footer {
-    margin-top: 19px;
-    color: #a5a0b4;
-    font-size: 8px;
-    display: flex;
+button {
+    display: inline-flex;
     align-items: center;
-    gap: 7px;
-    line-height: 1.6
-}
-
-.composer-footer>span {
-    color: #a79ac9;
-    font-size: 14px
-}
-
-.right-column {
-    display: flex;
-    flex-direction: column;
-    gap: 17px
-}
-
-.inspiration {
-    border: 1px solid #e7e2f7;
-    border-radius: 14px;
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(135deg, #f1edff, #f6f4fc 60%, #ece9fb);
-    padding: 27px 23px;
-    min-height: 330px
-}
-
-.brain-art {
-    font-size: 99px;
-    color: #9684db;
-    text-shadow: 5px 8px 0 #d3c9ed;
-    position: relative;
-    margin: 0 0 19px 4px;
-    transform: rotate(-14deg);
-    line-height: 1.15
-}
-
-.orbit {
-    position: absolute;
-    border: 1px solid #dcd4f0;
-    border-radius: 50%;
-    width: 240px;
-    height: 180px;
-    top: -32px;
-    right: -55px;
-    transform: rotate(-40deg)
-}
-
-.orbit.two {
-    width: 180px;
-    height: 140px;
-    top: 1px;
-    right: -20px
-}
-
-.floating {
-    position: absolute;
-    color: #9b89d7
-}
-
-.star {
-    right: 36px;
-    top: 58px;
-    font-size: 30px
-}
-
-.dot {
-    right: 72px;
-    top: 125px;
-    font-size: 15px
-}
-
-.small-tag {
-    font-size: 7px;
-    letter-spacing: 1.6px;
-    color: #9b8bbf
-}
-
-.inspiration h2 {
-    font-size: 24px;
-    line-height: 1.4;
-    font-weight: 700;
-    letter-spacing: -.8px;
-    margin-top: 12px
-}
-
-.inspiration em {
-    font-style: normal;
-    color: #8e79cc
-}
-
-.inspiration p {
-    font-size: 10px;
-    line-height: 1.9;
-    color: #a296b5;
-    margin-bottom: 0
-}
-
-.example {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 17px;
-    background: white
-}
-
-.example .purple-icon {
-    font-size: 21px;
-    width: 29px;
-    height: 29px;
-    margin-bottom: 13px;
-    background: #f9f6eb;
-    color: #c1aa6d
-}
-
-.example h3 {
-    font-size: 11px;
-    line-height: 1.6
-}
-
-.example p {
-    font-size: 10px;
-    color: #a19bae;
-    line-height: 1.8
-}
-
-.example button {
-    border: 0;
-    background: #f6f4fc;
-    color: #8b7bb7;
-    font-size: 10px;
-    width: 100%;
-    padding: 10px;
-    text-align: left
-}
-
-.example button span {
-    float: right
-}
-
-.section-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin: 28px 0 15px
-}
-
-.section-line h3 {
-    font-size: 12px
-}
-
-.section-line button {
-    background: none;
-    border: 0;
-    color: #9c93b3;
-    font-size: 10px;
-    padding: 0
-}
-
-.stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 22px
-}
-
-.stat {
-    border: 1px solid #e9e7ef;
-    border-radius: 11px;
-    background: white;
-    padding: 19px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px
-}
-
-.stat-icon {
-    display: grid;
-    place-items: center;
-    width: 35px;
-    height: 35px;
-    border-radius: 10px;
-    background: #f2eeff;
-    color: #9983d9;
-    font-size: 20px
-}
-
-.orange {
-    background: #fff4eb;
-    color: #d99f68
-}
-
-.green {
-    background: #ecf7f0;
-    color: #85b59d
-}
-
-.blue {
-    background: #ecf3fe;
-    color: #87a6d4
-}
-
-.stat strong {
-    font-size: 20px;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: var(--control-h);
+    padding: 0 var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--raised);
+    color: var(--ink);
+    font-size: var(--fs-2);
     font-weight: 600;
-    letter-spacing: -.7px
+    line-height: 1.2;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+        color var(--t-fast) var(--ease), scale var(--t-press) var(--ease)
 }
 
-.stat p {
-    font-size: 9px;
-    color: #aaa5b5;
-    margin: 5px 0 0
+button:hover:not(:disabled) {
+    background: var(--raised-2);
+    border-color: var(--line-strong)
 }
 
-.bottom-note {
-    text-align: center;
-    color: #b0a7bd;
-    font-size: 10px;
-    margin: 24px 0 35px
+/* Pressão: o botão encolhe para 0,97 sob o dedo ou o mouse. Pelo teclado (foco visível) não: nada que o teclado
+   dispara se move. Superfícies largas (cartão, opção do quiz, item do menu) encolhem menos. */
+button:active:not(:disabled):not(:focus-visible) {
+    scale: var(--press)
 }
 
-footer {
-    border-top: 1px solid #e8e6ef;
-    padding: 21px 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 9px;
-    color: #b5aebf
-}
-
-footer>span:first-child {
-    font-size: 14px;
-    font-weight: 700;
-    color: #a59bb9
-}
-
-footer .brand-dot {
-    margin: 0
-}
-
-footer>span:first-child>span:last-child {
-    font-size: 9px;
-    font-weight: 400;
-    color: #b5aebf;
-    margin-left: 15px
+button:disabled {
+    cursor: default;
+    color: var(--ink-3);
+    background: var(--paper)
 }
 
 .primary {
-    background: var(--purple);
-    color: white;
-    border-color: var(--purple)
+    background: var(--violet);
+    border-color: var(--violet);
+    color: var(--on-violet)
 }
 
-.primary:hover {
-    background: #5141c8;
-    color: white
+.primary:hover:not(:disabled) {
+    background: var(--violet-hover);
+    border-color: var(--violet-hover)
+}
+
+.primary:active:not(:disabled) {
+    background: var(--violet-press)
+}
+
+.primary:disabled {
+    background: var(--violet-off);
+    border-color: var(--violet-off);
+    color: var(--ink-2)
+}
+
+/* Botão só com texto, para ir a outra página ("Ver meu desempenho"). */
+.link {
+    min-height: 2.25rem;
+    padding: 0 var(--sp-2);
+    border-color: transparent;
+    background: none;
+    color: var(--ink-2);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: .25em
+}
+
+.link:hover:not(:disabled) {
+    background: none;
+    border-color: transparent;
+    color: var(--ink);
+    text-decoration-color: currentColor
+}
+
+.icon-button {
+    width: var(--control-h);
+    padding: 0
+}
+
+input,
+select,
+textarea {
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-2);
+    background: var(--field);
+    font-size: var(--fs-3);
+    caret-color: var(--focus)
+}
+
+input,
+select {
+    min-height: var(--control-h);
+    padding: 0 var(--sp-3);
+    min-width: 0
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--ink-3);
+    opacity: 1
+}
+
+input:disabled {
+    color: var(--ink-2);
+    border-color: var(--line)
+}
+
+select {
+    appearance: none;
+    padding-right: calc(var(--sp-3) + var(--chevron-w) + var(--sp-2));
+    background-image: var(--chevron);
+    background-repeat: no-repeat;
+    background-position: right var(--sp-3) center;
+    background-size: var(--chevron-w);
+    cursor: pointer
+}
+
+/* Um anel de foco para tudo, a 6,8:1 ou mais sobre qualquer superfície, afastado 2 px do controle. Os campos também:
+   antes o editor não mostrava foco nenhum. */
+:focus-visible {
+    outline: var(--ring) solid var(--focus);
+    outline-offset: var(--ring)
+}
+
+/* Títulos e retornos que recebem o foco por código (tabindex -1): o anel só com teclado. */
+[tabindex="-1"]:focus:not(:focus-visible) {
+    outline: none
+}
+
+/* ---------- Estrutura: menu à esquerda, barra de cima, conteúdo ---------- */
+
+.app {
+    display: grid;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    min-height: 100vh
+}
+
+.rail {
+    background: var(--grain), var(--paper-under);
+    border-right: var(--hair) solid var(--line)
+}
+
+.rail-inner {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    padding: var(--sp-5) var(--sp-3) var(--sp-3);
+    overflow-y: auto
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 0 var(--sp-2) var(--sp-6);
+    border-radius: var(--r-2);
+    text-decoration: none;
+    font-family: var(--font-title);
+    font-stretch: 75%;
+    font-weight: 700;
+    font-size: var(--fs-5);
+    letter-spacing: .01em
+}
+
+.brand-mark {
+    width: 2rem;
+    height: 2rem;
+    flex: none
+}
+
+.brand-mark rect {
+    fill: var(--violet)
+}
+
+.brand-mark path {
+    fill: none;
+    stroke: var(--on-violet);
+    stroke-width: 2.2;
+    stroke-linecap: round
+}
+
+.rail nav,
+.sheet-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-0)
+}
+
+/* Item do menu: ícone e nome. A divisória colorida da seção aparece como uma aba de 4 px na borda direita do menu,
+   como as abas de um caderno; a da página aberta fica inteira e mais alta. */
+.nav-item {
+    --press: .98;
+    position: relative;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+    padding: 0 var(--sp-3);
+    border-color: transparent;
+    background: none;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
+}
+
+.nav-item .icon {
+    color: var(--ink-3)
+}
+
+/* A aba tem sempre 1,75rem e encolhe para 1rem (scale) quando a seção não está aberta: cresce por transform, sem
+   mexer na altura. */
+.nav-item::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: calc(-1 * var(--sp-3));
+    width: var(--tab-mark);
+    height: 1.75rem;
+    translate: 0 -50%;
+    scale: 1 calc(1 / 1.75);
+    border-radius: var(--r-0) 0 0 var(--r-0);
+    background: color-mix(in srgb, var(--tab) 40%, var(--paper));
+    transition: scale var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease)
+}
+
+.nav-item:hover:not(:disabled) {
+    background: var(--raised);
+    border-color: transparent;
+    color: var(--ink)
+}
+
+.nav-item[aria-current=page] {
+    background: var(--raised-2);
+    color: var(--ink)
+}
+
+.nav-item[aria-current=page] .icon {
+    color: var(--tab)
+}
+
+.nav-item[aria-current=page]::after {
+    scale: 1;
+    background: var(--tab)
+}
+
+.profile {
+    --press: .98;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+    min-height: 3.5rem;
+    margin-top: auto;
+    padding: var(--sp-2);
+    border-color: transparent;
+    background: none;
+    text-align: left;
+    font-weight: 600
+}
+
+.profile:hover:not(:disabled) {
+    background: var(--raised);
+    border-color: var(--line)
+}
+
+.profile-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.profile small {
+    display: block;
+    color: var(--ink-2);
+    font-weight: 400
+}
+
+.profile .icon {
+    color: var(--ink-3)
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border: var(--hair) solid var(--line-strong);
+    border-radius: 50%;
+    background: var(--raised-2);
+    color: var(--ink);
+    font-weight: 700
+}
+
+.shell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    min-height: var(--top-h);
+    padding: 0 var(--sp-6);
+    border-bottom: var(--hair) solid var(--line);
+    font-size: var(--fs-2)
+}
+
+.crumbs {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--sp-2);
+    font-weight: 600
+}
+
+.crumbs .brand-mark {
+    display: none;
+    width: 1.75rem;
+    height: 1.75rem
+}
+
+/* O nome do app só aparece no celular, no lugar do caminho (mobile.css). */
+.crumb-brand {
+    display: none;
+    font-family: var(--font-title);
+    font-stretch: 75%;
+    font-weight: 700;
+    font-size: var(--fs-4);
+    letter-spacing: .01em
+}
+
+.crumb-root {
+    color: var(--ink-2);
+    font-weight: 400
+}
+
+.crumb-sep {
+    color: var(--ink-3)
+}
+
+/* Estado da IA: o texto vai sempre escrito; o ponto só reforça. position: o texto que sai esmaece no lugar dele
+   (App.jsx, popLayout). Esmaece por baixo da faixa de espera (.busy) e volta quando ela sai. */
+.ai-status {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    padding: var(--sp-1) var(--sp-3);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-round);
+    background: var(--paper);
+    color: var(--ink-2);
+    transition: opacity var(--t-fast) var(--ease)
+}
+
+.status-dot {
+    width: .5rem;
+    height: .5rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ink-3)
+}
+
+.ai-status[data-tone=ok] .status-dot {
+    background: var(--ok)
+}
+
+.ai-status[data-tone=warn] .status-dot {
+    background: var(--warn)
+}
+
+.ai-status[data-tone=off] .status-dot {
+    background: var(--pen)
+}
+
+.ai-status[data-tone=demo] .status-dot {
+    background: var(--focus)
+}
+
+/* Conferindo a IA: o ponto vazado e o texto em tinta fraca até a resposta chegar (no máximo 5 s). */
+.ai-status[data-tone=""] {
+    color: var(--ink-3)
+}
+
+.ai-status[data-tone=""] .status-dot {
+    background: none;
+    box-shadow: inset 0 0 0 var(--hair) var(--ink-3)
+}
+
+.status-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+main {
+    position: relative;
+    isolation: isolate;
+    flex: 1;
+    padding: var(--main-top) var(--main-x) var(--sp-7)
+}
+
+main:focus {
+    outline: none
+}
+
+/* O brilho do topo: a luz desce da borda de cima da coluna e se apaga até o sublinhado do título, por trás dele
+   (z-index -1 dentro do main isolado). A altura é a do bloco do título; a máscara zera o brilho no fim, então nenhum
+   texto abaixo do título fica sobre ele. Os painéis têm fundo próprio. */
+main::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: -1;
+    height: calc(var(--main-top) + var(--fs-6) * 1.05 + var(--title-gap) + var(--tab-mark) + var(--sp-2));
+    background: var(--glow);
+    -webkit-mask-image: linear-gradient(black 25%, transparent);
+    mask-image: linear-gradient(black 25%, transparent);
+    pointer-events: none
+}
+
+.view {
+    max-width: var(--content-w)
+}
+
+.page-head {
+    margin-bottom: var(--sp-5)
+}
+
+/* Título da página na letra condensada, sublinhado com a cor da seção. */
+.page-title {
+    font-family: var(--font-title);
+    font-stretch: 75%;
+    font-weight: 700;
+    font-size: var(--fs-6);
+    line-height: 1.05;
+    letter-spacing: -.01em
+}
+
+.page-title::after {
+    content: '';
+    display: block;
+    width: 3rem;
+    height: var(--tab-mark);
+    margin-top: var(--title-gap);
+    border-radius: var(--r-0);
+    background: var(--sec, var(--tab-estudar))
+}
+
+.lead {
+    margin-top: var(--sp-3);
+    max-width: var(--measure);
+    color: var(--ink-2);
+    /* Duas linhas parecidas: com pretty ainda sobrava "o material." sozinho embaixo. */
+    text-wrap: balance
+}
+
+/* Folha preta com grão: o contêiner dos conteúdos de cada página. */
+.panel {
+    margin-bottom: var(--sp-5);
+    padding: var(--sp-5);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-3);
+    background: var(--grain), var(--paper-under)
+}
+
+.panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-4)
 }
 
 .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
-    margin: 15px 0
-}
-
-.row input {
-    flex: 1
-}
-
-.row select {
-    width: auto;
-    margin: 0
-}
-
-.row label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 12px
+    gap: var(--sp-3);
+    margin: var(--sp-4) 0
 }
 
 .center {
     justify-content: center
 }
 
-.result-header {
-    display: flex;
-    justify-content: space-between;
+.inline-field {
+    display: inline-flex;
     align-items: center;
-    gap: 20px
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
 }
 
-.result-header h2 {
-    margin-top: 10px
+.inline-field select {
+    color: var(--ink)
 }
 
-.result-header button {
-    font-size: 11px;
+/* Frase de apoio: a regra do caderno de erros, o material de onde veio a questão, o aviso da revisão da IA. */
+.hint {
+    max-width: var(--measure);
+    margin: var(--sp-2) 0;
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+/* Aviso fixo sob o que a IA escreveu. */
+.ai-note {
+    max-width: var(--measure);
+    margin-top: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--sp-2);
+    min-height: 1.5rem;
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-1);
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    font-weight: 600
+}
+
+/* Erro: junto do controle que falhou, com o ícone e a borda da caneta vermelha. */
+.error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    margin: var(--sp-4) 0;
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--pen);
+    border-radius: var(--r-2);
+    background: var(--err-bg);
+    color: var(--ink);
+    font-size: var(--fs-2);
+    overflow-wrap: anywhere
+}
+
+.error .icon {
+    margin-top: .05rem;
+    color: var(--pen)
+}
+
+/* ---------- Estudar ---------- */
+
+/* O editor é uma folha preta pautada: as linhas de 28 px rolam junto com o texto e cada uma passa na linha de base
+   do texto (--rule-base), com as letras apoiadas nela. A borda do campo e o anel de foco ficam na folha inteira
+   (texto e ferramentas). --pad é o respiro de cima do texto, de onde a pauta conta. */
+.editor {
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--paper)
+}
+
+.editor:has(textarea:focus-visible) {
+    outline: var(--ring) solid var(--focus);
+    outline-offset: var(--ring)
+}
+
+.editor textarea {
+    --pad: var(--sp-4);
+    display: block;
+    width: 100%;
+    min-height: calc(var(--rule) * 8 + var(--pad) * 2);
+    resize: vertical;
+    padding: var(--pad) var(--sp-5);
+    border: 0;
+    border-radius: var(--r-3) var(--r-3) 0 0;
+    background-color: var(--paper-under);
+    background-image: linear-gradient(var(--rule-line) var(--hair), transparent var(--hair)), var(--grain);
+    background-size: 100% var(--rule), auto;
+    background-position: 0 calc(var(--pad) + var(--rule-base)), 0 0;
+    background-attachment: local, local;
+    line-height: var(--rule)
+}
+
+.editor textarea:focus-visible {
+    outline: none
+}
+
+.editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-top: var(--hair) solid var(--line)
+}
+
+.tool {
+    min-height: 2.5rem;
+    padding: 0 var(--sp-3);
+    border-color: transparent;
+    background: none;
+    color: var(--ink-2)
+}
+
+.tool:hover:not(:disabled) {
+    background: var(--raised);
+    border-color: var(--line);
+    color: var(--ink)
+}
+
+.tool:disabled {
+    background: none
+}
+
+.tool .short,
+.ask .short {
+    display: none
+}
+
+.counter {
+    margin-left: auto;
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap
 }
 
+.ask {
+    min-height: 2.5rem
+}
+
+.selectors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-4);
+    margin: var(--sp-4) 0
+}
+
+.selectors label {
+    display: grid;
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
+}
+
+.selectors select {
+    color: var(--ink);
+    font-weight: 400
+}
+
+.note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    max-width: var(--lead-w);
+    margin: 0 0 var(--sp-4);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    text-wrap: balance
+}
+
+.note .icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-top: .05rem
+}
+
+/* As ações de gerar: um grupo de botões comuns, Resumir em destaque. O ícone das outras leva a cor da seção onde o
+   material abre. */
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2)
+}
+
+.action:not(.primary):not(:disabled) .icon {
+    color: var(--tab)
+}
+
+/* Faixa "Seu progresso": números honestos, os mesmos do Desempenho. */
+.progress {
+    margin-top: var(--sp-6);
+    padding-top: var(--sp-5);
+    border-top: var(--hair) solid var(--line)
+}
+
+.progress-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-3)
+}
+
+.progress-head h2 {
+    margin-right: auto;
+    font-size: var(--fs-3)
+}
+
+/* Uma folha só, com os contadores em frase separados por fios. Quando a linha não cabe, eles quebram e se esticam até
+   encher cada linha: o fio de cima e o da esquerda (sombra de 1 px, cortada na borda da folha) separam vizinhos e
+   linhas, sem cartão sobrando sozinho. */
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: var(--sp-5);
+    overflow: hidden;
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--grain), var(--paper-under)
+}
+
+.progress .stats {
+    margin-bottom: 0
+}
+
+.stat {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: var(--control-h);
+    padding: var(--sp-2) var(--sp-4);
+    box-shadow: calc(-1 * var(--hair)) 0 0 var(--line), 0 calc(-1 * var(--hair)) 0 var(--line);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.stat strong {
+    color: var(--ink);
+    font-size: var(--fs-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap
+}
+
+.day-marks {
+    display: flex
+}
+
+.day-marks .pen svg {
+    width: 1.25rem;
+    height: 1.25rem
+}
+
+/* ---------- Material: Resumos, Flashcards, Quizzes ---------- */
+
+.result-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3) var(--sp-5)
+}
+
+.result-header > div {
+    flex: 1 1 20rem;
+    min-width: 0
+}
+
+.result-header h2 {
+    font-size: var(--fs-5);
+    overflow-wrap: anywhere
+}
+
+.meta {
+    margin-top: var(--sp-1);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+/* Abas de verdade (role="tab"): a selecionada ganha o sublinhado na cor da sua seção. */
 .tabs {
     display: flex;
-    gap: 7px;
-    border-bottom: 1px solid var(--line);
-    margin: 23px 0
+    gap: var(--sp-1);
+    margin: var(--sp-4) 0 var(--sp-5);
+    border-bottom: var(--hair) solid var(--line);
+    overflow-x: auto
 }
 
-.tabs button {
+.tabs [role=tab] {
+    position: relative;
     border: 0;
-    border-radius: 0;
+    border-radius: var(--r-1) var(--r-1) 0 0;
     background: none;
-    color: #9993ac
+    color: var(--ink-2);
+    font-size: var(--fs-3)
 }
 
-.tabs .selected {
-    color: var(--purple);
-    border-bottom: 2px solid var(--purple)
+.tabs [role=tab]:hover {
+    background: var(--raised);
+    color: var(--ink)
 }
 
-.summary article {
-    display: flex;
-    gap: 15px;
-    padding: 19px 0;
-    border-bottom: 1px solid var(--line)
+.tabs [role=tab][aria-selected=true] {
+    color: var(--ink)
 }
 
-.summary article>span {
-    font-size: 13px;
-    color: #b5a4eb
+.tabs [role=tab][aria-selected=true]::after {
+    content: '';
+    position: absolute;
+    left: var(--sp-3);
+    right: var(--sp-3);
+    bottom: 0;
+    height: var(--tab-mark);
+    border-radius: var(--r-0) var(--r-0) 0 0;
+    background: var(--tab)
 }
 
-.summary strong {
-    font-size: 14px
+/* A faixa das abas rola de lado (overflow): o anel por fora seria cortado nela, então vai por dentro da aba. */
+.tabs [role=tab]:focus-visible {
+    outline-offset: calc(-1 * var(--ring))
 }
 
-.summary p {
-    font-size: 14px;
-    line-height: 1.8;
-    color: #777287;
-    margin: 8px 0
+.topic-count {
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.summary-tools > button:last-child {
+    margin-left: auto
 }
 
 .summary {
-    margin-bottom: 25px
+    margin: 0 0 var(--sp-5);
+    padding: 0;
+    list-style: none
 }
 
-.progress-label {
+.summary li {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: var(--sp-3);
+    padding: var(--sp-4) 0;
+    border-bottom: var(--hair) solid var(--line)
+}
+
+.topic-n {
+    padding-top: .15rem;
+    color: var(--ink-3);
+    font-size: var(--fs-2);
+    font-variant-numeric: tabular-nums
+}
+
+.summary h3 {
+    margin-bottom: var(--sp-1);
+    font-size: var(--fs-4);
+    overflow-wrap: anywhere
+}
+
+/* Medida de leitura: 65 a 75 caracteres por linha. */
+.summary p {
+    max-width: var(--measure);
+    margin-bottom: var(--sp-2);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
+}
+
+/* Trecho do texto do aluno que sustenta o tópico. */
+.summary .source {
+    padding-left: var(--sp-3);
+    border-left: var(--hair) solid var(--line-strong);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+/* Etiqueta do tópico que não saiu do texto do aluno. */
+.ai-tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+    padding: 0 var(--sp-2);
+    border: var(--hair) solid var(--warn);
+    border-radius: var(--r-1);
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: var(--fs-1);
+    font-weight: 600
+}
+
+/* Botões que chamam a IA de dentro do estudo: "Não entendi, me explique" e "Pedir revisão da IA". */
+.ai-ask {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin: var(--sp-3) 0
+}
+
+.ai-ask button {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0 var(--sp-2);
+    min-height: 2.5rem;
+    padding-block: var(--sp-2);
+    text-align: left
+}
+
+/* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
+.ai-ask small {
+    color: var(--ink-2);
+    font-weight: 400
+}
+
+/* Resposta do tutor no lugar do pedido: abaixo do retorno do quiz ou dentro do tópico do resumo. */
+.why {
+    max-width: calc(var(--measure) + var(--sp-4) * 2);
+    margin: var(--sp-3) 0 var(--sp-5);
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-2);
+    background: var(--raised);
+    line-height: var(--lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+}
+
+.why small {
+    color: var(--ink-2);
+    font-weight: 700
+}
+
+.why p {
+    margin: var(--sp-1) 0 0
+}
+
+.study-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
-    font-size: 12px;
-    color: #9890a7;
-    margin: 22px 0 10px
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-variant-numeric: tabular-nums
 }
 
-.progress-label span {
-    font-size: 9px;
-    letter-spacing: 1px
+/* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
+.marks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-2);
+    min-height: 2rem;
+    margin: var(--sp-2) 0 var(--sp-4)
 }
 
-progress {
-    width: 100%;
-    height: 6px;
-    accent-color: var(--purple)
+.marks .pen {
+    padding-bottom: var(--underline-gap)
+}
+
+.marks .pen.current {
+    background: linear-gradient(var(--tab-quizzes), var(--tab-quizzes)) bottom / 100% var(--underline) no-repeat
+}
+
+.marks .pen--novo.current {
+    color: var(--ink)
 }
 
 .flashcard {
-    width: 100%;
-    min-height: 270px;
-    background: linear-gradient(130deg, #f7f3ff, #fdfcff);
-    margin: 24px 0;
-    display: flex;
+    --press: .99;
     flex-direction: column;
+    gap: var(--sp-4);
+    width: 100%;
+    min-height: 16rem;
+    padding: var(--sp-6) var(--sp-5);
+    border-color: var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--grain), var(--paper-under);
+    font-weight: 400;
+    text-align: center
+}
+
+/* Sob o ponteiro, o grão sobre a folha lisa: um tom acima. */
+.flashcard:hover:not(:disabled) {
+    background: var(--grain), var(--paper)
+}
+
+/* Virado, o cartão leva a borda verde, também sob o ponteiro (antes o button:hover a trocava pela cinza). */
+.flashcard.flipped,
+.flashcard.flipped:hover:not(:disabled) {
+    border-color: var(--tab-flashcards)
+}
+
+.face-text {
+    max-width: 40rem;
+    font-size: var(--fs-5);
+    line-height: 1.45;
+    overflow-wrap: anywhere
+}
+
+.face-hint {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 35px
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-1)
 }
 
-.flashcard small {
-    font-size: 9px;
-    letter-spacing: 2px;
-    color: #a898c4
+.face-hint .icon {
+    width: 1rem;
+    height: 1rem
 }
 
-.flashcard h2 {
-    font-size: 22px;
-    line-height: 1.7;
-    max-width: 700px;
-    margin: 25px 0
+.verdicts .no:not(:disabled) .icon {
+    color: var(--pen-text)
 }
 
-.flashcard>span {
-    font-size: 11px;
-    color: #a796bf
-}
-
-.flipped {
-    background: #f0f7f3
+.verdicts .primary .icon {
+    color: var(--on-violet)
 }
 
 .quiz-question {
-    margin: 30px 0;
-    font-size: 21px;
-    line-height: 1.6
+    margin: var(--sp-2) 0 var(--sp-5);
+    max-width: var(--measure);
+    font-size: var(--fs-5);
+    line-height: 1.4;
+    overflow-wrap: anywhere
+}
+
+.quiz-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-3)
+}
+
+.quiz-form input {
+    flex: 1 1 16rem
 }
 
 .options {
-    display: flex;
-    flex-direction: column;
-    gap: 12px
+    display: grid;
+    gap: var(--sp-3)
 }
 
-.options button {
-    text-align: left;
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    line-height: 1.7
+.option {
+    --press: .99;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    min-height: 3.25rem;
+    padding: var(--sp-3) var(--sp-4);
+    border-color: var(--line-strong);
+    background: var(--paper);
+    font-size: var(--fs-3);
+    font-weight: 400;
+    line-height: var(--lh-ui);
+    text-align: left
 }
 
-.options b {
-    background: #f2eff8;
-    padding: 3px 11px;
-    border-radius: 5px;
-    color: #9d8cba
+.option:disabled {
+    background: var(--paper);
+    color: var(--ink-2)
 }
 
-.options .correct {
-    border-color: #71aa8c;
-    background: #eef8f0;
-    opacity: 1
+.letter {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: var(--r-1);
+    background: var(--raised-2);
+    color: var(--ink);
+    font-size: var(--fs-2);
+    font-weight: 700
 }
 
-.options .wrong {
-    border-color: #cc8888;
-    background: #fff2f2;
-    opacity: 1
+.option-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere
+}
+
+.option .pen {
+    flex: none
+}
+
+.option.correct {
+    border-color: var(--ok);
+    background: var(--ok-bg);
+    color: var(--ink)
+}
+
+.option.wrong {
+    border-color: var(--pen);
+    background: var(--err-bg);
+    color: var(--ink)
 }
 
 .feedback {
-    padding: 23px;
-    border-radius: 10px;
-    margin: 22px 0;
-    background: #faf4ed;
-    line-height: 1.8;
-    font-size: 14px
+    margin: var(--sp-5) 0;
+    padding: var(--sp-4) var(--sp-5);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--raised);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
 }
 
 .feedback.good {
-    background: #edf7f1
+    border-color: var(--ok)
+}
+
+.feedback.bad {
+    border-color: var(--pen)
+}
+
+/* O título do retorno recebe o foco depois da resposta: com fit-content o anel abraça a frase, não a linha toda. */
+.feedback > strong {
+    display: block;
+    width: fit-content;
+    margin-bottom: var(--sp-2);
+    font-size: var(--fs-4)
+}
+
+.feedback p,
+.feedback ol {
+    max-width: var(--measure);
+    margin: 0 0 var(--sp-2)
+}
+
+.answer-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--sp-2)
+}
+
+.next-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--sp-4)
 }
 
 .empty {
-    text-align: center;
-    padding: 60px 20px
-}
-
-.empty>span {
-    font-size: 50px;
-    color: #aa97de
+    padding: var(--sp-7) var(--sp-4);
+    text-align: center
 }
 
 .empty h2 {
-    font-size: 22px;
-    margin: 20px
+    font-size: var(--fs-5)
 }
 
 .empty p {
-    font-size: 14px;
-    color: #a297ae;
-    line-height: 1.8
+    margin: var(--sp-3) auto 0;
+    max-width: 36rem;
+    color: var(--ink-2)
 }
 
-.chart {
-    height: 225px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    padding: 25px 0;
-    gap: 12px
+.empty > .primary {
+    margin-top: var(--sp-5)
 }
 
-.chart>div {
-    display: flex;
-    flex-direction: column;
+.deck-done .marks {
+    justify-content: center;
+    margin-top: var(--sp-4)
+}
+
+/* Questões erradas na tela final do quiz: lista alinhada à esquerda dentro do bloco centralizado. */
+.review {
+    max-width: calc(var(--measure) + var(--mark) + var(--sp-3));
+    margin: var(--sp-5) auto;
+    padding: 0;
+    list-style: none;
+    text-align: left
+}
+
+.review li {
+    display: grid;
+    grid-template-columns: var(--mark) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--sp-3);
+    padding: var(--sp-4) 0;
+    border-top: var(--hair) solid var(--line);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
+}
+
+.review li > div > span {
+    display: block;
+    color: var(--ink-2)
+}
+
+/* ---------- Caneta: as marcas que se desenham (marks.jsx) ---------- */
+
+.pen {
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    font-size: 11px;
-    color: #a79ab8;
-    width: 10%
+    gap: var(--sp-1);
+    flex: none
 }
 
-.bar {
-    background: linear-gradient(#a797e9, #6251df);
-    width: 100%;
-    max-width: 55px;
-    border-radius: 5px 5px 0 0
+.pen svg {
+    width: var(--mark);
+    height: var(--mark);
+    flex: none;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.3;
+    stroke-linecap: round;
+    stroke-linejoin: round
 }
 
-.subject {
+/* pathLength 1: a marca inteira mede 1. Traço de 1 e vão de 2: com dashoffset 1 ela some, com 0 aparece pronta. */
+.pen path {
+    stroke-dasharray: 1px 2px;
+    stroke-dashoffset: 0
+}
+
+.pen--certo {
+    color: var(--ok)
+}
+
+.pen--errei,
+.pen--refazer {
+    color: var(--pen)
+}
+
+.pen--novo {
+    color: var(--ink-3)
+}
+
+/* Nota à mão, em Kalam: "certa", "sua resposta", "errei". */
+.pen-note {
+    font-family: var(--font-pen);
+    font-size: var(--fs-4);
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap
+}
+
+.pen--errei .pen-note,
+.pen--refazer .pen-note {
+    color: var(--pen-text)
+}
+
+/* ---------- Dúvidas ---------- */
+
+.chat-panel {
+    padding-bottom: 0
+}
+
+.chat-head {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
-    padding: 17px 0;
-    border-bottom: 1px solid var(--line);
-    font-size: 12px
-}
-
-.subject span {
-    color: #9990a7
-}
-
-.library-item {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    padding: 22px 0;
-    border-bottom: 1px solid var(--line)
-}
-
-.library-item>div {
-    flex: 1
-}
-
-.library-item small {
-    color: #a299b2;
-    font-size: 10px
-}
-
-.library-item h3 {
-    margin: 8px 0
-}
-
-.library-item p {
-    font-size: 11px;
-    color: #9990a7
+    gap: var(--sp-3);
+    padding-bottom: var(--sp-4);
+    border-bottom: var(--hair) solid var(--line);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
 }
 
 .chat {
-    min-height: 260px;
-    max-height: 500px;
-    overflow: auto;
-    padding: 15px 0
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-5) 0
 }
 
 .message {
-    max-width: 85%;
-    padding: 16px 20px;
-    background: #f5f3fb;
-    border-radius: 12px;
-    margin: 12px 0;
-    line-height: 1.8;
-    font-size: 14px;
-    white-space: pre-wrap
+    max-width: min(85%, calc(var(--measure) + var(--sp-4) * 2));
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-3);
+    line-height: var(--lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+}
+
+.message.assistant {
+    align-self: flex-start;
+    background: var(--paper)
 }
 
 .message.user {
-    margin-left: auto;
-    background: #eee8ff
+    align-self: flex-end;
+    background: var(--raised-2)
 }
 
 .message small {
-    font-size: 10px;
-    color: #9785bd
+    display: block;
+    color: var(--ink-2);
+    font-weight: 700
 }
 
 .message p {
-    margin: 8px 0
+    margin-top: var(--sp-1)
+}
+
+/* Balão de espera da resposta: o esqueleto de três linhas e a espera, na largura de uma resposta curta. */
+.message.thinking {
+    width: min(28rem, 85%)
+}
+
+/* ---------- Esperas e esqueletos ---------- */
+
+/* Espera de um pedido à IA (ui.jsx, Wait): o fio indeterminado em cima, o que acontece, os segundos e o limite, o
+   Cancelar. O fio é a única coisa que se move numa espera; o esqueleto fica parado. */
+.wait {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1) var(--sp-3);
+    padding-top: var(--sp-3);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+/* O Cancelar fica na ponta direita da espera: no esqueleto do material, onde fica o Salvar. */
+.wait .link {
+    min-height: 2.25rem;
+    margin-left: auto
+}
+
+.elapsed {
+    font-variant-numeric: tabular-nums
+}
+
+.wait-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    overflow: hidden;
+    border-radius: var(--r-0);
+    background: var(--wait-track)
+}
+
+/* Um trecho de 35% do fio corre de uma ponta à outra enquanto o pedido existe, e some com ele. */
+.wait-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 35%;
+    border-radius: inherit;
+    background: var(--focus);
+    translate: -100% 0;
+    animation: wait-run 1.6s cubic-bezier(.65, 0, .35, 1) infinite
+}
+
+@keyframes wait-run {
+    to {
+        translate: 286% 0
+    }
+}
+
+.sk {
+    display: block;
+    height: .75rem;
+    max-width: 100%;
+    border-radius: var(--r-1);
+    background: var(--sk)
+}
+
+/* Alturas do esqueleto: a de cada texto que vai entrar no lugar, para nada pular quando ele chega. */
+.sk-read {
+    height: .8rem;
+    margin: .425rem 0
+}
+
+.sk-h3 {
+    height: 1.05rem;
+    margin: .2rem 0 .5rem
+}
+
+.sk-h2 {
+    height: 1.1rem
+}
+
+.sk-title {
+    height: 1.4rem;
+    margin: .15rem 0 var(--sp-2)
+}
+
+.sk-n {
+    height: .8rem;
+    margin-top: .3rem
+}
+
+.sk-face {
+    height: 1.25rem;
+    margin: .35rem auto
+}
+
+.quiz-question .sk-face {
+    margin-inline: 0
+}
+
+.sk-control {
+    height: var(--control-h);
+    border-radius: var(--r-2)
+}
+
+.sk-tag {
+    height: 1.5rem
+}
+
+.sk-mark {
+    width: var(--mark);
+    height: var(--mark);
+    border-radius: 50%
+}
+
+.sk-letter {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: none
+}
+
+.sk-note {
+    margin-top: var(--sp-3)
+}
+
+.sk-grow {
+    flex: 1 1 16rem
+}
+
+.sk-lines {
+    display: block;
+    margin: var(--sp-1) 0 var(--sp-2)
+}
+
+/* O cartão e as opções do quiz a caminho: as mesmas caixas, com bordas de fio. */
+.sk-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--hair) solid var(--line)
+}
+
+.sk-option {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-height: 3.25rem;
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--paper)
+}
+
+.chart .sk-bar {
+    display: block;
+    background: var(--sk)
+}
+
+/* Material a caminho: o fio corre na borda de cima da folha, e o texto da espera fica onde fica "Área · Nível". */
+.material-wait {
+    position: relative;
+    overflow: hidden
+}
+
+.material-wait .wait {
+    position: static;
+    padding-top: 0
+}
+
+/* A altura do cabeçalho pronto (título, área e nível, aviso da IA): as abas e o conteúdo não pulam quando o material
+   chega (medido: 69 px no esqueleto contra 80 px no material). */
+.material-wait .result-header > div {
+    min-height: 5rem
+}
+
+.material-wait .wait-bar {
+    border-radius: 0
+}
+
+/* As linhas do esqueleto ficam na medida de leitura, como o texto que vem no lugar delas. */
+.review-wait,
+.sk-measure {
+    max-width: var(--measure)
+}
+
+.review-wait {
+    margin: var(--sp-3) 0
+}
+
+/* Fio de progresso de verdade (App.jsx, Meter): cartões avaliados, questões respondidas. Anda por transform. */
+.meter {
+    height: 3px;
+    margin-top: var(--sp-2);
+    overflow: hidden;
+    border-radius: var(--r-0);
+    background: var(--line)
+}
+
+.meter > span {
+    display: block;
+    height: 100%;
+    background: var(--sec, var(--focus));
+    transform-origin: left;
+    scale: var(--p) 1;
+    transition: scale 200ms var(--ease)
+}
+
+/* Caixa de pergunta presa ao pé da tela enquanto a conversa rola. */
+.dock {
+    position: sticky;
+    bottom: var(--tabbar-h);
+    z-index: 5;
+    margin: 0 calc(-1 * var(--sp-5));
+    padding: var(--sp-3) var(--sp-5) var(--sp-4);
+    border-top: var(--hair) solid var(--line);
+    border-radius: 0 0 var(--r-3) var(--r-3);
+    background: var(--grain), var(--paper-under)
+}
+
+.dock .ai-note {
+    margin: 0 0 var(--sp-2)
+}
+
+.dock .error {
+    margin: var(--sp-2) 0
 }
 
 .suggestions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin: 4px 0 14px
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3)
 }
 
 .suggestions button {
-    padding: 8px 14px;
-    border-radius: 16px;
-    font-size: 12px;
-    color: var(--purple);
+    min-height: 2.25rem;
+    padding: var(--sp-1) var(--sp-3);
+    border-radius: var(--r-round);
+    font-weight: 400;
     text-align: left;
     overflow-wrap: anywhere
 }
 
-.error {
-    padding: 16px;
-    background: #fff0ec;
-    color: #a95341;
-    border-radius: 10px;
-    margin: 20px 0;
-    font-size: 13px
+.ask-form {
+    display: flex;
+    gap: var(--sp-2)
 }
 
-.toast,
-.busy {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 16px 25px;
-    border-radius: 12px;
-    background: #32274d;
-    color: white;
-    font-size: 13px;
-    z-index: 90;
-    box-shadow: 0 10px 40px #32274d33;
-    max-width: 90vw
+.ask-form input {
+    flex: 1
 }
 
-.busy {
-    bottom: auto;
-    top: 20px;
-    background: var(--purple)
+.chat-end {
+    height: var(--hair)
 }
 
-.overlay {
-    position: fixed;
-    inset: 0;
-    background: #28203677;
-    backdrop-filter: blur(6px);
+/* ---------- Caderno de erros ---------- */
+
+.erros-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3) var(--sp-5);
+    padding-bottom: var(--sp-4);
+    border-bottom: var(--hair) solid var(--line)
+}
+
+.erros-head .hint {
+    flex-basis: 100%;
+    margin: 0
+}
+
+.erros-head .primary {
+    margin-left: auto
+}
+
+/* A escada de uma questão no caderno: ○ novo, ✗ errei, ↻ refazer, ✓ certo em outro dia. */
+.ladder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.ladder li {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1)
+}
+
+.ladder .pen svg {
+    width: 1.25rem;
+    height: 1.25rem
+}
+
+.mistakes h2 {
+    margin: var(--sp-5) 0 var(--sp-1);
+    overflow-wrap: anywhere
+}
+
+.mistakes ul {
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+/* Cada questão: a marca e a nota à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno" embaixo. */
+.mistakes li {
     display: grid;
-    place-items: center;
-    z-index: 99;
-    padding: 20px
+    grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--sp-2) var(--sp-4);
+    padding: var(--sp-4) 0;
+    border-bottom: var(--hair) solid var(--line);
+    line-height: var(--lh-read)
 }
 
-.modal {
+.mistakes li > .pen {
+    grid-row: span 2
+}
+
+.mistakes li strong {
+    max-width: var(--measure);
+    overflow-wrap: anywhere
+}
+
+.mistakes details {
+    grid-column: 2;
+    color: var(--ink-2)
+}
+
+/* "Ver resposta" com a seta desenhada do app no lugar do triângulo do navegador (o display flex já tira o marcador; o
+   -webkit- é o do Safari): a seta aponta para o lado com a resposta fechada e para baixo com ela aberta. */
+.mistakes summary {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    width: fit-content;
+    padding: var(--sp-1) 0;
+    color: var(--ink);
+    cursor: pointer;
+    list-style: none;
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: .25em
+}
+
+.mistakes summary::-webkit-details-marker {
+    display: none
+}
+
+.mistakes summary .icon {
+    color: var(--ink-2);
+    rotate: -90deg;
+    transition: rotate var(--t-fast) var(--ease)
+}
+
+.mistakes details[open] > summary .icon {
+    rotate: 0deg
+}
+
+.mistakes details p {
+    margin-top: var(--sp-1);
+    max-width: var(--measure);
+    overflow-wrap: anywhere
+}
+
+.mistakes .drop {
+    grid-column: 3;
+    grid-row: 1;
+    min-height: 2.25rem;
+    white-space: nowrap
+}
+
+/* "Desfazer" que fica na lista depois de uma exclusão. */
+.undo-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2) var(--sp-4);
+    margin: var(--sp-4) 0;
+    padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+    border: var(--hair) dashed var(--line-strong);
+    border-radius: var(--r-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    overflow-wrap: anywhere
+}
+
+/* ---------- Desempenho ---------- */
+
+.chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: var(--sp-3);
+    min-height: 13rem;
+    padding: var(--sp-4) 0;
+    border-bottom: var(--hair) solid var(--line)
+}
+
+.chart > div {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    max-width: 5rem;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-variant-numeric: tabular-nums;
+    text-align: center
+}
+
+/* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. */
+.chart-bar {
+    width: 100%;
+    max-width: 3.5rem;
+    height: max(var(--bar-min), calc(var(--h) * 7.5rem));
+    border-radius: var(--r-1) var(--r-1) 0 0;
+    background: var(--tab-desempenho)
+}
+
+.chart-note {
+    max-width: var(--measure);
+    margin-top: var(--sp-3);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.subjects {
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    list-style: none
+}
+
+.subject {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--sp-1) var(--sp-4);
+    padding: var(--sp-3) 0;
+    border-top: var(--hair) solid var(--line);
+    font-size: var(--fs-2)
+}
+
+.subject span {
+    color: var(--ink-2)
+}
+
+.panel > h2 + p {
+    margin: var(--sp-2) 0 var(--sp-4);
+    color: var(--ink-2)
+}
+
+/* ---------- Biblioteca ---------- */
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3)
+}
+
+.search {
     position: relative;
-    background: white;
-    max-width: 450px;
-    width: 100%;
-    padding: 38px;
-    border-radius: 20px
+    display: flex;
+    flex: 1 1 16rem
 }
 
-.modal h2 {
-    font-size: 26px;
-    line-height: 1.4;
-    margin: 20px 0
+.search .icon {
+    position: absolute;
+    top: 50%;
+    left: var(--sp-3);
+    translate: 0 -50%;
+    color: var(--ink-3);
+    pointer-events: none
 }
 
-.modal p {
-    font-size: 13px;
-    line-height: 1.8;
-    color: #9a8ca9
+.search input {
+    flex: 1;
+    padding-left: 2.5rem
 }
 
-.modal label {
-    display: block;
-    font-size: 12px;
-    margin: 20px 0
+.library {
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    list-style: none
 }
 
-.modal input {
-    display: block;
-    width: 100%;
-    margin-top: 10px
+.library-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-4) 0;
+    border-top: var(--hair) solid var(--line)
 }
 
-.modal .primary {
-    width: 100%;
-    margin-top: 12px
+.library-item > div {
+    flex: 1;
+    min-width: 0
+}
+
+.library-item small {
+    color: var(--ink-2)
+}
+
+.library-item h2 {
+    margin: var(--sp-1) 0;
+    font-size: var(--fs-3);
+    overflow-wrap: anywhere
+}
+
+.library-item p {
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.library-item .icon-button {
+    color: var(--ink-2)
+}
+
+.library-item .icon-button:hover:not(:disabled) {
+    color: var(--pen-text)
+}
+
+/* ---------- Avisos, espera e janelas ---------- */
+
+.toast-region {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--tabbar-h) + var(--sp-5));
+    z-index: 90;
+    width: max-content;
+    max-width: min(36rem, calc(100vw - 2rem));
+    translate: -50% 0;
+    pointer-events: none
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--raised-2);
+    box-shadow: var(--shadow);
+    font-size: var(--fs-2);
+    pointer-events: auto;
+    overflow-wrap: anywhere
+}
+
+.toast button {
+    min-height: 2.25rem;
+    border-color: var(--line-strong);
+    background: var(--paper);
+    white-space: nowrap
+}
+
+/* Espera de um pedido à IA longe do lugar da resposta: o que está acontecendo, os segundos, o limite e o Cancelar,
+   com o fio correndo na borda de baixo da pílula. Fica na faixa da barra de cima, no lugar do estado da IA, que
+   esmaece enquanto isso: com a página no topo ela não cobre texto nenhum. Quando a espera está no lugar da resposta
+   (o esqueleto do material, a explicação, a revisão), esta faixa não existe (App.jsx, waitInline). */
+.busy {
+    position: fixed;
+    top: calc((var(--top-h) - var(--busy-h)) / 2);
+    right: var(--main-x);
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    max-width: calc(100% - var(--main-x) * 2);
+    min-height: var(--busy-h);
+    padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-4);
+    overflow: hidden;
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-round);
+    background: var(--raised-2);
+    box-shadow: var(--shadow);
+    font-size: var(--fs-2)
+}
+
+.app:has(> .busy) .ai-status {
+    opacity: 0
+}
+
+.busy .wait {
+    position: static;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding: 0
+}
+
+.busy .wait-bar {
+    top: auto;
+    bottom: 0;
+    left: var(--sp-4);
+    right: var(--sp-4)
+}
+
+.busy .wait-text {
+    color: var(--ink)
+}
+
+.busy .link {
+    min-height: 2.25rem;
+    padding: 0 var(--sp-4);
+    border-color: var(--line);
+    border-radius: var(--r-round);
+    background: var(--raised);
+    color: var(--ink);
+    text-decoration: none
+}
+
+.busy .link:hover:not(:disabled) {
+    border-color: var(--line-strong);
+    background: var(--paper)
+}
+
+dialog {
+    width: min(28rem, calc(100vw - 2rem));
+    max-width: none;
+    padding: 0;
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--grain), var(--paper-under);
+    color: var(--ink);
+    box-shadow: var(--shadow)
+}
+
+/* O fundo escuro esmaece ao abrir (@starting-style) e ao fechar ([data-closing], App.jsx, Modal), junto da janela.
+   Só opacidade: vale também com movimento reduzido. Pelo teclado, aparece e some na hora. */
+dialog::backdrop {
+    background: var(--veil);
+    transition: opacity 200ms var(--ease)
+}
+
+@starting-style {
+    dialog[open]::backdrop {
+        opacity: 0
+    }
+}
+
+dialog[data-closing] {
+    pointer-events: none
+}
+
+dialog[data-closing]::backdrop {
+    opacity: 0;
+    transition: opacity 140ms var(--ease-in)
+}
+
+/* A folha desce em 0,2 s: o fundo escurecido acompanha até ela sair da tela. */
+.sheet[data-closing]::backdrop {
+    transition-duration: 200ms
+}
+
+/* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, o balão de espera) não recebe
+   clique: a troca nunca segura o aluno. */
+[data-motion-pop-id] {
+    pointer-events: none
+}
+
+/* Troca de página sem movimento (teclado, página rolada, troca no meio de outra, movimento reduzido): a página que sai
+   some no mesmo desenho em que a nova entra. A saída instantânea do Motion só zera a opacidade no quadro seguinte, e
+   por um quadro as duas páginas apareciam juntas, uma por cima da outra (medido no motion-capture). */
+main[data-instant] > .view[data-motion-pop-id] {
+    opacity: 0 !important
+}
+
+.dialog-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-6)
+}
+
+.profile-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.profile-dialog p {
+    color: var(--ink-2)
+}
+
+.profile-dialog label {
+    display: grid;
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
+}
+
+.profile-dialog input,
+.profile-dialog select {
+    color: var(--ink);
+    font-weight: 400
+}
+
+.profile-dialog .primary {
+    margin-top: var(--sp-2)
+}
+
+/* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
+   rótulo fica na altura da linha dele e o botão com a margem dele: a janela não muda quando o formulário chega. */
+.profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4)
+}
+
+.sk-field {
+    display: grid;
+    gap: var(--sp-2)
+}
+
+.sk-label {
+    margin: calc((var(--fs-2) * var(--lh-ui) - .75rem) / 2) 0
+}
+
+.sk-submit {
+    margin-top: var(--sp-2)
 }
 
 .close {
     position: absolute;
-    right: 15px;
-    top: 15px;
-    border: 0
+    top: var(--sp-3);
+    right: var(--sp-3);
+    border-color: transparent;
+    background: none
 }
 
-@media(min-width:1450px) {
-    .content {
-        padding-top: 50px
-    }
-
-    .input-wrap textarea {
-        height: 245px
-    }
-
-    .inspiration {
-        min-height: 370px
-    }
-
-    .study-grid {
-        grid-template-columns: minmax(0, 1fr) 290px
-    }
-
-    .action-grid button {
-        padding: 18px 13px
-    }
-
-    .action-grid strong {
-        font-size: 12px
-    }
-
-    .action-grid small {
-        font-size: 10px
-    }
-
-    .panel-title h2 {
-        font-size: 18px
-    }
-
-    .panel-title p {
-        font-size: 12px
-    }
+.sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between
 }
 
-@media(max-width:1150px) {
-    aside {
-        width: 200px;
-        padding: 25px 13px 0
+.sheet .profile {
+    margin-top: var(--sp-2);
+    border-color: var(--line)
+}
+
+/* A barra de baixo só existe no celular (mobile.css). */
+.tabbar {
+    display: none
+}
+
+/* Pelo teclado nada se move (anim.js marca <html data-input>): a aba do menu, o fio de progresso, a seta de "Ver
+   resposta", o fundo da janela e o estado da IA sob a faixa de espera mudam na hora. */
+:root[data-input=teclado] .nav-item::after,
+:root[data-input=teclado] .meter > span,
+:root[data-input=teclado] .mistakes summary .icon,
+:root[data-input=teclado] dialog::backdrop,
+:root[data-input=teclado] .ai-status {
+    transition: none
+}
+
+/* Movimento reduzido: sem deslize, sem pressão e sem o fio correndo (fica o trilho parado e os segundos contando);
+   o esqueleto já é parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda pode esmaecer. */
+@media (prefers-reduced-motion: reduce) {
+    button,
+    .mistakes summary .icon,
+    .nav-item::after,
+    .meter > span {
+        transition: none
     }
 
-    main {
-        margin-left: 200px;
-        width: calc(100% - 200px)
+    button:active:not(:disabled) {
+        scale: none
     }
 
-    header {
-        padding: 0 25px
-    }
-
-    .content {
-        padding: 30px 25px 0
-    }
-
-    .study-grid {
-        grid-template-columns: minmax(0, 1fr) 215px;
-        gap: 16px
-    }
-
-    .composer {
-        padding: 18px
-    }
-
-    .pill {
-        display: none
-    }
-
-    .action-grid {
-        grid-template-columns: repeat(2, 1fr)
-    }
-
-    .action-grid button>span {
-        margin-bottom: 6px
-    }
-
-    .inspiration {
-        min-height: 350px
-    }
-
-    .stat {
-        padding: 15px 10px;
-        gap: 8px
-    }
-
-    .stat-icon {
-        width: 28px;
-        height: 28px
-    }
-
-    .stat strong {
-        font-size: 18px
-    }
-
-    .stat p {
-        font-size: 8px
-    }
-
-    .brand {
-        font-size: 26px
+    .wait-bar::after {
+        animation: none;
+        opacity: 0
     }
 }
 
-@media(max-width:850px) {
-    aside {
-        width: 76px;
-        padding: 25px 10px
+/* Alto contraste do sistema: as superfícies somem, e as bordas e o foco ficam com as cores do sistema. */
+@media (forced-colors: active) {
+    .nav-item[aria-current=page],
+    .tabs [role=tab][aria-selected=true] {
+        outline: var(--ring) solid CanvasText
     }
 
-    .brand {
-        font-size: 0;
-        padding: 0;
-        justify-content: center;
-        gap: 0
+    .pen svg,
+    .icon {
+        stroke: CanvasText
     }
 
-    .brand .logo {
-        font-size: 36px
-    }
-
-    .brand-dot,
-    .workspace,
-    .nav-label,
-    .side-tip {
-        display: none
-    }
-
-    nav {
-        margin-top: 35px
-    }
-
-    nav button {
-        font-size: 0;
-        padding: 14px;
-        gap: 0
-    }
-
-    nav button span {
-        font-size: 23px
-    }
-
-    nav b {
-        display: none
-    }
-
-    .profile {
-        margin-top: auto;
-        justify-content: center
-    }
-
-    .profile>span:not(:first-child) {
-        display: none
-    }
-
-    main {
-        margin-left: 76px;
-        width: calc(100% - 76px)
-    }
-
-    .study-grid {
-        grid-template-columns: 1fr
-    }
-
-    .right-column {
-        display: grid;
-        grid-template-columns: 1fr 1fr
-    }
-
-    .inspiration {
-        min-height: 230px;
-        padding: 20px
-    }
-
-    .brain-art {
-        float: right;
-        font-size: 80px;
-        margin: 15px 0
-    }
-
-    .inspiration h2 {
-        font-size: 21px
-    }
-
-    .inspiration p {
-        font-size: 9px
-    }
-
-    .orbit {
-        right: -20px
-    }
-
-    .example {
-        padding: 23px
-    }
-
-    .stats {
-        grid-template-columns: repeat(2, 1fr)
-    }
-
-    .stat p {
-        font-size: 10px
-    }
-
-    .header-right {
-        font-size: 9px
-    }
-
-    .stat {
-        padding: 20px
-    }
-
-    .heading h1 {
-        font-size: 27px
-    }
-
-    .input-wrap textarea {
-        height: 190px
-    }
-
-    .action-grid {
-        grid-template-columns: repeat(4, 1fr)
-    }
-}
-
-@media(max-width:550px) {
-    aside {
-        width: 58px;
-        padding: 20px 6px
-    }
-
-    main {
-        margin-left: 58px;
-        width: calc(100% - 58px)
-    }
-
-    nav button {
-        padding: 12px
-    }
-
-    .content {
-        padding: 26px 15px 0
-    }
-
-    header {
-        height: 60px;
-        padding: 0 16px
-    }
-
-    .header-right {
-        font-size: 0;
-        gap: 0
-    }
-
-    .header-right .divider,
-    .header-right>span:last-child {
-        display: none
-    }
-
-    .heading h1 {
-        font-size: 25px;
-        line-height: 1.3
-    }
-
-    .heading>p {
-        line-height: 1.8;
-        font-size: 11px
-    }
-
-    .eyebrow {
-        font-size: 8px
-    }
-
-    .panel {
-        padding: 16px
-    }
-
-    .panel-title h2 {
-        font-size: 14px
-    }
-
-    .panel-title p {
-        font-size: 9px;
-        line-height: 1.7
-    }
-
-    .action-grid {
-        grid-template-columns: repeat(2, 1fr)
-    }
-
-    .selectors {
-        gap: 9px
-    }
-
-    .selectors label {
-        font-size: 7px
-    }
-
-    .right-column {
-        grid-template-columns: 1fr
-    }
-
-    .inspiration {
-        min-height: 210px
-    }
-
-    .inspiration h2 br {
-        display: none
-    }
-
-    .inspiration h2 {
-        max-width: 140px;
-        font-size: 23px
-    }
-
-    .brain-art {
-        font-size: 110px;
-        margin-right: 15px
-    }
-
-    .example {
-        display: none
-    }
-
-    .stat {
-        padding: 14px 10px
-    }
-
-    .stat strong {
-        font-size: 19px
-    }
-
-    .stat p {
-        font-size: 8px
-    }
-
-    .section-line h3 {
-        font-size: 10px
-    }
-
-    .section-line button {
-        font-size: 8px
-    }
-
-    .bottom-note {
-        line-height: 1.8;
-        font-size: 9px
-    }
-
-    footer {
-        font-size: 8px
-    }
-
-    footer>span:first-child>span:last-child {
-        display: none
-    }
-
-    .result-header {
-        align-items: flex-start
-    }
-
-    .result-header h2 {
-        font-size: 14px
-    }
-
-    .result-header button {
-        font-size: 9px;
-        padding: 8px
-    }
-
-    .row {
-        flex-wrap: wrap
-    }
-
-    .row input {
-        width: 100%
-    }
-
-    .subject {
-        font-size: 10px;
-        gap: 10px
-    }
-
-    .library-item {
-        flex-wrap: wrap
-    }
-
-    .flashcard {
-        padding: 20px
-    }
-
-    .flashcard h2 {
-        font-size: 18px
-    }
-
-    .progress-label {
-        font-size: 10px
-    }
-
-    .progress-label span {
-        font-size: 7px
-    }
-
-    .quiz-question {
-        font-size: 17px
-    }
-
-    .tabs button {
-        font-size: 12px
-    }
-
-    .modal {
-        padding: 25px
+    /* A seta desenhada das listas é uma imagem de cor fixa: no alto contraste volta a seta do sistema. */
+    select {
+        appearance: auto;
+        background-image: none
     }
 }
