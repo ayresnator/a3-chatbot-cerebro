@@ -1,19 +1,34 @@
-from typing import Literal
-from pydantic import BaseModel, Field, model_validator
+from typing import Annotated, Literal
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Area = Literal["Tecnologia", "Administração", "Economia", "Matemática", "Direito", "Escolar"]
 Level = Literal["Básico", "Intermediário", "Avançado"]
 
-class StudyInput(BaseModel):
+def filled(text: str) -> str:
+    if not text:
+        raise ValueError("Text must not be blank")
+    return text
+
+# Texto obrigatório do material. A regra fica num validador, e não em Field(min_length=1), porque o esquema JSON
+# enviado ao provedor (StudyOutput.model_json_schema()) foi validado na API real e não pode ganhar palavra-chave nova.
+# Desde essa validação ele só mudou pelo campo source de SummaryItem, que rodou na API real em 17/11/2026.
+Text = Annotated[str, AfterValidator(filled)]
+
+class Trimmed(BaseModel):
+    # Espaços nas pontas não contam como texto: cinco espaços passavam pelo mínimo de caracteres e chegavam à IA,
+    # e um material com textos em branco voltava HTTP 200.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+class StudyInput(Trimmed):
     content: str = Field(min_length=3, max_length=20000)
     area: Area
     level: Level
 
-class ChatTurn(BaseModel):
+class ChatTurn(Trimmed):
     role: Literal["user", "assistant"]
     text: str = Field(max_length=4000)
 
-class ChatInput(BaseModel):
+class ChatInput(Trimmed):
     question: str = Field(min_length=1, max_length=20000)
     content: str = Field(default="", max_length=20000)
     area: Area
@@ -21,21 +36,52 @@ class ChatInput(BaseModel):
     # Últimas mensagens da conversa. Quem manda é o navegador: o servidor não guarda nada.
     history: list[ChatTurn] = Field(default_factory=list, max_length=6)
 
-class SummaryItem(BaseModel):
-    concept: str
-    text: str
-
-class Card(BaseModel):
-    question: str
+class ChatOutput(BaseModel):
     answer: str
+    suggestions: list[str]
 
-class QuizItem(BaseModel):
+class GradeInput(Trimmed):
+    # Revisão de uma questão de resposta curta: enunciado, gabarito e o que o aluno digitou.
+    question: str = Field(min_length=1, max_length=500)
+    expected: str = Field(min_length=1, max_length=200)
+    answer: str = Field(min_length=1, max_length=500)
+    area: Area
+    level: Level
+
+class GradeOutput(Trimmed):
+    verdict: Literal["correta", "parcial", "incorreta"]
+    feedback: Text
+
+class SummaryItem(Trimmed):
+    concept: Text
+    text: Text
+    # Trecho do texto do aluno que sustenta o tópico; "" quando não há (tema sem texto, material antigo).
+    # default_factory, e não = "", para a palavra-chave "default" não entrar no esquema enviado ao provedor.
+    source: str = Field(default_factory=str)
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def blank_when_not_text(cls, source):
+        # O trecho é um extra: se vier fora do formato (nulo, número), sai só ele, não o tópico.
+        return source if isinstance(source, str) else ""
+
+class Card(Trimmed):
+    question: Text
+    answer: Text
+
+class QuizItem(Trimmed):
     type: Literal["multiple", "boolean", "short"]
-    question: str
-    options: list[str] = Field(default_factory=list)
+    question: Text
+    options: list[Text] = Field(default_factory=list)
     answer: int | str
-    explanation: str
+    explanation: Text
     steps: list[str] = Field(default_factory=list)
+
+    @field_validator("steps")
+    @classmethod
+    def drop_blank_steps(cls, steps):
+        # Passo em branco não vale a questão inteira: sai só ele.
+        return [step for step in steps if step]
 
     @model_validator(mode="before")
     @classmethod
@@ -51,16 +97,45 @@ class QuizItem(BaseModel):
                 answer = 0 if answer else 1
             elif kind == "short" and isinstance(answer, (int, float)):
                 answer = str(answer).removesuffix(".0")
-            elif kind != "short" and isinstance(answer, str) and answer.strip().isdecimal():
-                answer = int(answer)
+            elif kind != "short" and isinstance(answer, str):
+                # O esquema enviado aceita texto em answer: além do índice como texto, o modelo pode escrever
+                # a própria opção ("Cloroplasto") ou a letra dela ("B").
+                text, options = answer.strip().casefold(), data.get("options")
+                labels = [str(option).strip().casefold() for option in options] if isinstance(options, list) else []
+                if text in labels:
+                    # "2" com as opções ["1", "2", "3"] pode ser o índice 2 ou a opção "2". Sem como saber qual,
+                    # a questão é recusada: melhor perder uma questão do que ensinar a resposta errada.
+                    if text.isdecimal() and int(text) < len(labels) and int(text) != labels.index(text):
+                        raise ValueError("Answer can be an option index or another option's text")
+                    answer = labels.index(text)
+                elif text.isdecimal():
+                    answer = int(text)
+                elif len(text) == 1 and text in "abcde"[:len(labels)]:
+                    answer = "abcde".index(text)
             data = {**data, "answer": answer}
         return data
 
     @model_validator(mode="after")
     def check_answer(self):
         if self.type == "short":
-            if not isinstance(self.answer, str) or not self.answer.strip():
+            if not isinstance(self.answer, str) or not self.answer:
                 raise ValueError("Short answer must be a nonempty string")
+            # A resposta curta é digitada. O esquema enviado não liga options ao tipo: as opções que vierem junto saem.
+            self.options = []
+            # A tela compara o que o aluno digita com cada forma separada por "|" e com a resposta inteira.
+            forms = [form.strip() for form in self.answer.split("|") if form.strip()]
+            if forms:
+                # Resposta discursiva não dá para digitar igual: pelo menos uma forma tem de ser curta.
+                if not any(len(form) <= 40 and len(form.split()) <= 4 for form in forms):
+                    raise ValueError("Short answer is too long to be typed")
+                # A resposta fica como o modelo escreveu, porque o aluno também acerta digitando a resposta inteira:
+                # reescrita com as formas juntas por "|", "ls | wc -l" virava "ls|wc -l" e "|x|" virava "x".
+                # Só saem barras e espaços sobrando no fim ("Selic| "); a que começa com barra fica inteira.
+                if not self.answer.startswith("|"):
+                    self.answer = self.answer.rstrip("| ")
+            # Só barras ("||", o operador OU): não há forma separada, e o aluno acerta digitando a resposta inteira.
+            elif len(self.answer) > 40:
+                raise ValueError("Short answer is too long to be typed")
         else:
             if type(self.answer) is not int or not 0 <= self.answer < len(self.options):
                 raise ValueError("Answer index outside options")
@@ -68,11 +143,23 @@ class QuizItem(BaseModel):
                 raise ValueError("Boolean requires two options")
             if self.type == "multiple" and len(self.options) < 3:
                 raise ValueError("Multiple choice requires at least three options")
+            # Com duas opções iguais só uma contava como certa: o aluno errava marcando o mesmo texto.
+            if len({option.casefold() for option in self.options}) < len(self.options):
+                raise ValueError("Options must be different")
         return self
 
-class StudyOutput(BaseModel):
-    title: str
+class StudyOutput(Trimmed):
+    title: Text
     summary: list[SummaryItem] = Field(min_length=1, max_length=15)
     flashcards: list[Card] = Field(min_length=1, max_length=20)
     quiz: list[QuizItem] = Field(min_length=1, max_length=15)
+
+    @model_validator(mode="after")
+    def check_sizes(self):
+        # A instrução pede de 6 a 12 tópicos e cartões e 6 questões; abaixo destes mínimos não sobra o que estudar.
+        # Os mínimos dos campos acima continuam em 1 para o esquema enviado ao provedor não mudar.
+        sizes = len(self.summary), len(self.flashcards), len(self.quiz)
+        if sizes[0] < 3 or sizes[1] < 3 or sizes[2] < 4:
+            raise ValueError(f"Material needs 3 topics, 3 cards and 4 questions; got {sizes}")
+        return self
 

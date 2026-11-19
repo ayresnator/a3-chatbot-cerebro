@@ -23,11 +23,13 @@ class Settings:
     # que os 503 levam para chegar entra por fora. Na conta simples, com cada chamada em até 45 s, dá
     # 4 x 45 + 9 = 189 s, mas não é um teto: o limite vale para cada espera da rede, e uma resposta que chega
     # aos poucos pode levar mais. Um pedido ainda pode fazer mais de uma ida (catálogo com AI_MODEL=auto, JSON
-    # quebrado, material recusado, falta de acento). Por isso o total pode passar dos 105 s que o navegador espera.
+    # quebrado, material recusado, falta de acento, interrupção por RECITATION na geração, revisão fora do formato
+    # em /api/grade). Por isso o total pode passar dos 105 s que o navegador espera.
     timeout_seconds: float = 45.0
 
 def load_settings():
-    provider = os.getenv("AI_PROVIDER", "gemini").strip().lower()
+    # "AI_PROVIDER=" sem valor no .env vale o padrão, como já acontece com AI_MODEL.
+    provider = os.getenv("AI_PROVIDER", "").strip().lower() or "gemini"
     if provider not in {"gemini", "openai"}:
         raise ValueError("AI_PROVIDER deve ser gemini ou openai.")
     default_model = "auto" if provider == "gemini" else "gpt-4o-mini"
