@@ -1,17 +1,491 @@
-@media(max-width:550px) {
-    .example {
-        display: block
+/* Telas estreitas e janelas baixas. Este arquivo é carregado depois do styles.css: o que está aqui vale por último.
+   Só muda a arrumação; cores, tipos e medidas continuam saindo das variáveis do styles.css. */
+
+/* Janela baixa (notebook de 768 px de altura): o menu rola quando precisa e o perfil fica preso embaixo. */
+.rail .profile {
+    position: sticky;
+    bottom: 0;
+    background: var(--paper)
+}
+
+@media (max-width: 1100px) {
+    :root {
+        --rail-w: 13.5rem;
+        --main-x: var(--sp-5)
     }
 
-    .example .purple-icon {
+    .topbar {
+        padding: 0 var(--sp-5)
+    }
+}
+
+/* Até 850 px o menu da esquerda vira a barra de baixo: as cinco primeiras seções e "Mais", que abre uma folha com as
+   outras e o perfil. Cabe tudo sem rolar de lado e sem cortar nome. */
+@media (max-width: 850px) {
+    :root {
+        --tabbar-h: calc(4rem + env(safe-area-inset-bottom, 0px));
+        /* Altura da faixa presa de "Próxima questão" (.next-row): o botão, o respiro e o fio de cima. */
+        --next-h: calc(var(--control-h) + var(--sp-3) * 2 + var(--hair));
+        --main-top: var(--sp-5);
+        --main-x: var(--sp-4)
+    }
+
+    .app {
+        grid-template-columns: minmax(0, 1fr)
+    }
+
+    .rail {
         display: none
     }
 
-    .example p {
-        margin: 8px 0
+    .tabbar {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 30;
+        /* Cada item tem pelo menos a largura do próprio nome; o que sobra é dividido por igual. */
+        display: grid;
+        grid-auto-columns: minmax(max-content, 1fr);
+        grid-auto-flow: column;
+        height: var(--tabbar-h);
+        padding: 0 var(--sp-1) env(safe-area-inset-bottom, 0px);
+        border-top: var(--hair) solid var(--line);
+        background: var(--grain), var(--paper-under)
     }
 
-    .right-column {
-        gap: 12px
+    .tab-item {
+        --press: .98;
+        position: relative;
+        flex-direction: column;
+        gap: var(--sp-0);
+        height: 4rem;
+        min-width: 3rem;
+        min-height: 0;
+        padding: 0 var(--sp-1);
+        border: 0;
+        border-radius: 0;
+        background: none;
+        color: var(--ink-2);
+        font-size: var(--fs-1);
+        font-weight: 600;
+        white-space: nowrap
+    }
+
+    .tab-item:hover:not(:disabled) {
+        background: none;
+        color: var(--ink)
+    }
+
+    .tab-item .icon {
+        color: var(--ink-3)
+    }
+
+    /* A aba colorida da seção, agora na borda de cima do item. */
+    .tab-item::before {
+        content: '';
+        position: absolute;
+        top: calc(-1 * var(--hair));
+        left: 50%;
+        width: 1.75rem;
+        height: var(--tab-mark);
+        translate: -50% 0;
+        border-radius: 0 0 var(--r-0) var(--r-0);
+        background: transparent
+    }
+
+    .tab-item[aria-current=page],
+    .tab-item[data-current] {
+        color: var(--ink)
+    }
+
+    .tab-item[aria-current=page] .icon,
+    .tab-item[data-current] .icon {
+        color: var(--tab)
+    }
+
+    .tab-item[aria-current=page]::before,
+    .tab-item[data-current]::before {
+        background: var(--tab)
+    }
+
+    .tab-item:focus-visible {
+        outline-offset: calc(-1 * var(--ring) - var(--hair))
+    }
+
+    .topbar {
+        padding: 0 var(--sp-4)
+    }
+
+    /* Sem o menu da esquerda, a barra de cima leva a marca e o nome do app; a página já está no título. */
+    .crumbs .brand-mark {
+        display: block
+    }
+
+    .crumb-brand {
+        display: inline
+    }
+
+    .crumb-root,
+    .crumb-sep,
+    .crumb-page {
+        display: none
+    }
+
+    main {
+        padding-bottom: calc(var(--tabbar-h) + var(--sp-6))
+    }
+
+    /* A folha "Mais" sobe da borda de baixo, na largura da tela. */
+    .sheet {
+        width: 100%;
+        max-height: 85dvh;
+        margin: auto 0 0;
+        border-bottom: 0;
+        border-radius: var(--r-3) var(--r-3) 0 0
+    }
+
+    .sheet .dialog-body {
+        gap: var(--sp-3);
+        padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px))
+    }
+
+    .sheet .nav-item {
+        min-height: 3rem;
+        font-size: var(--fs-3)
+    }
+
+    .sheet .nav-item::after {
+        right: auto;
+        left: 0;
+        border-radius: 0 var(--r-0) var(--r-0) 0
+    }
+
+    /* O que rola até a vista para acima da barra de baixo. */
+    .why,
+    .error,
+    .feedback,
+    .chat-end,
+    .undo-row,
+    .quiz-question {
+        scroll-margin-bottom: calc(var(--tabbar-h) + var(--sp-4))
+    }
+
+    /* Depois de responder, a página rola até a última linha com marca da caneta (App.jsx, submit): ela para acima da
+       barra de baixo e do "Próxima questão" preso, com a marca ✓ ou ✗ e a nota à vista. */
+    #retorno,
+    .answer-line {
+        scroll-margin-bottom: calc(var(--tabbar-h) + var(--next-h) + var(--sp-3))
+    }
+
+    /* O retorno do quiz pode ser longo: "Próxima questão" fica preso acima da barra enquanto ele está na tela, numa
+       faixa opaca por cima do texto que rola. */
+    .next-row {
+        position: sticky;
+        bottom: var(--tabbar-h);
+        margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4));
+        padding: var(--sp-3) var(--sp-4);
+        border-top: var(--hair) solid var(--line);
+        border-radius: 0 0 calc(var(--r-3) - var(--hair)) calc(var(--r-3) - var(--hair));
+        background: var(--raised)
+    }
+
+    .next-row .primary {
+        flex: 1
+    }
+
+    .mistakes li {
+        grid-template-columns: minmax(0, 1fr) auto
+    }
+
+    .mistakes li > .pen {
+        grid-row: auto;
+        grid-column: 1
+    }
+
+    .mistakes li strong {
+        grid-column: 1 / -1
+    }
+
+    .mistakes details {
+        grid-column: 1 / -1
+    }
+
+    .mistakes .drop {
+        grid-column: 2;
+        grid-row: 1
+    }
+}
+
+/* Celular. O editor fica mais baixo e os quatro botões de gerar ficam em duas linhas: tudo até eles cabe na primeira
+   tela, acima da barra, de 360 × 780 para cima. */
+@media (max-width: 550px) {
+    :root {
+        --fs-6: 2rem;
+        --main-top: var(--sp-4);
+        --title-gap: var(--sp-2)
+    }
+
+    .page-head {
+        margin-bottom: var(--sp-4)
+    }
+
+    /* A frase de abertura repete o que o editor já diz: no celular ela sai para os botões de gerar caberem na tela. */
+    .lead {
+        display: none
+    }
+
+    .panel {
+        padding: var(--sp-4)
+    }
+
+    .editor textarea {
+        --pad: var(--sp-3);
+        min-height: calc(var(--rule) * 5 + var(--pad) * 2);
+        padding: var(--pad) var(--sp-4)
+    }
+
+    .editor-tools {
+        padding: var(--sp-1) var(--sp-2)
+    }
+
+    .tool {
+        padding: 0 var(--sp-2)
+    }
+
+    /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
+       Dúvidas, "Enviar" fica só no nome do botão e a seta sobra para a pergunta caber. */
+    .tool .full,
+    .ask-form .primary span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
+
+    .tool .short {
+        display: inline
+    }
+
+    .ask-form .primary {
+        width: var(--control-h);
+        padding: 0
+    }
+
+    /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo. */
+    .ask {
+        flex: 1;
+        order: 1
+    }
+
+    .counter {
+        order: 2;
+        margin-left: var(--sp-2)
+    }
+
+    .hint {
+        margin: var(--sp-2) 0
+    }
+
+    .selectors {
+        gap: var(--sp-3);
+        margin: var(--sp-3) 0
+    }
+
+    .note {
+        margin-bottom: var(--sp-3);
+        font-size: var(--fs-1)
+    }
+
+    /* Os botões de gerar enchem cada linha: duas linhas de dois na primeira tela, acima da barra, até 360 px. */
+    .action {
+        flex: 1 1 auto;
+        padding: 0 var(--sp-3)
+    }
+
+    .result-header h2 {
+        font-size: var(--fs-4)
+    }
+
+    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas e o "Salvar material" embaixo:
+       174 px em 390 px com um título comum. O esqueleto guarda essa altura para o material não empurrar as abas. */
+    .material-wait .result-header {
+        min-height: 10.875rem
+    }
+
+    /* As três abas dividem a largura: com o respiro de 16 px, "Quiz" ficava cortado em 320 px. */
+    .tabs [role=tab] {
+        flex: 1 1 auto;
+        padding: 0 var(--sp-2)
+    }
+
+    .flashcard {
+        min-height: 13rem;
+        padding: var(--sp-5) var(--sp-4)
+    }
+
+    .face-text,
+    .quiz-question {
+        font-size: var(--fs-4)
+    }
+
+    .verdicts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--sp-2)
+    }
+
+    .verdicts button {
+        padding: 0 var(--sp-2)
+    }
+
+    /* A marca e a nota da caneta vão para baixo do texto da opção, que fica com a largura inteira. */
+    .option {
+        flex-wrap: wrap;
+        padding: var(--sp-3)
+    }
+
+    .option .pen {
+        flex-basis: 100%;
+        padding-left: calc(1.75rem + var(--sp-3))
+    }
+
+    .feedback {
+        padding: var(--sp-4)
+    }
+
+    .message {
+        max-width: 92%
+    }
+
+    .dock {
+        margin: 0 calc(-1 * var(--sp-4));
+        padding: var(--sp-2) var(--sp-4) var(--sp-3)
+    }
+
+    .erros-head .primary {
+        width: 100%;
+        margin-left: 0
+    }
+
+    /* Biblioteca: a busca e o filtro ganham a linha inteira; Exportar e Importar dividem a de baixo. */
+    .toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+    }
+
+    .search,
+    .toolbar select {
+        grid-column: 1 / -1
+    }
+
+    .library-item {
+        flex-wrap: wrap
+    }
+
+    .library-item > div {
+        flex-basis: calc(100% - var(--control-h) - var(--sp-3))
+    }
+
+    .library-item .open {
+        order: 3;
+        flex: 1
+    }
+
+    .chart {
+        gap: var(--sp-1)
+    }
+
+    .chart > div {
+        font-size: var(--fs-1)
+    }
+
+    .dialog-body {
+        padding: var(--sp-5)
+    }
+
+    /* Os contadores em colunas iguais, duas quando cabem (de uns 386 px para cima) e uma só abaixo disso: os fios
+       formam uma grade só (antes cada linha se dividia num ponto diferente). Em 11rem a frase mais curta cabe inteira;
+       em duas colunas de 320 px todas quebravam. Os dias de estudo ficam numa linha inteira embaixo. */
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr))
+    }
+
+    .stat.days {
+        grid-column: 1 / -1
+    }
+
+    /* A espera da IA toma a faixa inteira da barra de cima, por cima da marca e do estado: com o Cancelar ela não
+       cabia ao lado do nome do app. Em 320 px o texto da espera encurta com reticências. */
+    .busy {
+        left: var(--sp-2);
+        right: var(--sp-2);
+        max-width: none
+    }
+
+    .busy .wait {
+        flex: 1;
+        gap: var(--sp-2)
+    }
+
+    .busy .wait-text {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis
+    }
+
+    /* Na faixa do celular só os segundos: o limite fica na espera que está no lugar da resposta. */
+    .busy .wait-limit {
+        display: none
+    }
+
+    .busy .link {
+        margin-left: auto
+    }
+}
+
+/* Telefone de 380 px ou menos: os seis nomes da barra cabem inteiros, até 320 px, com o nome a 12 px. */
+@media (max-width: 380px) {
+    .tab-item {
+        padding: 0 var(--sp-0);
+        font-size: var(--fs-0)
+    }
+
+    /* Seis linhas de pauta: o texto de exemplo do campo ocupa seis aqui, e a última ficava cortada pela borda. */
+    .editor textarea {
+        min-height: calc(var(--rule) * 6 + var(--pad) * 2)
+    }
+
+    /* As três ferramentas do editor cabem numa linha (com "Desfazer" também): em 320 px "Limpar" descia para a linha
+       de "Perguntar" e empurrava o contador para uma terceira linha. */
+    .tool {
+        gap: var(--sp-1);
+        padding: 0 var(--sp-1)
+    }
+
+    /* "Perguntar" na tela, o nome inteiro no botão: com "Perguntar ao Cérebro" e o contador na mesma linha, em 320 px
+       o botão quebrava em duas linhas e o contador caía sozinho para a linha de baixo. */
+    .ask .full {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
+
+    .ask .short {
+        display: inline
+    }
+}
+
+/* Em 320 px as duas listas lado a lado não cabem: uma por linha. */
+@media (max-width: 359px) {
+    .selectors {
+        grid-template-columns: minmax(0, 1fr)
     }
 }
