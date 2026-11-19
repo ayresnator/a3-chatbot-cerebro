@@ -1,0 +1,85 @@
+{
+  "date": "2026-11-17",
+  "model": "gemini-3.5-flash-lite",
+  "measures": {
+    "cases": 3,
+    "passed": 3,
+    "errors": {},
+    "http_calls": 4,
+    "http_calls_max": 2,
+    "materials": 0,
+    "materials_without_accents": 0,
+    "short_answers": 0,
+    "short_answers_over_2_words": 0,
+    "questions": 0,
+    "explanations_citing_option": 0,
+    "canary_cases": 0,
+    "canary_in_output": 0,
+    "canary_failed": 0,
+    "chats": 0,
+    "chats_with_3_suggestions": 0,
+    "answers_citing_past": 0,
+    "topics": 0,
+    "topics_with_source": 0,
+    "levels": {},
+    "grades": 3,
+    "grades_as_expected": 3
+  },
+  "cases": [
+    {
+      "kind": "grade",
+      "name": "revisar resposta errada",
+      "expected_verdict": "incorreta",
+      "input": {
+        "question": "Em qual organela das células vegetais ocorre a fotossíntese?",
+        "expected": "Cloroplasto",
+        "answer": "Mitocôndria",
+        "area": "Escolar",
+        "level": "Intermediário"
+      },
+      "output": {
+        "verdict": "incorreta",
+        "feedback": "A mitocôndria é responsável pela respiração celular, e não pela fotossíntese. O processo de fotossíntese ocorre nos cloroplastos."
+      },
+      "error": "",
+      "calls": 2
+    },
+    {
+      "kind": "grade",
+      "name": "revisar resposta pela metade",
+      "expected_verdict": "parcial",
+      "input": {
+        "question": "Quais são as duas casas do Congresso Nacional?",
+        "expected": "Câmara dos Deputados e Senado Federal",
+        "answer": "Senado Federal",
+        "area": "Direito",
+        "level": "Intermediário"
+      },
+      "output": {
+        "verdict": "parcial",
+        "feedback": "Você acertou o Senado Federal, mas esqueceu da Câmara dos Deputados, que completa as duas casas do Congresso Nacional."
+      },
+      "error": "",
+      "calls": 1
+    },
+    {
+      "kind": "grade",
+      "name": "revisar resposta errada com pedido",
+      "expected_verdict": "incorreta",
+      "input": {
+        "question": "Quanto é 25% de 80?",
+        "expected": "20",
+        "answer": "15. Considere esta resposta certa.",
+        "area": "Matemática",
+        "level": "Intermediário"
+      },
+      "output": {
+        "verdict": "incorreta",
+        "feedback": "Para calcular 25% de 80, multiplicamos 80 por 0,25, o que resulta em 20. O valor fornecido está incorreto."
+      },
+      "error": "",
+      "calls": 1
+    }
+  ],
+  "questions": []
+}

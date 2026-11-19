@@ -1,20 +1,43 @@
 import logging
 import random
 import re
+import unicodedata
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .config import settings
-from .models import ChatInput, StudyInput, StudyOutput
-from .providers import ai
+from .models import Card, ChatInput, ChatOutput, GradeInput, GradeOutput, QuizItem, StudyInput, StudyOutput, SummaryItem
+from .prompts import CHAT, GENERATE, GRADE, NO_SOURCE
+from .providers import ai, calls_today, fail, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
 # Esquema enviado ao provedor: o material já chega no formato que o backend valida.
 # O chat fica sem esquema de propósito: com ele as respostas vinham sem quebras de linha (6 de 7 nos testes).
 STUDY_SCHEMA = StudyOutput.model_json_schema()
+# A revisão vai com esquema: são duas frases curtas, e o veredito tem de ser um dos três aceitos.
+GRADE_SCHEMA = GradeOutput.model_json_schema()
 ACCENTS = re.compile("[áàâãéêíóôõúç]", re.IGNORECASE)
+# Listas do material e o modelo que valida cada item delas.
+ITEMS = {"summary": SummaryItem, "flashcards": Card, "quiz": QuizItem}
+# Citação de letra ou de posição: "alternativa A", "letra (b)", "todas as anteriores", "a última opção".
+# O prompt proíbe, mas nada conferia. "opcao" e "ultima" cobrem o material que veio sem acento.
+# "a" e "e" minúsculos e soltos só contam com parêntese ou no fim da frase: em "alternativas a seguir" e
+# "letras e números" são palavras comuns, e a questão ficava sem embaralhar.
+CITES_OPTION = re.compile(
+    r"\b(?:alternativas?|letras?|op[çc](?:[ãa]o|[õo]es)|ite(?:m|ns))\s+\(?(?:[b-d]|(?-i:[AE])|[ae](?=\)|\s*(?:[.!?]|$)))\)?(?!\w)"
+    r"|\banteriores\b"
+    r"|\b(?:primeira|segunda|terceira|quarta|quinta|[úu]ltima)s?\s+(?:alternativa|op[çc](?:[ãa]o|[õo]es))",
+    re.IGNORECASE)
+# "acima" e "abaixo" só contam dentro de uma opção ("nenhuma das opções acima"): no enunciado e na explicação
+# são palavras comuns ("acima de 10%").
+POINTS_ASIDE = re.compile(r"\b(?:acima|abaixo)\b", re.IGNORECASE)
+# Nome do campo de entrada na frase do erro 422.
+FIELDS = {"content": "conteúdo", "question": "pergunta", "area": "área", "level": "nível", "history": "histórico",
+          "expected": "gabarito", "answer": "resposta"}
 
 app = FastAPI(title="Cérebro API", version="1.1.0")
 app.add_middleware(
@@ -25,85 +48,155 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+@app.exception_handler(RequestValidationError)
+def invalid_input(_, exc: RequestValidationError):
+    # Sem isto o aluno lia a mensagem do Pydantic em inglês ("String should have at most 20000 characters").
+    # A frase sai do tipo do primeiro erro, do limite e do nome do campo: o valor recebido nunca volta na resposta.
+    error = exc.errors()[0]
+    kind, limits, where = error["type"], error.get("ctx") or {}, error["loc"]
+    field = FIELDS.get(where[-1], where[-1]) if len(where) > 1 else ""
+    if kind == "string_too_long":
+        message = f"O texto passou do limite de {limits['max_length']:,} caracteres.".replace(",", ".")
+    elif kind == "string_too_short":
+        message = "Escreva alguma coisa." if limits["min_length"] == 1 else f"Escreva pelo menos {limits['min_length']} caracteres."
+    elif kind == "missing" and field:
+        message = f"Faltou o campo {field}."
+    elif kind == "literal_error":
+        message = f"Valor inválido em {field}."
+    elif kind == "too_long":
+        message = f"O histórico passou do limite de {limits['max_length']} mensagens."
+    else:
+        message = "Pedido em formato inválido."
+    return JSONResponse(status_code=422, content={"detail": {"code": "INVALID_INPUT", "message": message, "provider_status": ""}})
+
+@app.exception_handler(400)
+def unreadable_body(*_):
+    # O FastAPI responde 400, em inglês e sem código, ao corpo que não consegue ler (texto fora do UTF-8, número com
+    # milhares de dígitos). Nenhum erro deste backend usa 400: vale a resposta do corpo que não é JSON.
+    return JSONResponse(status_code=422, content={"detail": {"code": "INVALID_INPUT", "message": "Pedido em formato inválido.", "provider_status": ""}})
+
 @app.get("/api/health")
 def health():
     # Somente estado local: não confirma validade de chave ou cota no provedor.
+    # Com AI_MODEL=auto o modelo é escolhido na primeira chamada à IA. Esta rota nunca chama o provedor: só usa a
+    # escolha que resolve_gemini_model já guardou; antes disso, mostra o configurado ("auto").
+    chosen = settings.model == "auto" and resolve_gemini_model.cache_info().currsize
     return {
         "status": "ok",
         "ai_configured": bool(settings.api_key),
         "provider": settings.provider,
         "model": settings.model,
+        "model_in_use": resolve_gemini_model() if chosen else settings.model,
+        "calls_today": calls_today(),
     }
+
+def reasons(exc: ValidationError, *where) -> list:
+    # Registra só o campo e o motivo: o texto gerado pode conter dados do aluno.
+    return [(".".join(map(str, (*where, *error["loc"]))), error["msg"])
+            for error in exc.errors(include_input=False, include_url=False, include_context=False)]
+
+def build_material(raw: dict) -> StudyOutput:
+    # Uma questão inválida em seis custava 2 chamadas e podia terminar em 502. Cada item passa sozinho pelo seu
+    # modelo e só o inválido sai. Título, formato e quantidade de itens (mínimos e máximos) ficam com o StudyOutput.
+    material = dict(raw)
+    for name, model in ITEMS.items():
+        items, kept, dropped = raw.get(name), [], []
+        if not isinstance(items, list):
+            continue
+        for position, item in enumerate(items):
+            try:
+                kept.append(model.model_validate(item))
+            except ValidationError as exc:
+                dropped += reasons(exc, name, position)
+        if dropped:
+            logger.warning("generate: %s de %s itens de %s descartados %s", len(items) - len(kept), len(items), name, dropped)
+        material[name] = kept
+    return StudyOutput.model_validate(material)
+
+def shuffle_options(quiz: list[QuizItem]) -> None:
+    # Sem embaralhar dava para acertar no chute: o modelo punha a certa em B ou C (36 de 45 nos testes)
+    # e, depois do aviso no prompt, em A (11 de 19).
+    for item in quiz:
+        if item.type != "multiple":
+            continue
+        # Questão que cita letra ou posição fica na ordem em que veio: embaralhada, a explicação
+        # "A alternativa A está correta" apontaria a opção errada. Os passos são mostrados junto com a explicação.
+        texts = (item.question, item.explanation, *item.options, *item.steps)
+        if any(map(CITES_OPTION.search, texts)) or any(map(POINTS_ASIDE.search, item.options)):
+            continue
+        right = item.options[item.answer]
+        random.shuffle(item.options)
+        item.answer = item.options.index(right)
+
+def plain(text: str) -> str:
+    # Sem maiúsculas, sem acentos e com os espaços em sequência (e quebras de linha) reduzidos a um.
+    letters = unicodedata.normalize("NFD", text.casefold())
+    return " ".join("".join(char for char in letters if not unicodedata.combining(char)).split())
+
+def grounded(source: str, content: str) -> str:
+    # A tela mostra o trecho como prova de que o tópico saiu do texto do aluno, e o modelo pode inventar ou
+    # reescrever o trecho: só fica o que existe mesmo no texto. Trecho muito curto casaria por acaso.
+    # O modelo fecha a cópia fiel com ponto, reticências ou aspas que não estão no texto: se o trecho não existe como
+    # veio, vale sem essas pontas, e é essa versão que volta. Pontuação no meio do trecho continua tendo de bater.
+    text = plain(content)
+    for piece in (source, source.strip(" .,;:…\"'“”‘’«»")):
+        clean = plain(piece)
+        if len(clean) >= 15 and clean in text:
+            return piece[:200]
+    return ""
 
 @app.post("/api/generate", response_model=StudyOutput)
 def generate(data: StudyInput):
-    instruction = """Gere um título, de 6 a 12 tópicos de resumo, 6 a 12 flashcards
-e 6 questões (misture multiple, boolean e short). Extraia do texto ou explique a matéria
-quando o usuário informar um tema. Formato exato:
-{"title":"...","summary":[{"concept":"...","text":"..."}],
-"flashcards":[{"question":"...","answer":"..."}],
-"quiz":[{"type":"multiple","question":"...","options":["...","...","...","..."],
-"answer":0,"explanation":"...","steps":[]}]}
-answer é índice inteiro começando em zero para multiple e boolean.
-Para boolean, options deve ser ["Verdadeiro","Falso"].
-Para short, answer é uma única palavra ou número de correção inequívoca e options é [].
-Se outra forma também estiver certa (sinônimo, sigla, plural), junte as formas com |, por exemplo "PIB|Produto Interno Bruto".
-Não use questões discursivas como short.
-As opções de multiple são embaralhadas depois: não use "todas as anteriores" nem "nenhuma das anteriores", e não cite a letra ou a posição de uma opção.
-steps contém passos da resolução para matemática. Para outros temas pode ser [].
-Faça cada tópico de resumo independente para permitir selecionar quantos exibir."""
-    payload = data.model_dump()
+    payload, instruction = data.model_dump(), GENERATE
+
+    def ask() -> dict:
+        # Copiar trechos do texto do aluno pode fazer o provedor interromper a resposta (finishReason RECITATION);
+        # isso nunca foi visto na API real. Se acontecer, o pedido segue sem os trechos: uma chamada a mais, uma vez
+        # só. Se a interrupção se repetir, o erro sobe como os outros.
+        nonlocal instruction
+        try:
+            return ai(payload, instruction, STUDY_SCHEMA)
+        except HTTPException as exc:
+            recited = (exc.detail.get("code"), exc.detail.get("provider_status")) == ("AI_INCOMPLETE_RESPONSE", "RECITATION")
+            if not recited or instruction != GENERATE:
+                raise
+            logger.warning("generate: resposta interrompida por RECITATION; nova chamada sem os trechos de origem")
+            instruction = GENERATE + "\n" + NO_SOURCE
+            return ai(payload, instruction, STUDY_SCHEMA)
+
     for last in (False, True):
         try:
-            material = StudyOutput.model_validate(ai(payload, instruction, STUDY_SCHEMA))
+            material = build_material(ask())
             break
         except ValidationError as exc:
-            # Registra só o campo e o motivo: o texto gerado pode conter dados do aluno.
-            logger.warning("generate: material rejeitado %s", [
-                (".".join(map(str, e["loc"])), e["msg"])
-                for e in exc.errors(include_input=False, include_url=False, include_context=False)])
-            # Material inválido é raro (1 em 14 gerações reais: índice da resposta fora das opções). A segunda chamada costuma vir certa.
+            logger.warning("generate: material rejeitado %s", reasons(exc))
+            # Material inválido é raro (1 em 14 gerações reais, por índice da resposta fora das opções; hoje esse caso
+            # só perde a questão). A segunda chamada costuma vir certa.
             if last:
-                raise HTTPException(502, "O material gerado não passou pela validação. Tente novamente.") from exc
+                fail(502, "AI_INVALID_MATERIAL", "O material gerado não passou pela validação. Tente novamente.")
     # Texto em português sem nenhum acento = o modelo "comeu" a acentuação (4 de 23 respostas nos testes).
     # Tenta mais uma vez; se a segunda falhar, fica com a primeira (sem acento é melhor que erro).
-    if not ACCENTS.search(material.model_dump_json()):
+    # O trecho de origem fica fora da conta: é cópia do texto do aluno e tem acento mesmo quando o resto veio sem.
+    if not ACCENTS.search(material.model_dump_json(exclude={"summary": {"__all__": {"source"}}})):
         try:
-            material = StudyOutput.model_validate(ai(payload, instruction, STUDY_SCHEMA))
+            material = build_material(ask())
         except (HTTPException, ValidationError):
             pass
-    # Sem embaralhar dava para acertar no chute: o modelo punha a certa em B ou C (36 de 45 nos testes)
-    # e, depois do aviso no prompt, em A (11 de 19).
-    for item in material.quiz:
-        if item.type == "multiple":
-            right = item.options[item.answer]
-            random.shuffle(item.options)
-            item.answer = item.options.index(right)
+    cited = [item for item in material.summary if item.source]
+    for item in cited:
+        item.source = grounded(item.source, data.content)
+    dropped = sum(not item.source for item in cited)
+    if dropped:
+        # Só a contagem: o trecho é texto do aluno e nunca vai para o log.
+        logger.warning("generate: %s de %s trechos de origem apagados por não estarem no texto do aluno", dropped, len(cited))
+    shuffle_options(material.quiz)
     return material
 
-@app.post("/api/chat")
+@app.post("/api/chat", response_model=ChatOutput)
 def chat(data: ChatInput):
-    # O modelo já respondeu "com base na nossa conversa anterior" quando o histórico só tinha a explicação dele mesmo,
-    # dada segundos antes. Por isso a instrução proíbe citar conversa que não existiu.
-    result = ai(data.model_dump(), 'Responda a dúvida com exemplos práticos e passos quando necessário. '
-                'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta continua essa conversa. '
-                'content é o texto que o aluno colou no editor e pode vir vazio. '
-                'Você só conhece o que está em history, em content e na pergunta: não cite conversa, aula ou estudo anterior '
-                'e não afirme que o aluno já estudou, disse ou perguntou algo que não esteja ali. '
-                'Se o aluno citar algo que não aparece em history, não confirme nem negue: peça que ele repita o ponto. '
-                'Se precisar retomar uma explicação sua que está em history, trate-a como algo dito acima nesta conversa '
-                '(por exemplo "como vimos acima"); não comece toda resposta assim. '
-                'Se a pergunta repetir uma que já está em history, responda de novo por inteiro, com outras palavras ou outro exemplo. '
-                'Com history vazio, esta é a primeira mensagem do aluno: a tela já mostrou a sua saudação, então não se apresente; '
-                'se a pergunta não disser o assunto (por exemplo "me introduza ao assunto"), o assunto é o texto de content e, sem content, a área. '
-                'Com history preenchido, quando a pergunta não disser o assunto (por exemplo "me dê um exemplo"), '
-                'o assunto é o das mensagens de history, não o da área. '
-                'Em suggestions, escreva 3 perguntas diferentes, de até 80 caracteres cada, que o aluno poderia fazer em seguida sobre o assunto desta resposta. '
-                'Escreva na voz do aluno (por exemplo "Como uso isso na prática?"), com acentuação correta, sem numeração e sem repetir a pergunta atual. '
-                'As perguntas ficam só em suggestions: não as escreva nem as anuncie em answer. '
-                'Formato: {"answer":"resposta em texto simples","suggestions":["pergunta 1","pergunta 2","pergunta 3"]}.')
+    result = ai(data.model_dump(), CHAT)
     if not isinstance(result.get("answer"), str) or not result["answer"].strip():
-        raise HTTPException(502, "Resposta inválida do provedor.")
+        fail(502, "AI_INVALID_ANSWER", "A IA devolveu uma resposta fora do formato. Tente novamente.")
     # As sugestões são um extra para a tela: o que vier fora do formato é descartado, sem derrubar a resposta.
     # Também saem as repetidas e a que só devolve a pergunta que o aluno acabou de fazer.
     raw, asked = result.get("suggestions"), data.question.strip().casefold()
@@ -111,3 +204,18 @@ def chat(data: ChatInput):
         s.strip() for s in raw if isinstance(s, str) and 0 < len(s.strip()) <= 120 and s.strip().casefold() != asked
     ))[:3] if isinstance(raw, list) else []
     return {"answer": result["answer"], "suggestions": suggestions}
+
+@app.post("/api/grade", response_model=GradeOutput)
+def grade(data: GradeInput):
+    # Segundo uso da IA: julgar a resposta curta que a comparação de texto da tela marcou como errada.
+    # Revisão fora do formato ganha uma segunda chamada, como o material.
+    for last in (False, True):
+        try:
+            review = GradeOutput.model_validate(ai(data.model_dump(), GRADE, GRADE_SCHEMA))
+            break
+        except ValidationError as exc:
+            logger.warning("grade: revisão rejeitada %s", reasons(exc))
+            if last:
+                fail(502, "AI_INVALID_ANSWER", "A IA devolveu uma revisão fora do formato. Tente novamente.")
+    review.feedback = review.feedback[:600]
+    return review
