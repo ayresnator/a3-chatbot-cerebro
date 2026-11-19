@@ -1,5 +1,5 @@
 # 0.132+ recusa corpo sem Content-Type JSON: sem isso, uma página de outro site faria o backend local gastar cota.
-fastapi>=0.132,<1
-uvicorn[standard]>=0.32,<1
-pydantic>=2.9,<3
-python-dotenv>=1.0,<2
+fastapi==0.162.4
+uvicorn[standard]==0.54.0
+pydantic==2.14.3
+python-dotenv==1.2.4
