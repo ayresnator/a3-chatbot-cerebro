@@ -383,18 +383,21 @@ button {
         color var(--t-fast) var(--ease), scale var(--t-press) var(--ease)
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled, [aria-disabled=true]) {
     background: var(--raised-2);
     border-color: var(--line-strong)
 }
 
 /* Pressão: o botão encolhe para 0,97 sob o dedo ou o mouse. Pelo teclado (foco visível) não: nada que o teclado
    dispara se move. Superfícies largas (cartão, opção do quiz, item do menu) encolhem menos. */
-button:active:not(:disabled):not(:focus-visible) {
+button:active:not(:disabled, [aria-disabled=true]):not(:focus-visible) {
     scale: var(--press)
 }
 
-button:disabled {
+/* aria-disabled: o botão desligado que fica com o foco (o pedido à IA em espera, o "Salvo"); na tela, igual ao
+   disabled. */
+button:disabled,
+button[aria-disabled=true] {
     cursor: default;
     color: var(--ink-3);
     background: none
@@ -501,6 +504,38 @@ select {
 /* Títulos e retornos que recebem o foco por código (tabindex -1): o anel só com teclado. */
 [tabindex="-1"]:focus:not(:focus-visible) {
     outline: none
+}
+
+/* O título da página e o do material recebem o foco depois de uma troca de página: o anel abraça o texto, não a linha
+   toda. */
+.page-title,
+.result-header h2 {
+    width: fit-content
+}
+
+/* "Pular para o conteúdo" (App.jsx): fora da vista até receber o foco, no primeiro Tab da página; com ele, aparece na
+   altura da barra de cima, por cima dela, em fundo sólido. Fixo: fora do grid do .app e à vista em qualquer rolagem. */
+.skip-link {
+    position: fixed;
+    top: calc(var(--top-y) + (var(--top-h) - var(--control-h)) / 2);
+    left: var(--gutter);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    min-height: var(--control-h);
+    padding: 0 var(--sp-4);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-round);
+    background: var(--paper);
+    box-shadow: var(--shadow);
+    color: var(--ink-hi);
+    font-size: var(--fs-2);
+    font-weight: 650;
+    text-decoration: none
+}
+
+.skip-link:not(:focus) {
+    clip-path: inset(50%)
 }
 
 /* ---------- Estrutura: barra de cima, dock das seções, palco ---------- */
@@ -1340,13 +1375,14 @@ main:focus {
     color: var(--ink-2)
 }
 
-.tool:hover:not(:disabled) {
+.tool:hover:not(:disabled, [aria-disabled=true]) {
     background: var(--raised);
     border-color: var(--line);
     color: var(--ink)
 }
 
-.tool:disabled {
+.tool:disabled,
+.tool[aria-disabled=true] {
     background: none
 }
 
@@ -1915,7 +1951,10 @@ main:focus {
     text-align: center
 }
 
+/* O título do fim do baralho e do quiz recebe o foco: com fit-content o anel abraça a frase, centrada. */
 .empty h2 {
+    width: fit-content;
+    margin-inline: auto;
     font-size: var(--fs-5)
 }
 
