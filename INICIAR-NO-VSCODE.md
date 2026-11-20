@@ -100,8 +100,8 @@ Com o frontend rodando, abra http://localhost:5173/?demo. A demonstração organ
 - AI_QUOTA_EXCEEDED: cota do projeto atingida. Confira os limites no AI Studio; trocar a chave do mesmo projeto não renova a cota.
 - AI_REQUEST_REJECTED: confira modelo, região e situação do projeto/plano.
 - AI_NETWORK_ERROR: verifique internet, proxy, firewall e certificados HTTPS.
-- AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho. Tente de novo.
-- Tempo de espera esgotado (sem código): o navegador desiste depois de 105 segundos. Pode acontecer quando o backend precisa de várias chamadas seguidas ao Gemini no mesmo pedido. Tente de novo.
+- AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho, ou o pedido chegou ao teto de 6 chamadas ao Gemini ou 100 segundos. Tente de novo.
+- Tempo de espera esgotado (sem código): o navegador desiste depois de 105 segundos. Ficou raro: o backend encerra cada pedido em 100 segundos, com AI_TIMEOUT. Se aparecer, confira o terminal do backend e tente de novo.
 - AI_PROVIDER_UNAVAILABLE: erro do lado do Gemini. Quando é sobrecarga (HTTP 503: aparece UNAVAILABLE ou HTTP_503 depois do código), o backend já tentou mais duas vezes sozinho: aguarde alguns minutos. Nos outros erros 5xx (INTERNAL, por exemplo) ele faz uma chamada só: vale tentar de novo.
 - AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - AI_EMPTY_RESPONSE: a IA não devolveu conteúdo. Se aparecer um motivo depois do código (SAFETY, por exemplo), o provedor bloqueou o pedido: reformule.
@@ -113,6 +113,7 @@ Com o frontend rodando, abra http://localhost:5173/?demo. A demonstração organ
 - AI_NO_COMPATIBLE_MODEL: com AI_MODEL=auto (ou vazio, que no Gemini vale auto), a listagem não trouxe nenhum Gemini Flash estável. Veja "Modelo não encontrado (404)" e ponha em AI_MODEL um nome da listagem.
 - INVALID_INPUT: o pedido foi recusado antes de chegar à IA (texto vazio, longo demais ou campo inválido). A mensagem diz o que corrigir.
 - Erro de proxy sem JSON: confira o terminal do Python e a porta 8000.
+- Invalid host header (HTTP 400, ou "O backend não retornou JSON (HTTP 400)" na tela): o backend só responde pelos nomes de ALLOWED_HOSTS, no .env (padrão 127.0.0.1 e localhost; a porta não conta). Isso impede que um site de fora use o backend pelo seu navegador. Abra pelo endereço do guia ou acrescente o nome em ALLOWED_HOSTS e reinicie o backend.
 - content.js com chrome-extension://: teste sem extensões; não desative CSP.
 
 ## Testes
