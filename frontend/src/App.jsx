@@ -300,8 +300,9 @@ function App() {
   useEffect(() => setUndo(null), [page]);
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
-  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
-  useEffect(() => setError(null), [input]);
+  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
+  // espera acabar: é ele que conta os segundos até os botões da IA voltarem.
+  useEffect(() => setError(e => (e?.until > Date.now() ? e : null)), [input]);
 
   // Os botões da IA voltam sozinhos quando a espera do limite por minuto acaba.
   useEffect(() => {
@@ -830,7 +831,6 @@ function App() {
     if (waiting) return;
     const ai = !!API_BASE && health?.ai_configured !== false;
     let written = null;
-    let paused = false;
     if (ai) {
       setBusy({ kind: 'example', label: 'Escrevendo um exemplo…', since: Date.now() });
       try {
@@ -840,9 +840,10 @@ function App() {
         }
         written = { topic: data.topic, text: data.text.trim() };
       } catch (e) {
-        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto.
+        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto. No limite por
+        // minuto os botões da IA ficam desligados alguns segundos (callAI): o aviso de erro conta a espera.
         if (e.cancelled) return;
-        paused = !!e.wait;
+        if (e.wait) setError(e);
       } finally {
         // O botão desabilitado na espera, ou o Cancelar da faixa que sai com ela, deixa o foco no vazio: ele volta ao
         // botão. Quem foi escrever ou foi para outra página continua onde está.
@@ -864,9 +865,8 @@ function App() {
     }
     const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
     // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
-    // quem escreveu. No limite por minuto os botões da IA ficam desligados alguns segundos (callAI): o aviso diz por quê.
+    // quem escreveu.
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
-      : paused ? ERRORS.AI_RATE_LIMITED + ' Exemplo pronto adicionado: '
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
     exampleTopic.current = example.topic;
     setInput(example.text);
@@ -986,12 +986,19 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
+  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
+  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
+  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
+    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
+    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  const problem = pause || error;
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
-      {error && (
+      {problem && (
         <m.div key="erro" ref={errorBox} role="alert" className="error" variants={pop} initial={appear()} animate="show" exit="exit">
           <Icon name="alerta" />
-          <Problem error={error} />
+          <Problem error={problem} />
         </m.div>
       )}
     </AnimatePresence>
@@ -1249,7 +1256,7 @@ function App() {
                           type="button"
                           className={'action' + (k === 'resumo' ? ' primary' : '')}
                           data-tab={s}
-                          disabled={waiting || (aiOff && k !== 'chat')}
+                          disabled={k === 'chat' ? !!busy || asking : waiting || aiOff}
                           aria-describedby={aiOff && k !== 'chat' ? 'aviso-ia' : undefined}
                           aria-busy={busy?.kind === k || undefined}
                           onClick={() => (k === 'chat' ? setPage('Dúvidas') : generate(k))}
