@@ -22,7 +22,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, inText, originNote,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -100,8 +100,9 @@ const ACTIONS = [
 ];
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 
-// Aviso fixo onde há texto escrito pela IA. A demonstração não usa IA e não mostra.
-const aiNote = API_BASE && <p className="ai-note">Gerado por IA. Pode conter erros: confira com o seu material.</p>;
+// Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
+// demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
+const aiNote = API_BASE && <p className="ai-note">{AI_NOTE}</p>;
 
 // O modelo às vezes devolve **negrito** em Markdown: mostra em negrito em vez de asteriscos soltos.
 // Só casa um par colado ao texto, para não mexer em código como "a ** 2" ou "x**2".
@@ -203,6 +204,9 @@ function App() {
   const recognition = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
+  // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto): o trecho do material
+  // que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
+  const aiExample = useRef(DRAFT.exemplo);
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
   const viewed = useRef(false);
@@ -237,7 +241,7 @@ function App() {
   // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
-    draft.current = { input, area, level, result: opened, made: made.current, chat, tips };
+    draft.current = { input, area, level, result: opened, made: made.current, chat, tips, exemplo: aiExample.current };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
   }, [input, area, level, opened, chat, tips]);
@@ -474,6 +478,8 @@ function App() {
     // O mesmo botão de novo gera material novo.
     const key = JSON.stringify([input, area, level]);
     const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
+    // O exemplo da IA que acompanha o texto deste clique: o Desfazer do aviso pode trocar os dois durante a espera.
+    const example = aiExample.current;
     const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
     // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
     // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
@@ -496,6 +502,9 @@ function App() {
       if (!validMaterial(data)) {
         throw Error('Material incompleto recebido do backend');
       }
+      // Trecho copiado do exemplo que a IA escreveu não confere nada: seria a IA citando a si mesma. A marca ia vai com
+      // o material para a biblioteca, o rascunho e o backup. A demonstração não tem trecho e não ganha marca.
+      if (!reuse) data = { ...data, summary: data.summary.map(s => (inText(s.source, example) ? { ...s, ia: true } : s)) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
       // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
       // material do mesmo texto.
@@ -843,15 +852,21 @@ function App() {
       }
     }
     const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
-    // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
-    // quem escreveu.
+    // O aviso diz quem escreveu. O texto da IA fica guardado em aiExample: o material feito dele cita o trecho como
+    // "No exemplo escrito pela IA", e não como "No seu texto".
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
+    const before = aiExample.current;
     exampleTopic.current = example.topic;
+    aiExample.current = written ? example.text : '';
     setInput(example.text);
-    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás.
-    if (input.trim()) offerUndo('texto', note, () => setInput(input));
-    else toast(note);
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás, e o exemplo da IA volta junto.
+    if (input.trim()) {
+      offerUndo('texto', note, () => {
+        aiExample.current = before;
+        setInput(input);
+      });
+    } else toast(note);
   }
 
   // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
@@ -908,8 +923,6 @@ function App() {
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
   const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
-  // Material com algum trecho de origem: nele, o tópico que não tem trecho ganha a etiqueta de explicação da IA.
-  const sourced = summary.some(s => s.source?.trim());
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1306,7 +1319,11 @@ function App() {
                             <p className="meta">
                               {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
-                            {aiNote}
+                            {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
+                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                            {result.virtual
+                              ? aiNote
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
                           {!result.virtual && (
                             <button type="button" disabled={isSaved} onClick={save}>
@@ -1357,9 +1374,16 @@ function App() {
                                     <div>
                                       <h3>{s.concept}</h3>
                                       <p>{s.text}</p>
-                                      {s.source?.trim()
-                                        ? <p className="source">{'No seu texto: "' + s.source.trim() + '"'}</p>
-                                        : sourced && <span className="ai-tag">Explicação da IA: confira</span>}
+                                      {s.source?.trim() && (
+                                        <p className="source">
+                                          {(s.ia ? 'No exemplo escrito pela IA: "' : 'No seu texto: "') + s.source.trim() + '"'}
+                                        </p>
+                                      )}
+                                      {/* Sem trecho, ou com trecho do exemplo da própria IA, o tópico não foi conferido
+                                          com um texto do aluno. */}
+                                      {result.semIA !== true && (s.ia || !s.source?.trim()) && (
+                                        <span className="ai-tag">Explicação da IA: confira</span>
+                                      )}
                                       {API_BASE && (
                                         <div className="ai-ask">
                                           <button

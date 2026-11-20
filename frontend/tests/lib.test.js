@@ -1,6 +1,7 @@
 // Testes da lógica pura do Cérebro (src/lib.js), com o executor que já vem no Node: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
@@ -8,7 +9,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES,
+  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -370,6 +371,7 @@ test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão'
       explanation: 'Trecho do material: ' + text,
       steps: [],
     }],
+    semIA: true,
   });
 });
 
@@ -399,6 +401,13 @@ test('demo: o título para na quebra de linha, antes de "em que" e em 12 palavra
   assert.equal(demo('O ano em que tudo mudou foi 1789.').title, 'O ano');
   assert.equal(demo('um dois três quatro cinco seis sete oito nove dez onze doze treze').title,
     'um dois três quatro cinco seis sete oito nove dez onze doze…');
+});
+
+test('demo: o material leva a marca semIA e continua valendo como material', () => {
+  const material = demo(EXAMPLE);
+  assert.equal(material.semIA, true);
+  assert.equal(validMaterial(material), true);
+  assert.equal(sameMaterial(material, demo(EXAMPLE)), true);
 });
 
 test('EXAMPLES: cada área tem pelo menos 3 exemplos prontos, com tema e texto de 350 a 900 caracteres', () => {
@@ -778,6 +787,45 @@ test('sameMaterial: compara o conteúdo, sem olhar id, data, área e nível', ()
   assert.equal(sameMaterial(GOOD, broken(m => { m.quiz.reverse(); })), false);
 });
 
+test('inText: acha o trecho sem ligar para maiúsculas, acentos, espaços, quebras de linha e invisíveis', () => {
+  // Hífen invisível no texto e espaço de largura zero no trecho.
+  const [shy, zwsp] = [0xad, 0x200b].map(c => String.fromCodePoint(c));
+  const text = 'A fotossíntese é o processo\npelo qual plantas trans' + shy + 'formam   energia luminosa.';
+  assert.equal(inText('FOTOSSINTESE é o processo pelo qual', text), true);
+  assert.equal(inText('plantas  transformam energia', text), true);
+  assert.equal(inText('energia lumi' + zwsp + 'nosa.', text), true);
+  assert.equal(inText('plantas absorvem energia', text), false);
+});
+
+test('inText: trecho vazio, só com espaços ou ausente, e texto vazio não contam', () => {
+  for (const source of ['', '   ', '\n', null, undefined]) {
+    assert.equal(inText(source, 'Qualquer texto.'), false, JSON.stringify(source));
+  }
+  assert.equal(inText('Qualquer texto', ''), false);
+  assert.equal(inText('Qualquer texto', null), false);
+});
+
+test('inText: a regra da tela acha os 64 trechos que o backend manteve na rodada real, cada um no texto do seu caso', () => {
+  const round = JSON.parse(readFileSync(new URL('../../docs/avaliacao-2026-11-17.json', import.meta.url), 'utf8'));
+  const pairs = round.cases
+    .filter(c => c.kind === 'generate' && c.output)
+    .flatMap(c => c.output.summary.filter(s => s.source).map(s => [s.source, c.input.content]));
+  assert.equal(pairs.length, 64);
+  for (const [source, content] of pairs) assert.equal(inText(source, content), true, source);
+});
+
+test('originNote: o aviso do material diz de onde ele veio', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
+  const nothing = 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+  assert.equal(AI_NOTE, 'Gerado por IA. Pode conter erros: confira com o seu material.');
+  assert.equal(originNote([own, none]), AI_NOTE);
+  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }]), nothing);
+  assert.equal(originNote([]), nothing);
+  assert.equal(originNote([own, { ...own, ia: true }, none]),
+    'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.');
+});
+
 const EVENT = { kind: 'quiz', ok: true, area: 'Economia', title: 'Inflação', date: at(16) };
 
 test('validEvent: aceita o evento que o App grava, com ou sem título', () => {
@@ -847,10 +895,11 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 });
 
 const NO_DRAFT = {
-  input: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [], tips: NO_TIPS,
+  input: '', exemplo: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [], tips: NO_TIPS,
 };
 const DRAFT = {
   input: 'Inflação e juros',
+  exemplo: 'Inflação é o aumento contínuo e generalizado dos preços.',
   area: 'Economia',
   level: 'Avançado',
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
@@ -883,6 +932,17 @@ test('readDraft: texto do editor acima de 20.000 caracteres, ou que não é text
   assert.equal(draft({ input: 5 }).input, '');
   assert.equal(draft({ input: null }).input, '');
   assert.equal(draft({ input: ['a'] }).input, '');
+});
+
+test('readDraft: o exemplo escrito pela IA volta em texto de até 20.000 caracteres; o resto vale vazio', () => {
+  assert.equal(draft({ exemplo: 'a'.repeat(20000) }).exemplo, 'a'.repeat(20000));
+  for (const exemplo of ['a'.repeat(20001), 5, null, { text: 'a' }, ['a']]) {
+    assert.equal(draft({ exemplo }).exemplo, '', JSON.stringify(exemplo).slice(0, 30));
+  }
+  assert.equal(draft({ exemplo: undefined }).exemplo, '', 'rascunho gravado antes do campo');
+  // O tópico marcado como trecho do exemplo da IA volta com a marca depois de um F5.
+  const marked = broken(m => Object.assign(m.summary[0], { source: 'A clorofila absorve a luz', ia: true }));
+  assert.deepEqual(draft({ result: marked }).result, marked);
 });
 
 test('readDraft: área e nível só valem se forem da lista', () => {
@@ -1263,6 +1323,13 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
     erros: [{ ...BACKUP.erros[0], key: 'outra|chave' }, { ...BACKUP.erros[0], item: { type: 'short' } }, BACKUP.erros[0]],
   }));
   assert.deepEqual(got, { saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros });
+});
+
+test('readBackup: material da demonstração mantém a marca semIA, e o do exemplo da IA, a marca ia dos tópicos', () => {
+  const fromDemo = { ...demo(EXAMPLE), id: 2, date: at(11), area: 'Escolar', level: 'Básico' };
+  const fromExample = { ...BACKUP.saved[0], id: 3, date: at(12) };
+  fromExample.summary = [{ concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz', ia: true }];
+  assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [fromDemo, fromExample] })).saved, [fromDemo, fromExample]);
 });
 
 test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 1 não são backup', () => {

@@ -81,7 +81,7 @@ O estudante pode:
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página.
 
-Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. Se só alguns tópicos ficaram com trecho, os outros ganham a etiqueta "Explicação da IA: confira".
+Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. Trecho que saiu do texto que a IA escreveu no "Usar um exemplo" aparece como "No exemplo escrito pela IA: ...". O tópico sem trecho, ou com trecho desse exemplo, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta.
 
 ### 3. Flashcards
 

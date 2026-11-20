@@ -59,7 +59,9 @@ A entrada é conferida antes de gastar cota: texto de até 20.000 caracteres, at
 
 O resumo deve sair do texto que o aluno colou. Para mostrar isso, a instrução pede em cada tópico do resumo um trecho curto copiado do texto (`source`). O modelo pode inventar ou reescrever esse trecho, então o backend só mantém o que existe mesmo no texto enviado. A comparação ignora maiúsculas, acentos e espaços a mais, exige pelo menos 15 caracteres e corta o trecho em 200 (`grounded`, em `backend/app/main.py`). Se o modelo fecha a cópia com ponto, reticências ou aspas que não estão no texto, vale o trecho sem essas pontas. Pontuação no meio do trecho tem de bater.
 
-Na tela, o tópico com trecho mostra `No seu texto: "..."`. Se o material tem algum tópico com trecho, os que ficaram sem ganham a etiqueta "Explicação da IA: confira". Quando o aluno informa só um tema, a instrução pede `source` vazio, e sem trecho nenhum a tela não mostra nada disso.
+Na tela, o tópico com trecho mostra `No seu texto: "..."`. O texto do "Usar um exemplo" é escrito pela própria IA, e um trecho dele não confere nada: a IA estaria citando a si mesma. Por isso a tela guarda o último exemplo da IA que entrou no editor, também no rascunho, e compara cada trecho com ele pela mesma regra do backend (`inText`, em `frontend/src/lib.js`). O trecho que está no exemplo mostra `No exemplo escrito pela IA: "..."`, e o tópico leva a marca `ia`, que vai com o material para a biblioteca e o backup. Se o aluno reescreveu parte do exemplo, o trecho que ele escreveu continua `No seu texto`.
+
+Todo tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". Quando o aluno informa só um tema, a instrução pede `source` vazio, e todos os tópicos ganham a etiqueta. O aviso sob o título do material diz a origem: com trecho do aluno, "Gerado por IA. Pode conter erros: confira com o seu material."; sem nenhum trecho, "Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável."; feito do exemplo da IA, "Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável." O aviso segue o material, e não o modo do app: o material da demonstração leva a marca `semIA` e não mostra aviso nem etiqueta, e todo material sem ela mostra o aviso, com a IA ligada ou não, inclusive o importado de um backup.
 
 A conferência prova que o trecho está no texto. Ela não prova que a explicação do tópico decorre dele. Na rodada real, os 64 tópicos dos 11 materiais voltaram com trecho conferido.
 
@@ -70,7 +72,7 @@ O que foi feito para reduzir o problema e para deixá-lo visível:
 - Os trechos de origem são conferidos por código, como descrito acima.
 - No chat, quando há texto no editor, a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
 - A instrução proíbe citar conversa, aula ou estudo que não esteja no histórico. O caso que motivou a regra: uma resposta "com base na nossa conversa anterior" quando o histórico só tinha a explicação do próprio Cérebro. Na rodada real de 17/11/2026 a regra não segurou: à pergunta "Como você disse na aula passada...", o modelo continuou a explicação em vez de pedir que o aluno repetisse o ponto.
-- A tela avisa sob o título do material, sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." A revisão leva o aviso "Revisão feita por IA: pode errar."
+- A tela avisa sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." Sob o título do material, o aviso diz de onde ele veio, como descrito acima. A revisão leva o aviso "Revisão feita por IA: pode errar."
 
 O que não dá para garantir é que o conteúdo esteja certo. Nos 17 materiais conferidos à mão apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). O Cérebro não faz checagem automática de fatos.
 
@@ -147,7 +149,7 @@ A primeira rodada real foi em 17/11/2026, com o gemini-3.5-flash-lite e teto de 
 - O trecho de origem prova que a frase existe no texto, não que o tópico está certo.
 - A revisão da IA pode errar. Ela só muda o resultado quando diz "correta"; "parcial" e "incorreta" deixam a questão como estava.
 - O embaralhamento não reconhece toda forma de citar uma opção: "alternativa 2", "Alternativa correta: A" e opção que já começa com "A)" passam sem ser percebidas.
-- O exemplo escrito pela IA (`/api/example`) só tem teste simulado: ainda não rodou na API real, e a rodada de avaliação não tem casos dele.
+- O exemplo escrito pela IA (`/api/example`) só tem teste simulado: ainda não rodou na API real, e a rodada de avaliação não tem casos dele. A marca "No exemplo escrito pela IA" é da tela, que só conhece o exemplo que ela pôs no editor: texto de IA colado de fora do Cérebro continua como "No seu texto".
 - O caminho com `AI_PROVIDER=openai` só tem teste simulado e não manda o esquema da resposta: pede só um objeto JSON, e o formato fica por conta da validação.
 - Na rodada real a instrução não segurou o modelo em dois casos: a ordem escondida no texto do aluno (flashcards com a palavra-canário) e a aula que não existiu (o chat continuou a explicação). O código não confere nenhum dos dois.
 - A revisão da IA acertou o veredito nos 4 casos da rodada real, inclusive na resposta que pedia para ser considerada certa. Quatro casos são pouco para dizer que ela não erra.

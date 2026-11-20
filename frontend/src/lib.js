@@ -187,6 +187,24 @@ export function sameMaterial(a, b) {
   return content(a) === content(b);
 }
 
+// Aviso fixo onde há texto escrito pela IA.
+export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu material.';
+
+// O trecho do tópico está no texto? Sem maiúsculas, sem acentos e com os espaços em sequência reduzidos a um, como o
+// backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend pode recebê-los limpos.
+export function inText(source, text) {
+  const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
+  return !!plain(source) && plain(text).includes(plain(source));
+}
+
+// O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), de um
+// texto do aluno (trecho conferido) ou de nada que dê para conferir (só um tema, ou material de antes dos trechos).
+export function originNote(summary) {
+  if (summary.some(s => s.ia)) return 'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.';
+  if (summary.some(s => s.source?.trim())) return AI_NOTE;
+  return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+}
+
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
 export function validEvent(e) {
   return !!e && isText(e.kind) && e.kind !== '' && typeof e.ok === 'boolean' && isDate(e.date);
@@ -218,6 +236,8 @@ export function readDraft() {
   const texts = list => Array.isArray(list) && list.every(isText);
   return {
     input: isText(d.input) && d.input.length <= MAX_INPUT ? d.input : '',
+    // O último exemplo que a IA escreveu e pôs no editor: o trecho que sai dele não é do aluno (App, aiExample).
+    exemplo: isText(d.exemplo) && d.exemplo.length <= MAX_INPUT ? d.exemplo : '',
     area: AREAS.includes(d.area) ? d.area : '',
     level: LEVELS.includes(d.level) ? d.level : '',
     result,
@@ -291,6 +311,8 @@ export function demo(text) {
       explanation: 'Trecho do material: ' + s,
       steps: [],
     })),
+    // Material sem nada escrito pela IA: é o único que abre sem o aviso de conteúdo gerado por IA (App).
+    semIA: true,
   };
 }
 
