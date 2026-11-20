@@ -3287,6 +3287,28 @@ main[data-instant] > .view[data-motion-pop-id] {
     display: none
 }
 
+/* No toque, 44 px para o dedo nos botões mais usados que com o mouse têm de 34 a 40 px: as ferramentas e o "Perguntar
+   ao Cérebro" do editor, os botões de texto ("Ver meu desempenho"), os pedidos à IA ("Não entendi"), o Cancelar das
+   esperas, "Ver resposta" e "Tirar do caderno" no caderno de erros e o botão do aviso ("Desfazer"). Fica depois das
+   regras deles: com a mesma força, vale a última. A faixa de espera cresce com o Cancelar e continua centrada na barra
+   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). */
+@media (pointer: coarse) {
+    :root {
+        --busy-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
+    }
+
+    .tool,
+    .ask,
+    .link,
+    .ai-ask button,
+    .wait .link,
+    .mistakes summary,
+    .mistakes .drop,
+    .toast button {
+        min-height: var(--control-h)
+    }
+}
+
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
    resposta", a seta do menu do nível, o fundo da janela, o estado da IA sob a faixa de espera, as barras do gráfico e o
    menu do nível mudam na hora. O pulso do "Perguntar ao Cérebro" tem a regra dele (.ask[data-quiet]). */
