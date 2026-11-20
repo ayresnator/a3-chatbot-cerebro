@@ -19,10 +19,11 @@ import {
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
-  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   matches, libraryCount, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
+  originNote,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -111,8 +112,9 @@ const ACTIONS = [
 ];
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 
-// Aviso fixo onde há texto escrito pela IA. A demonstração não usa IA e não mostra.
-const aiNote = API_BASE && <p className="ai-note">Gerado por IA. Pode conter erros: confira com o seu material.</p>;
+// Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
+// demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
+const aiNote = API_BASE && <p className="ai-note">{AI_NOTE}</p>;
 
 // O modelo às vezes devolve **negrito** em Markdown: mostra em negrito em vez de asteriscos soltos.
 // Só casa um par colado ao texto, para não mexer em código como "a ** 2" ou "x**2".
@@ -220,6 +222,11 @@ function App() {
   const recognition = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
+  // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
+  // trecho do material que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
+  const aiExample = useRef(DRAFT.exemplo);
+  // O mesmo para o exemplo pronto, que também não é do aluno ('' quando o exemplo é da IA e depois do Limpar).
+  const readyExample = useRef(DRAFT.exemploPronto);
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
   const viewed = useRef(false);
@@ -245,7 +252,8 @@ function App() {
   // Marcas do caderno de erros já mostradas (chave e data do erro): na volta ao caderno só a de um erro novo desde a
   // última visita se desenha, as outras aparecem prontas. As que já estavam no caderno na abertura contam como vistas.
   const [penned] = useState(() => new Set(mistakes.map(m => m.key + m.date)));
-  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva].
+  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva] e, ao
+  // responder, o que rola até a vista (show e whole, no efeito abaixo).
   const focusAfter = useRef(null);
 
   // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário do caderno de erros
@@ -254,7 +262,10 @@ function App() {
   // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
-    draft.current = { input, area, level, result: opened, made: made.current, chat, tips };
+    draft.current = {
+      input, area, level, result: opened, made: made.current, chat, tips,
+      exemplo: aiExample.current, exemploPronto: readyExample.current,
+    };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
   }, [input, area, level, opened, chat, tips]);
@@ -334,14 +345,21 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show] = focusAfter.current;
+    const [selector, fallback, show, whole] = focusAfter.current;
     focusAfter.current = null;
     // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova.
     const last = s => s && [...document.querySelectorAll(s)].pop();
-    (last(selector) || last(fallback))?.focus();
-    // show: o último elemento que casa rola até a vista. No celular a margem dele (mobile.css) desconta a barra de baixo
-    // e o "Próxima questão" preso: as marcas ✓ e ✗ com a nota ficam acima deles, não por baixo.
-    if (show) [...document.querySelectorAll(show)].pop()?.scrollIntoView({ block: 'nearest' });
+    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
+    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
+    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
+    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
+    // acima da faixa.
+    (last(selector) || last(fallback))?.focus({ preventScroll: !!show });
+    if (!show) return;
+    const box = last(whole);
+    const fits = box && fitsAbove(box.offsetHeight, innerHeight,
+      getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
+    (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -514,6 +532,9 @@ function App() {
     // O mesmo botão de novo gera material novo.
     const key = JSON.stringify([input, area, level]);
     const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
+    // Os exemplos que acompanham o texto deste clique: o Desfazer do aviso pode trocar tudo durante a espera.
+    const example = aiExample.current;
+    const ready = readyExample.current;
     const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
     // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
     // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
@@ -540,6 +561,10 @@ function App() {
       if (!validMaterial(data)) {
         throw Error('Material incompleto recebido do backend');
       }
+      // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
+      // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
+      // biblioteca, o rascunho e o backup. Na demonstração o trecho é a própria frase: a do exemplo pronto ganha marca.
+      if (!reuse) data = { ...data, summary: markExample(data.summary, example, ready) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
       // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
       // material do mesmo texto.
@@ -695,8 +720,9 @@ function App() {
     notebook(list => (ok
       ? clearMistake(list, mistakeKey(from.title, q.question), now)
       : addMistake(list, q, from.title, from.area, now)));
-    // Depois do foco, a página rola até a última linha com marca da caneta (ou o próprio retorno) ficar à vista.
-    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line'];
+    // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
+    // última linha com marca da caneta (ou o próprio retorno).
+    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
   }
 
   // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
@@ -909,16 +935,23 @@ function App() {
       }
     }
     const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
-    // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
-    // quem escreveu.
+    // O aviso diz quem escreveu. O texto fica guardado em aiExample, o da IA, ou em readyExample, o pronto: o material
+    // feito dele cita o trecho como "No exemplo escrito pela IA" ou "No texto de exemplo", e não como "No seu texto".
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
+    const before = [aiExample.current, readyExample.current];
     exampleTopic.current = example.topic;
+    aiExample.current = written ? example.text : '';
+    readyExample.current = written ? '' : example.text;
     setInput(example.text);
-    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás. O Desfazer do aviso some com
-    // ele e leva o foco ao Limpar.
-    if (input.trim()) offerUndo('texto', note, () => setInput(input), ['#limpar', 'main h1']);
-    else toast(note);
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para desfazer, e o exemplo anterior volta junto.
+    // O Desfazer do aviso some com ele e leva o foco ao Limpar.
+    if (input.trim()) {
+      offerUndo('texto', note, () => {
+        [aiExample.current, readyExample.current] = before;
+        setInput(input);
+      }, ['#limpar', 'main h1']);
+    } else toast(note);
   }
 
   // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
@@ -975,8 +1008,6 @@ function App() {
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
   const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
-  // Material com algum trecho de origem: nele, o tópico que não tem trecho ganha a etiqueta de explicação da IA.
-  const sourced = summary.some(s => s.source?.trim());
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1290,8 +1321,15 @@ function App() {
                           disabled={!input}
                           onClick={() => {
                             const before = input;
+                            // O exemplo, da IA ou pronto, sai junto com o texto: o que o aluno escrever depois é
+                            // dele. O Desfazer devolve os dois.
+                            const examples = [aiExample.current, readyExample.current];
+                            aiExample.current = readyExample.current = '';
                             setInput('');
-                            offerUndo('texto', 'Texto apagado', () => setInput(before), ['#limpar', 'main h1']);
+                            offerUndo('texto', 'Texto apagado', () => {
+                              [aiExample.current, readyExample.current] = examples;
+                              setInput(before);
+                            }, ['#limpar', 'main h1']);
                           }}
                         >
                           <Icon name="limpar" />
@@ -1410,7 +1448,11 @@ function App() {
                             <p className="meta">
                               {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
-                            {aiNote}
+                            {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
+                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                            {result.virtual
+                              ? aiNote
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
                           {!result.virtual && (
                             <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
@@ -1461,9 +1503,12 @@ function App() {
                                     <div>
                                       <h3>{s.concept}</h3>
                                       <p>{s.text}</p>
-                                      {s.source?.trim()
-                                        ? <p className="source">{'No seu texto: "' + s.source.trim() + '"'}</p>
-                                        : sourced && <span className="ai-tag">Explicação da IA: confira</span>}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                      {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
+                                          exemplo pronto não é da IA: o trecho dele confere, como o do aluno. */}
+                                      {result.semIA !== true && (s.ia || !s.source?.trim()) && (
+                                        <span className="ai-tag">Explicação da IA: confira</span>
+                                      )}
                                       {API_BASE && (
                                         <div className="ai-ask">
                                           <button
@@ -1713,6 +1758,14 @@ function App() {
                                   animate="show"
                                 >
                                   <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  {/* Errou a opção: a marcada e a certa também em texto, como no fim do quiz. No celular
+                                      deitado as marcas delas, nas opções, podiam ficar fora da vista. */}
+                                  {quiz.type !== 'short' && !answer.ok && (
+                                    <>
+                                      <p className="answer-line">Sua resposta: {quiz.options[answer.value]}</p>
+                                      <p className="answer-line">Resposta certa: {expectedText(quiz)}</p>
+                                    </>
+                                  )}
                                   {quiz.type === 'short' && (
                                     <p className="answer-line">
                                       Resposta esperada: {expectedText(quiz)} <Pen kind="certo" note="certa" draw />
@@ -2073,6 +2126,8 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
+        {/* Só o mouse e o foco do teclado seguram o aviso. O toque virava "mouse em cima" e prendia o aviso por cima dos
+            botões do cartão; na tela de toque o corpo dele deixa o toque passar (styles.css). */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
             <m.div
@@ -2082,8 +2137,8 @@ function App() {
               initial={appear()}
               animate="show"
               exit="exit"
-              onMouseEnter={holdNotice}
-              onMouseLeave={releaseNotice}
+              onPointerEnter={e => e.pointerType === 'mouse' && holdNotice()}
+              onPointerLeave={e => e.pointerType === 'mouse' && releaseNotice()}
               onFocus={holdNotice}
               onBlur={releaseNotice}
             >

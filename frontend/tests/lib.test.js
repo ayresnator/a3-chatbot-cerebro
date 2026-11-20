@@ -1,14 +1,15 @@
 // Testes da lógica pura do Cérebro (src/lib.js), com o executor que já vem no Node: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo,
+  AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES, libraryCount,
+  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, libraryCount,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -360,7 +361,7 @@ test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão'
   const text = 'Mitocôndrias produzem a energia da célula.';
   assert.deepEqual(demo(text), {
     title: 'Mitocôndrias produzem a energia da célula',
-    summary: [{ concept: 'Mitocôndrias produzem a energia da célula', text }],
+    summary: [{ concept: 'Mitocôndrias produzem a energia da célula', text, source: text }],
     flashcards: [{ question: 'Complete o trecho 1: Mitocôndrias produzem a energia…', answer: text }],
     quiz: [{
       type: 'short',
@@ -370,6 +371,7 @@ test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão'
       explanation: 'Trecho do material: ' + text,
       steps: [],
     }],
+    semIA: true,
   });
 });
 
@@ -399,6 +401,14 @@ test('demo: o título para na quebra de linha, antes de "em que" e em 12 palavra
   assert.equal(demo('O ano em que tudo mudou foi 1789.').title, 'O ano');
   assert.equal(demo('um dois três quatro cinco seis sete oito nove dez onze doze treze').title,
     'um dois três quatro cinco seis sete oito nove dez onze doze…');
+});
+
+test('demo: o material leva a marca semIA, o trecho de cada tópico é a própria frase, e ele continua valendo', () => {
+  const material = demo(EXAMPLE);
+  assert.equal(material.semIA, true);
+  assert.ok(material.summary.every(s => s.source === s.text && inText(s.source, EXAMPLE)));
+  assert.equal(validMaterial(material), true);
+  assert.equal(sameMaterial(material, demo(EXAMPLE)), true);
 });
 
 test('EXAMPLES: cada área tem pelo menos 3 exemplos prontos, com tema e texto de 350 a 900 caracteres', () => {
@@ -542,6 +552,27 @@ test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
   assert.equal(rove('Home', 4, 6), 0);
   assert.equal(rove('End', 1, 6), 5);
   for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
+});
+
+// O retorno do quiz depois de errar (uns 315 px, com a faixa de "Próxima questão" de 69 px dentro dele): inteiro no
+// computador e no celular em pé. No celular deitado e no zoom de 200% a raiz reserva 155 px (a barra de baixo, a faixa
+// presa e o respiro); sem a faixa, que já está no bloco, sobram 86 px de reserva, e ele não cabe.
+test('fitsAbove: o bloco cabe na janela menos a reserva da raiz; "auto" (computador) não reserva nada', () => {
+  assert.equal(fitsAbove(315, 768, 'auto', 69), true, 'computador, 1366 x 768');
+  assert.equal(fitsAbove(315, 844, '155px', 69), true, 'celular em pé, 390 x 844');
+  assert.equal(fitsAbove(315, 390, '155px', 69), false, 'celular deitado, 844 x 390');
+  assert.equal(fitsAbove(315, 312, '155px', 69), false, 'zoom de 200%, 683 x 312');
+  assert.equal(fitsAbove(304, 390, '155px', 69), true, 'na medida exata, cabe');
+  assert.equal(fitsAbove(315, 768, ''), true, 'sem valor, sem reserva');
+});
+
+// A faixa presa conta uma vez só: em 390 x 844, um retorno de 700 px cabe inteiro acima da barra. No computador a faixa
+// não é presa e a raiz não reserva nada: o bloco mais alto que a janela continua sem caber.
+test('fitsAbove: a faixa dentro do bloco sai da reserva, e no computador não aumenta a janela', () => {
+  assert.equal(fitsAbove(700, 844, '155px'), false, 'com a faixa contada duas vezes, não cabia');
+  assert.equal(fitsAbove(700, 844, '155px', 69), true, 'contada uma vez, cabe');
+  assert.equal(fitsAbove(759, 844, '155px', 69), false, 'passou da barra e do respiro');
+  assert.equal(fitsAbove(800, 768, 'auto', 69), false, 'computador, retorno mais alto que a janela');
 });
 
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
@@ -784,6 +815,73 @@ test('sameMaterial: compara o conteúdo, sem olhar id, data, área e nível', ()
   assert.equal(sameMaterial(GOOD, broken(m => { m.quiz.reverse(); })), false);
 });
 
+test('inText: acha o trecho sem ligar para maiúsculas, acentos, espaços, quebras de linha e invisíveis', () => {
+  // Hífen invisível no texto e espaço de largura zero no trecho.
+  const [shy, zwsp] = [0xad, 0x200b].map(c => String.fromCodePoint(c));
+  const text = 'A fotossíntese é o processo\npelo qual plantas trans' + shy + 'formam   energia luminosa.';
+  assert.equal(inText('FOTOSSINTESE é o processo pelo qual', text), true);
+  assert.equal(inText('plantas  transformam energia', text), true);
+  assert.equal(inText('energia lumi' + zwsp + 'nosa.', text), true);
+  assert.equal(inText('plantas absorvem energia', text), false);
+});
+
+test('inText: trecho vazio, só com espaços ou ausente, e texto vazio não contam', () => {
+  for (const source of ['', '   ', '\n', null, undefined]) {
+    assert.equal(inText(source, 'Qualquer texto.'), false, JSON.stringify(source));
+  }
+  assert.equal(inText('Qualquer texto', ''), false);
+  assert.equal(inText('Qualquer texto', null), false);
+});
+
+test('inText: a regra da tela acha os 64 trechos que o backend manteve na rodada real, cada um no texto do seu caso', () => {
+  const round = JSON.parse(readFileSync(new URL('../../docs/avaliacao-2026-11-17.json', import.meta.url), 'utf8'));
+  const pairs = round.cases
+    .filter(c => c.kind === 'generate' && c.output)
+    .flatMap(c => c.output.summary.filter(s => s.source).map(s => [s.source, c.input.content]));
+  assert.equal(pairs.length, 64);
+  for (const [source, content] of pairs) assert.equal(inText(source, content), true, source);
+});
+
+test('originNote: o aviso do material diz de onde ele veio', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
+  const nothing = 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+  assert.equal(AI_NOTE, 'Gerado por IA. Pode conter erros: confira com o seu material.');
+  assert.equal(originNote([own, none]), AI_NOTE);
+  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }]), nothing);
+  assert.equal(originNote([]), nothing);
+  assert.equal(originNote([own, { ...own, ia: true }, none]),
+    'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.');
+  // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
+  assert.equal(originNote([own, { ...own, pronto: true }, none]),
+    'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pronto, e o resto fica como veio', () => {
+  const ai = 'A inflação corrói o poder de compra das famílias. O Banco Central sobe os juros para conter os preços.';
+  const ready = EXAMPLES.Economia[0].text;
+  const own = { concept: 'Juros', text: 'Rendem sobre o saldo.', source: 'juros compostos rendem sobre o saldo' };
+  const fromAi = { concept: 'Poder de compra', text: 'Cai.', source: 'A INFLACAO corrói o poder de compra' };
+  const fromReady = { concept: 'IPCA', text: 'Índice oficial.', source: 'o índice oficial de inflação é o IPCA' };
+  const none = { concept: 'Selic', text: 'Taxa básica.', source: '' };
+  const summary = [own, fromAi, fromReady, none];
+  assert.deepEqual(markExample(summary, ai, ''), [own, { ...fromAi, ia: true }, fromReady, none], 'exemplo da IA');
+  assert.deepEqual(markExample(summary, '', ready), [own, fromAi, { ...fromReady, pronto: true }, none], 'pronto');
+  assert.deepEqual(markExample(summary, '', ''), summary, 'depois do Limpar, nenhum exemplo');
+  // Demonstração: as frases do exemplo pronto ganham a marca; a que o aluno escreveu depois dele, não.
+  const mine = 'Juros altos seguram o consumo.';
+  const marked = markExample(demo(ready + ' ' + mine).summary, '', ready);
+  const expected = [...demo(ready).summary.map(s => [s.source, true]), [mine, false]];
+  assert.deepEqual(marked.map(s => [s.source, !!s.pronto]), expected);
+});
+
+test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
+  const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
+  assert.equal(sourceLabel(s), 'No seu texto: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+});
+
 const EVENT = { kind: 'quiz', ok: true, area: 'Economia', title: 'Inflação', date: at(16) };
 
 test('validEvent: aceita o evento que o App grava, com ou sem título', () => {
@@ -853,10 +951,13 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 });
 
 const NO_DRAFT = {
-  input: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [], tips: NO_TIPS,
+  input: '', exemplo: '', exemploPronto: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [],
+  tips: NO_TIPS,
 };
 const DRAFT = {
   input: 'Inflação e juros',
+  exemplo: 'Inflação é o aumento contínuo e generalizado dos preços.',
+  exemploPronto: '',
   area: 'Economia',
   level: 'Avançado',
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
@@ -889,6 +990,21 @@ test('readDraft: texto do editor acima de 20.000 caracteres, ou que não é text
   assert.equal(draft({ input: 5 }).input, '');
   assert.equal(draft({ input: null }).input, '');
   assert.equal(draft({ input: ['a'] }).input, '');
+});
+
+test('readDraft: o exemplo da IA e o pronto voltam em texto de até 20.000 caracteres; o resto vale vazio', () => {
+  for (const field of ['exemplo', 'exemploPronto']) {
+    assert.equal(draft({ [field]: 'a'.repeat(20000) })[field], 'a'.repeat(20000), field);
+    for (const value of ['a'.repeat(20001), 5, null, { text: 'a' }, ['a']]) {
+      assert.equal(draft({ [field]: value })[field], '', field + ' ' + JSON.stringify(value).slice(0, 30));
+    }
+    assert.equal(draft({ [field]: undefined })[field], '', field + ': rascunho gravado antes do campo');
+  }
+  // O tópico marcado como trecho de um exemplo, da IA ou pronto, volta com a marca depois de um F5.
+  for (const mark of ['ia', 'pronto']) {
+    const marked = broken(m => Object.assign(m.summary[0], { source: 'A clorofila absorve a luz', [mark]: true }));
+    assert.deepEqual(draft({ result: marked }).result, marked, mark);
+  }
 });
 
 test('readDraft: área e nível só valem se forem da lista', () => {
@@ -1269,6 +1385,18 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
     erros: [{ ...BACKUP.erros[0], key: 'outra|chave' }, { ...BACKUP.erros[0], item: { type: 'short' } }, BACKUP.erros[0]],
   }));
   assert.deepEqual(got, { saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros });
+});
+
+test('readBackup: material da demonstração mantém a marca semIA, e o de um exemplo, as marcas ia e pronto', () => {
+  const made = demo(EXAMPLE);
+  const fromDemo = { ...made, summary: markExample(made.summary, '', EXAMPLE), id: 2, date: at(11), area: 'Escolar' };
+  assert.ok(fromDemo.summary.every(s => s.pronto), 'demonstração feita do exemplo pronto');
+  const fromExample = { ...BACKUP.saved[0], id: 3, date: at(12) };
+  fromExample.summary = [
+    { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz', ia: true },
+    { concept: 'Calvin', text: 'Fixa o carbono.', source: 'o gás carbônico é fixado', pronto: true },
+  ];
+  assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [fromDemo, fromExample] })).saved, [fromDemo, fromExample]);
 });
 
 test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 1 não são backup', () => {
