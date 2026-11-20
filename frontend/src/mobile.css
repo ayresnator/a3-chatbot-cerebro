@@ -551,6 +551,22 @@
         padding: 0 var(--sp-2)
     }
 
+    /* "Questão X de Y" e "Recomeçar" numa linha e a etiqueta do tipo sempre na de baixo: lado a lado, ela cabia ou não
+       conforme a largura e a questão, e o cabeçalho mudava de altura de uma questão para a outra. O esqueleto da
+       geração (ui.jsx) segue a mesma arrumação, com as linhas na altura da etiqueta. */
+    .study-head {
+        display: grid;
+        grid-template-columns: auto auto;
+        grid-auto-rows: minmax(1.5rem, auto);
+        justify-content: start
+    }
+
+    .study-head .tag,
+    .study-head .sk-tag {
+        grid-column: 1 / -1;
+        justify-self: start
+    }
+
     .flashcard {
         min-height: 13rem;
         padding: var(--sp-5) var(--sp-4)

@@ -1853,6 +1853,14 @@ main:focus {
     font-variant-numeric: tabular-nums
 }
 
+/* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
+   negativa deixa o alvo de 36 px na altura da etiqueta (24 px): o cabeçalho fica do tamanho do esqueleto da geração.
+   No toque o alvo tem 44 px, e a margem acompanha (pointer: coarse, no fim do arquivo). */
+.study-head .link {
+    margin-block: calc((1.5rem - var(--control-h-inline)) / 2);
+    margin-inline: 0 auto
+}
+
 /* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
 .marks {
     display: flex;
@@ -3186,6 +3194,32 @@ main:focus {
     color: var(--ink)
 }
 
+/* Pé da Biblioteca e do Desempenho (ui.jsx, BackupNote): onde os dados ficam, o último backup e o botão, no tom da
+   frase de apoio (.hint), separados do resto por um fio como a faixa "Seu progresso". O botão desce para a linha de
+   baixo quando não cabe ao lado. */
+.backup-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3) var(--sp-4);
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
+    border-top: var(--hair) solid var(--line);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.backup-note p {
+    flex: 1 1 20rem;
+    max-width: var(--measure)
+}
+
+.backup-note strong {
+    color: var(--ink);
+    font-weight: 650
+}
+
 /* ---------- Avisos, espera e janelas ---------- */
 
 /* O aviso fica no meio, fora das áreas seguras dos lados (o entalhe do iPhone deitado). */
@@ -3473,6 +3507,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     .mistakes .drop,
     .toast button {
         min-height: var(--control-h)
+    }
+
+    /* "Recomeçar" do quiz e do baralho: com o alvo de 44 px, o cabeçalho continua na altura da etiqueta (24 px), a do
+       esqueleto da geração. */
+    .study-head .link {
+        margin-block: calc((1.5rem - var(--control-h)) / 2)
     }
 }
 
