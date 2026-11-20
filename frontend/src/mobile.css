@@ -3,7 +3,7 @@
 
 /* Até 850 px o dock vira a barra de baixo, uma pílula de vidro solta da borda: as cinco primeiras seções e "Mais",
    que abre uma folha com as outras e o perfil. Cabe tudo sem rolar de lado e sem cortar nome. A barra de cima fica só
-   com a marca e o estado da IA. */
+   com a marca e o estado da IA. De 600 a 850 px as oito seções cabem na barra, sem "Mais" (bloco abaixo deste). */
 @media (max-width: 850px) {
     :root {
         /* Do pé da tela ao topo da barra de baixo, com 8 px de folga embaixo e em cima dela. */
@@ -108,7 +108,8 @@
     }
 
     .ask-pill,
-    .topbar .profile {
+    .topbar .profile,
+    .tab-extra {
         display: none
     }
 
@@ -136,8 +137,8 @@
     }
 
     /* A espera da IA toma a barra de cima inteira, por cima da marca e do estado: com o Cancelar ela não cabia ao lado
-       da marca. A marca sai do Tab enquanto isso; se o foco estava nela, vai para o item da página aberta na barra de
-       baixo (App.jsx). */
+       da marca. A marca (e o perfil, de 600 a 850 px) sai do Tab enquanto isso; se o foco estava nela, vai para o item
+       da página aberta na barra de baixo (App.jsx). */
     .busy {
         left: var(--sp-2);
         right: var(--sp-2);
@@ -146,7 +147,7 @@
         translate: none
     }
 
-    .app:has(> .busy) .brand {
+    .app:has(> .busy) :is(.brand, .topbar .profile) {
         visibility: hidden
     }
 
@@ -231,12 +232,13 @@
     }
 
     /* O retorno do quiz pode ser longo: "Próxima questão" fica preso acima da barra enquanto ele está na tela, numa
-       faixa opaca por cima do texto que rola. */
+       faixa opaca por cima do texto que rola. A faixa vai de uma borda à outra do retorno: a margem dos lados desconta
+       o respiro dele (24 px; no celular, 16). */
     .next-row {
         position: sticky;
         bottom: var(--tabbar-h);
-        margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4));
-        padding: var(--sp-3) var(--sp-4);
+        margin: var(--sp-4) calc(-1 * var(--sp-5)) calc(-1 * var(--sp-4));
+        padding: var(--sp-3) var(--sp-5);
         border-top: var(--hair) solid var(--line);
         border-radius: 0 0 calc(var(--r-3) - var(--hair)) calc(var(--r-3) - var(--hair));
         background: var(--glass-float);
@@ -268,6 +270,25 @@
     .mistakes .drop {
         grid-column: 2;
         grid-row: 1
+    }
+}
+
+/* Tablet em pé: de 600 a 850 px os oito nomes cabem na barra de baixo (a partir de uns 565 px), e Dúvidas, Desempenho
+   e Biblioteca ficam a um toque, sem "Mais". O perfil volta para a barra de cima, no botão redondo do computador. O
+   inline-flex é o display de todo botão (styles.css); com display none os itens saem também do Tab. */
+@media (min-width: 600px) and (max-width: 850px) {
+    /* A barra de cima com o perfil: o botão de 44 px, o respiro e a borda. A faixa de espera se centra por esta altura. */
+    :root {
+        --top-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
+    }
+
+    .topbar .profile,
+    .tab-extra {
+        display: inline-flex
+    }
+
+    .tabbar [aria-haspopup=dialog] {
+        display: none
     }
 }
 
@@ -527,6 +548,11 @@
 
     .feedback {
         padding: var(--sp-4)
+    }
+
+    .next-row {
+        margin-inline: calc(-1 * var(--sp-4));
+        padding-inline: var(--sp-4)
     }
 
     .message {

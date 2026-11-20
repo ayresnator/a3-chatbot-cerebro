@@ -97,6 +97,7 @@ const SECTIONS = [
 const SLUG = Object.fromEntries(SECTIONS);
 // No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e Erros) e "Mais", uma
 // folha com as outras três seções e o perfil. Na barra, "Quizzes" vai como "Quiz": os seis nomes cabem em 320 px.
+// De 600 a 850 px as outras três também ficam na barra, e "Mais" sai (mobile.css).
 const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n, SLUG[n]]);
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
 const SHORT = { Quizzes: 'Quiz' };
@@ -1007,6 +1008,7 @@ function App() {
   // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
   // Dúvidas o atalho também sai (styles.css). Se o foco estava nele, vai para o item da página aberta no menu, o mesmo
   // destino, em vez de cair no body; fora do toque, quem chega ao Dúvidas pelo atalho segue para a caixa (focusAfter).
+  // De 600 a 850 px a faixa também cobre o perfil da barra de cima, que sai do Tab do mesmo jeito (mobile.css).
   // Antes da pintura: o foco não chega a sumir da tela.
   useLayoutEffect(() => {
     const was = document.activeElement;
@@ -1125,7 +1127,8 @@ function App() {
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
-              Dúvidas estão na folha "Mais". */}
+              Dúvidas estão na folha "Mais". De 600 a 850 px o perfil continua aqui, e o Dúvidas fica na barra de
+              baixo. */}
           <a
             className="brand"
             href="#"
@@ -2034,6 +2037,7 @@ function App() {
       </div>
       <nav className="tabbar" aria-label="Seções">
         {BAR.map(s => navButton(s, 'tab-item', true))}
+        {MORE.map(s => navButton(s, 'tab-item tab-extra', true))}
         {/* Com a página aberta dentro da folha, "Mais" fica marcado como ela (data-current, a pílula ciano). */}
         <button
           type="button"
@@ -2100,7 +2104,14 @@ function App() {
       <p id="anuncio" className="sr-only" role="status">{spoken}</p>
       <AnimatePresence>
         {more && (
-          <Modal key="mais" className="sheet" sheet labelledBy="mais-titulo" onClose={() => setMore(false)}>
+          <Modal
+            key="mais"
+            className="sheet"
+            sheet
+            labelledBy="mais-titulo"
+            back=".rail [aria-current=page], .tabbar [aria-current=page]"
+            onClose={() => setMore(false)}
+          >
             <div className="dialog-body">
               <div className="sheet-head">
                 <h2 id="mais-titulo">Mais seções</h2>
@@ -2127,7 +2138,7 @@ function App() {
             key="perfil"
             className="profile-dialog"
             labelledBy="profile-title"
-            back=".tabbar [aria-haspopup=dialog]"
+            back=".tabbar [aria-haspopup=dialog], .topbar .profile"
             onClose={() => setLogin(false)}
           >
             <div className="dialog-body">
@@ -2242,7 +2253,10 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     }
     return () => {
       if (dialog.open) dialog.close();
-      const to = opener?.isConnected ? opener : back && document.querySelector(back);
+      // Quem abriu pode estar na página e fora da vista: com o celular girado para 600 px ou mais, o "Mais" some
+      // (mobile.css). Aí vale o primeiro de back que está na tela.
+      const shown = el => el?.isConnected && el.getClientRects().length > 0;
+      const to = shown(opener) ? opener : back && [...document.querySelectorAll(back)].find(shown);
       if (!document.querySelector('dialog[open]')) to?.focus?.({ preventScroll: true });
     };
   }, []);
