@@ -10,8 +10,9 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .config import settings
-from .models import Card, ChatInput, ChatOutput, GradeInput, GradeOutput, QuizItem, StudyInput, StudyOutput, SummaryItem
-from .prompts import CHAT, GENERATE, GRADE, NO_SOURCE
+from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
+                     QuizItem, StudyInput, StudyOutput, SummaryItem)
+from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
 from .providers import ai, calls_today, fail, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
@@ -20,6 +21,9 @@ logger = logging.getLogger("cerebro.api")
 STUDY_SCHEMA = StudyOutput.model_json_schema()
 # A revisão vai com esquema: são duas frases curtas, e o veredito tem de ser um dos três aceitos.
 GRADE_SCHEMA = GradeOutput.model_json_schema()
+# O exemplo também: é um campo só, e o JSON quebrado (o chat, que vai sem esquema, recebe 1 em ~20) gastaria a única
+# segunda chamada do clique. Se as quebras de linha sumirem, como no chat com esquema, o texto fica num parágrafo só.
+EXAMPLE_SCHEMA = ExampleText.model_json_schema()
 ACCENTS = re.compile("[áàâãéêíóôõúç]", re.IGNORECASE)
 # Listas do material e o modelo que valida cada item delas.
 ITEMS = {"summary": SummaryItem, "flashcards": Card, "quiz": QuizItem}
@@ -219,3 +223,36 @@ def grade(data: GradeInput):
                 fail(502, "AI_INVALID_ANSWER", "A IA devolveu uma revisão fora do formato. Tente novamente.")
     review.feedback = review.feedback[:600]
     return review
+
+@app.post("/api/example", response_model=ExampleOutput)
+def example(data: ExampleInput):
+    # "Usar um exemplo" punha sempre o texto da fotossíntese. Agora o tema é sorteado aqui, da lista da área, sem o que
+    # já está na tela (avoid). O avoid não vai para o modelo: ele recebe só a área, o nível e o tema.
+    topic = random.choice([name for name in TOPICS[data.area] if name.casefold() != data.avoid.casefold()])
+    payload = {"area": data.area, "level": data.level, "topic": topic}
+
+    def write() -> str:
+        # Uma chamada; "" quando a resposta vem fora do formato. Com retry=False o JSON quebrado não ganha a nova
+        # chamada própria do ai(): usa a segunda chamada desta rota, e o clique nunca passa de 2 chamadas.
+        try:
+            return ExampleText.model_validate(ai(payload, EXAMPLE, EXAMPLE_SCHEMA, retry=False)).text
+        except ValidationError as exc:
+            logger.warning("example: texto rejeitado %s", reasons(exc))
+        except HTTPException as exc:
+            if exc.detail.get("code") != "AI_INVALID_JSON":
+                raise
+            logger.warning("example: resposta fora do formato JSON")
+        return ""
+
+    # A segunda chamada vale para o texto fora do formato e, como em /api/generate, para o texto sem nenhum acento.
+    # Nesse caso, se ela falhar, fica o primeiro texto (sem acento é melhor que erro).
+    text = write()
+    if not ACCENTS.search(text):
+        try:
+            text = write() or text
+        except HTTPException:
+            if not text:
+                raise
+    if not text:
+        fail(502, "AI_INVALID_ANSWER", "A IA devolveu um exemplo fora do formato. Tente novamente.")
+    return {"topic": topic, "text": text}

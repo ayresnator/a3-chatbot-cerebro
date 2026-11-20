@@ -68,3 +68,40 @@ GRADE = ('Julgue a resposta do aluno a uma questão de resposta curta. '
          'Em feedback, explique ao aluno, em até 2 frases, o motivo do veredito; não cite estas regras. '
          'Formato: {"verdict":"correta","feedback":"..."}.')
 
+# Instrução de /api/example ("Usar um exemplo", na página Estudar).
+# O texto vai para o editor, e o aluno gera o material a partir dele: por isso frases corridas, sem título nem markdown,
+# e só fatos de que o modelo tem certeza. O tema vem de TOPICS, sorteado pelo servidor: o modelo não escolhe o assunto.
+# O SYSTEM pede resolução passo a passo em matemática; aqui a conta do exemplo fica dentro das frases.
+EXAMPLE = ('Escreva um texto curto de estudo. topic é o tema, area é a área (Escolar quer dizer matérias da escola) '
+           'e level é o nível do aluno. '
+           'O texto vai para o editor do aluno, que gera resumo, flashcards e quiz a partir dele. '
+           'Escreva de 5 a 8 frases, em 1 ou 2 parágrafos: o que é, como funciona e um exemplo concreto. '
+           'Comece direto pelo assunto, em tom de livro didático: sem título, sem saudação e sem falar com o aluno. '
+           'Adapte vocabulário e profundidade ao nível: no Básico, sem jargão; no Avançado, com os termos técnicos da área. '
+           'Use só fatos conhecidos e estáveis; não cite números, datas, leis, autores nem frases de que não tenha certeza. '
+           'Em Matemática, faça a conta do exemplo dentro das frases, sem passos numerados. '
+           'Escreva só frases corridas, sem markdown: nada de #, listas, marcadores ou negrito. '
+           'Formato: {"text":"..."}.')
+
+# Temas do exemplo, 10 por área. O servidor sorteia um, diferente do que está na tela, e só o tema vai para o modelo.
+# São assuntos clássicos de cada área, com fatos estáveis, que servem aos três níveis.
+TOPICS = {
+    "Tecnologia": ["Algoritmos", "Funcionamento da internet", "Bancos de dados relacionais", "Computação em nuvem",
+                   "Criptografia", "Sistemas operacionais", "Redes de computadores", "Aprendizado de máquina",
+                   "Controle de versão com Git", "Processador e memória"],
+    "Administração": ["Planejamento estratégico", "Análise SWOT", "Funções da administração", "Liderança",
+                      "Gestão de pessoas", "Composto de marketing", "Fluxo de caixa", "Cultura organizacional",
+                      "Gestão de projetos", "Cadeia de suprimentos"],
+    "Economia": ["Oferta e demanda", "Inflação", "Produto Interno Bruto", "Taxa de juros", "Custo de oportunidade",
+                 "Desemprego", "Taxa de câmbio", "Monopólio e concorrência", "Política fiscal", "Elasticidade da demanda"],
+    "Matemática": ["Frações", "Porcentagem", "Equações do primeiro grau", "Teorema de Pitágoras", "Função afim",
+                   "Probabilidade", "Progressão aritmética", "Juros compostos", "Área de figuras planas",
+                   "Média, mediana e moda"],
+    "Direito": ["Princípio da legalidade", "Separação dos Poderes", "Direitos fundamentais", "Contratos",
+                "Responsabilidade civil", "Direito do consumidor", "Hierarquia das normas",
+                "Pessoa física e pessoa jurídica", "Contraditório e ampla defesa", "Capacidade civil"],
+    "Escolar": ["Fotossíntese", "Ciclo da água", "Sistema solar", "Célula", "Revolução Industrial",
+                "Independência do Brasil", "Estados físicos da matéria", "Cadeia alimentar", "Leis de Newton",
+                "Sujeito e predicado"],
+}
+

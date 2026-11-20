@@ -1,6 +1,6 @@
 # Roteiro da apresentação
 
-Demonstração de 10 minutos em quatro blocos, um por integrante, mais as perguntas. Os quatro blocos fazem 4 pedidos à IA. O gasto da cota é maior: o `app.check` faz 1 chamada antes de começar, e cada nova tentativa automática do backend também conta. Com `AI_MODEL=auto`, o `app.check` e o primeiro pedido do backend fazem ainda uma consulta ao catálogo de modelos.
+Demonstração de 10 minutos em quatro blocos, um por integrante, mais as perguntas. Os quatro blocos fazem 5 pedidos à IA. O gasto da cota é maior: o `app.check` faz 1 chamada antes de começar, e cada nova tentativa automática do backend também conta. Com `AI_MODEL=auto`, o `app.check` e o primeiro pedido do backend fazem ainda uma consulta ao catálogo de modelos.
 
 ## Na véspera
 
@@ -19,11 +19,11 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 5. Aumente o zoom do navegador para 125% (Ctrl e +) se for usar projetor. Se o menu da esquerda virar uma barra embaixo, a janela ficou estreita para esse zoom: diminua o zoom até o menu voltar.
 6. Deixe abertos em outras abas o [docs/IA.md](IA.md), o [VALIDACAO.md](VALIDACAO.md) na tabela da rodada de 17/11 e a página Actions do repositório no GitHub, com os testes passando.
 
-## Bloco 1: gerar o material (2 minutos, 1 pedido à IA)
+## Bloco 1: gerar o material (2 minutos, 2 pedidos à IA)
 
 1. Diga em uma frase o que é o Cérebro: transforma um texto em resumo, flashcards e quiz, e mostra onde o aluno erra.
-2. Na página Estudar, clique em "Usar um exemplo". Mostre o aviso embaixo do editor: o texto vai para o Google Gemini.
-3. Escolha a área e o nível e clique em "Resumir".
+2. Na página Estudar, escolha a área e o nível e clique em "Usar um exemplo". A IA escreve um texto curto sobre um tema sorteado da área, e o aviso no pé da tela diz o tema. Se ele disser que a IA não respondeu, entrou um exemplo pronto da área: siga com ele. Mostre o aviso embaixo do editor: o texto vai para o Google Gemini.
+3. Clique em "Resumir".
 4. No resumo, mostre um tópico com "No seu texto: ...". Se algum tópico ficou sem trecho, ele traz a etiqueta "Explicação da IA: confira"; ela pode não aparecer, porque na rodada de 17/11 os 64 tópicos vieram com trecho. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
@@ -37,7 +37,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 ## Bloco 3: dúvidas e desempenho (2 minutos, 1 pedido à IA)
 
-1. Em Dúvidas, pergunte algo que não está no texto colado, como "Quem descobriu a fotossíntese?". A instrução manda o Cérebro avisar quando a resposta não está no texto.
+1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
 3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada.
 4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e o botão "Refazer meus erros".
@@ -46,7 +46,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
-1. A IA entra em três lugares: gerar o material, tirar dúvidas e revisar resposta curta. O resto é código comum.
+1. A IA entra em quatro lugares: gerar o material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).
@@ -69,7 +69,7 @@ Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICI
 
 ## Perguntas prováveis
 
-**Onde está a inteligência artificial do trabalho?** Em três rotas do backend: gerar o material, responder dúvidas e revisar resposta curta. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
+**Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
 **Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, o tópico que fica sem trecho ao lado de outros com trecho ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 

@@ -1168,7 +1168,8 @@ main::before {
 }
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
-.ai-ask small {
+.ai-ask small,
+.tool small {
     color: var(--ink-2);
     font-weight: 400
 }

@@ -106,7 +106,7 @@ Com o frontend rodando, abra http://localhost:5173/?demo. A demonstração organ
 - AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - AI_EMPTY_RESPONSE: a IA não devolveu conteúdo. Se aparecer um motivo depois do código (SAFETY, por exemplo), o provedor bloqueou o pedido: reformule.
 - AI_INVALID_MATERIAL: o material gerado não passou na validação do backend, nem na segunda chamada. Tente de novo; se repetir com o mesmo texto, envie um trecho menor.
-- AI_INVALID_ANSWER: a resposta do chat ou da revisão veio fora do formato esperado. Tente de novo.
+- AI_INVALID_ANSWER: a resposta do chat, da revisão ou do exemplo veio fora do formato esperado. Tente de novo.
 - AI_INVALID_JSON: a IA respondeu fora do formato JSON, também na segunda chamada que o backend faz sozinho. Tente de novo.
 - AI_INVALID_RESPONSE: o provedor devolveu uma resposta que o backend não conseguiu ler. Tente de novo.
 - AI_PROVIDER_ERROR: o provedor recusou o pedido com um erro que não está nesta lista. O código HTTP aparece depois do código do erro (HTTP_302, por exemplo, quando um filtro de rede redireciona o pedido).
