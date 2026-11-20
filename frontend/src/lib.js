@@ -545,6 +545,12 @@ export function deckRedo(deck) {
   return { queue: deckMissed(deck), pos: 0 };
 }
 
+// "Recomeçar" no meio: a mesma sessão desde o início, com os cartões dela na ordem do material e sem as voltas por
+// erro. No "Refazer só os que errei" recomeçam só esses cartões, como o quiz recomeça só as questões erradas.
+export function deckRestart(deck) {
+  return { queue: [...new Set(deck.queue)].sort((a, b) => a - b), pos: 0 };
+}
+
 // Frase do fim do baralho.
 export function deckSummary(deck) {
   const cards = new Set(deck.queue).size;

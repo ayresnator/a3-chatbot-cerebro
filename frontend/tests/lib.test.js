@@ -9,7 +9,7 @@ import {
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
   opener, openers, typeDelay, rove, LEVEL_NOTES,
-  read, storageKey, demoStorage, newId, backupStatus, backupSummary,
+  read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -355,6 +355,11 @@ test('baralho: uma sessão inteira, com erro, "Revisar depois" e o último cart�
   assert.deepEqual(deckMissed(d), [0, 2]);
   assert.equal(deckSummary(d), '3 cartões revisados; 2 voltaram por erro.');
   assert.deepEqual(deckRedo(d), { queue: [0, 2], pos: 0 });
+});
+
+test('deckRestart: a sessão desde o início, com os cartões dela na ordem e sem as voltas por erro', () => {
+  assert.deepEqual(deckRestart(deck([0, 2, 0, 1], 2)), deckStart(3), 'baralho inteiro, com um erro e um "Revisar depois"');
+  assert.deepEqual(deckRestart(deck([2, 0, 2], 1)), { queue: [0, 2], pos: 0 }, '"Refazer só os que errei": só esses');
 });
 
 test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão', () => {

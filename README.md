@@ -95,7 +95,7 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
-Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y". O baralho e o quiz também recomeçam ao gerar um material, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros.
+Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros. Reaproveitar o material com outro botão de gerar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
 ### 4. Quizzes
 

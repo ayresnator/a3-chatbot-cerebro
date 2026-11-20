@@ -18,7 +18,7 @@ import {
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
-  backupSummary, validMaterial, sameMaterial, validEvent, fold, demo,
+  backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
@@ -548,7 +548,10 @@ function App() {
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       setResult(twin || store(material) || material);
       made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
-      restart();
+      // O quiz e o baralho recomeçam com outro material. Reaproveitar (outro botão com o mesmo texto) ou repetir o texto
+      // na demonstração reabre o mesmo, e eles seguem onde estavam. Depois da espera pela IA recomeçam sempre: durante
+      // ela o aluno pode ter aberto outro material ou o quiz do caderno de erros.
+      if (wait || !previous || !sameMaterial(previous, data)) restart();
       const at = latest.current.page;
       if (at === 'Estudar' || MATERIAL.includes(at)) {
         // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
@@ -626,12 +629,11 @@ function App() {
   // Exportar (e o "Fazer backup" do pé da Biblioteca e do Desempenho): um arquivo com tudo o que este navegador guarda
   // (biblioteca, desempenho, caderno de erros e perfil), para levar a outro computador. Parte do que está gravado, não
   // das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes, como quando outro toma
-  // o lugar dele, e assim vai no arquivo; no quiz do caderno de erros, o aberto é o que ficou guardado (parked).
+  // o lugar dele, e assim vai no arquivo.
   function exportBackup() {
     const unsaved = !!opened && !opened.id;
     const entry = unsaved ? store(opened) : null;
-    if (entry && result.virtual) setParked(entry);
-    else if (entry) setResult(entry);
+    if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
     };
@@ -932,12 +934,13 @@ function App() {
   }
 
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
+  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho.
   function openSaved(material) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
     made.current = { key: '', kinds: [] };
     setResult(material);
     setPage('Resumos');
-    restart();
+    if (!result || !sameMaterial(result, material)) restart();
   }
 
   // Perfil confirmado na janela (Perfil.jsx).
@@ -1472,14 +1475,15 @@ function App() {
                               <div className="study-head">
                                 <span>Cartão {session.pos + 1} de {session.queue.length}</span>
                                 {/* Trocar de aba ou de página não recomeça o baralho: este botão recomeça. Antes do primeiro
-                                    cartão avaliado ele guarda o lugar invisível, e aparecer não empurra o cartão. */}
+                                    cartão avaliado ele guarda o lugar invisível, e aparecer não empurra o cartão. No
+                                    "Refazer só os que errei" recomeça só esses (deckRestart). */}
                                 <button
                                   type="button"
                                   className="link"
                                   aria-label="Recomeçar o baralho"
                                   style={{ visibility: session.pos ? undefined : 'hidden' }}
                                   onClick={() => {
-                                    setDeck(null);
+                                    setDeck(deckRestart(session));
                                     setFlip(false);
                                     focusAfter.current = ['.flashcard'];
                                   }}
@@ -1594,8 +1598,10 @@ function App() {
                               {result.virtual && <p className="hint">Do material: {quiz.title}</p>}
                               <h2 className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
                               {quiz.type === 'short' ? (
+                                // Questão nova ou recomeçada: o campo abre vazio. Respondida, ele mostra o que o aluno
+                                // escreveu, também na volta de outra aba ou página.
                                 <form
-                                  key={idx}
+                                  key={idx + '-' + answers.length}
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
@@ -1616,6 +1622,7 @@ function App() {
                                     required
                                     maxLength={500}
                                     placeholder="Sua resposta"
+                                    defaultValue={answer?.value}
                                     disabled={answer !== null}
                                   />
                                   <button disabled={answer !== null} className="primary">Responder</button>
