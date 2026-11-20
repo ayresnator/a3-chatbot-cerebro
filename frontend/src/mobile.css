@@ -17,6 +17,18 @@
         --main-x: var(--sp-4)
     }
 
+    /* O Tab rola a página só até o controle entrar na janela, e a barra de baixo, presa, cobria o controle (WCAG
+       2.4.11). A rolagem até o foco, e a de scrollIntoView, param acima dela. Com o retorno do quiz na tela, também acima
+       do "Próxima questão" preso: depois de responder, a linha com a marca ✓ ou ✗ e a nota fica à vista (App.jsx,
+       submit). */
+    html {
+        scroll-padding-bottom: calc(var(--tabbar-h) + var(--sp-4))
+    }
+
+    html:has(.next-row) {
+        scroll-padding-bottom: calc(var(--tabbar-h) + var(--next-h) + var(--sp-3))
+    }
+
     .app {
         grid-template-columns: minmax(0, 1fr);
         padding-bottom: var(--tabbar-h)
@@ -33,12 +45,13 @@
 
     /* Cada item tem pelo menos a largura do próprio nome; o que sobra é dividido por igual. Com o espaçamento de texto
        do aluno (WCAG 1.4.12) os nomes alargam e a barra rola de lado, em vez de deixar "Mais" fora da tela. O
-       scroll-padding faz o Tab rolar a barra até o item inteiro: sem ele, o item pela metade ficava como estava. */
+       scroll-padding faz o Tab rolar a barra até o item inteiro: sem ele, o item pela metade ficava como estava. Nas
+       laterais ela fica na margem da barra de cima, fora do entalhe do iPhone deitado. */
     .tabbar {
         position: fixed;
-        right: var(--sp-2);
+        right: max(var(--sp-2), env(safe-area-inset-right, 0px));
         bottom: calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
-        left: var(--sp-2);
+        left: max(var(--sp-2), env(safe-area-inset-left, 0px));
         z-index: 30;
         display: grid;
         grid-auto-columns: minmax(max-content, 1fr);
@@ -127,7 +140,7 @@
 
     .sheet .dialog-body {
         gap: var(--sp-3);
-        padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px))
+        padding: var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-right, 0px)) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)) calc(var(--sp-4) + env(safe-area-inset-left, 0px))
     }
 
     .sheet .nav-item {
@@ -137,10 +150,10 @@
 
     /* A espera da IA toma a barra de cima inteira, por cima da marca e do estado: com o Cancelar ela não cabia ao lado
        da marca. A marca sai do Tab enquanto isso; se o foco estava nela, vai para o item da página aberta na barra de
-       baixo (App.jsx). */
+       baixo (App.jsx). Nas laterais, as margens da barra de cima (.app), fora do entalhe do iPhone deitado. */
     .busy {
-        left: var(--sp-2);
-        right: var(--sp-2);
+        left: max(var(--sp-2), env(safe-area-inset-left, 0px));
+        right: max(var(--sp-2), env(safe-area-inset-right, 0px));
         width: auto;
         max-width: none;
         translate: none
@@ -210,8 +223,9 @@
         visibility: hidden
     }
 
-    /* O que rola até a vista para acima da barra de baixo (o menu do nível também, quando abre numa janela baixa, e cada
-       item dele que recebe o foco). */
+    /* O que rola até a vista fica com um respiro a mais acima da barra de baixo (o menu do nível também, quando abre
+       numa janela baixa, e cada item dele que recebe o foco). A barra, a raiz já desconta (html, acima): somada aqui,
+       ela contaria duas vezes, e numa janela baixa o topo do bloco sairia da tela. */
     .why,
     .error,
     .feedback,
@@ -220,14 +234,7 @@
     .quiz-question,
     .level-menu,
     .level-menu button {
-        scroll-margin-bottom: calc(var(--tabbar-h) + var(--sp-4))
-    }
-
-    /* Depois de responder, a página rola até a última linha com marca da caneta (App.jsx, submit): ela para acima da
-       barra de baixo e do "Próxima questão" preso, com a marca ✓ ou ✗ e a nota à vista. */
-    #retorno,
-    .answer-line {
-        scroll-margin-bottom: calc(var(--tabbar-h) + var(--next-h) + var(--sp-3))
+        scroll-margin-bottom: var(--sp-4)
     }
 
     /* O retorno do quiz pode ser longo: "Próxima questão" fica preso acima da barra enquanto ele está na tela, numa
@@ -595,8 +602,8 @@
    perto da borda e os itens curtos com no mínimo 40 px de largura (e 48 de altura; em 320 px eles medem 44). */
 @media (max-width: 380px) {
     .tabbar {
-        right: var(--sp-1);
-        left: var(--sp-1);
+        right: max(var(--sp-1), env(safe-area-inset-right, 0px));
+        left: max(var(--sp-1), env(safe-area-inset-left, 0px));
         gap: 0;
         padding: var(--seg-pad)
     }
@@ -685,5 +692,37 @@
         overflow: hidden;
         clip-path: inset(50%);
         white-space: nowrap
+    }
+}
+
+/* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
+   As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
+   abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só), os botões de gerar sobem;
+   com o cartão mais baixo, ele e os três botões cabem juntos acima da barra. */
+@media (max-height: 30rem) {
+    .lead {
+        display: none
+    }
+
+    .editor textarea {
+        max-height: calc(var(--rule) * 5 + var(--pad) + var(--sp-2))
+    }
+
+    .tool .full {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
+
+    .tool .short {
+        display: inline
+    }
+
+    .flashcard {
+        min-height: 10rem;
+        padding: var(--sp-4)
     }
 }

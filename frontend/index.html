@@ -3,7 +3,9 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <!-- viewport-fit=cover: sem ele o Safari do iPhone dá 0 a env(safe-area-inset-*), e a barra de baixo encostava no
+         indicador de início. Os recuos ficam no CSS (.app, .tabbar, .busy, a folha "Mais" e o aviso). -->
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <title>Cérebro | Assistente de estudos</title>

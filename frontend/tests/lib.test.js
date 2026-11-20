@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo,
+  AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
@@ -542,6 +542,17 @@ test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
   assert.equal(rove('Home', 4, 6), 0);
   assert.equal(rove('End', 1, 6), 5);
   for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
+});
+
+// O retorno do quiz (uns 300 px) depois de responder: inteiro no computador e no celular em pé; no celular deitado e
+// no zoom de 200%, a barra de baixo e o "Próxima questão" preso reservam 155 px e ele não cabe.
+test('fitsAbove: o bloco cabe na janela menos a reserva da raiz; "auto" (computador) não reserva nada', () => {
+  assert.equal(fitsAbove(300, 768, 'auto'), true, 'computador, 1366 x 768');
+  assert.equal(fitsAbove(300, 844, '155px'), true, 'celular em pé, 390 x 844');
+  assert.equal(fitsAbove(300, 390, '155px'), false, 'celular deitado, 844 x 390');
+  assert.equal(fitsAbove(300, 312, '155px'), false, 'zoom de 200%, 683 x 312');
+  assert.equal(fitsAbove(235, 390, '155px'), true, 'na medida exata, cabe');
+  assert.equal(fitsAbove(300, 768, ''), true, 'sem valor, sem reserva');
 });
 
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {

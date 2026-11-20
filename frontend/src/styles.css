@@ -507,7 +507,8 @@ select {
 
 /* O app numa coluna centrada. A barra de cima e o palco dividem as bordas; o dock fica na primeira coluna, de 24 px, e
    passa por cima da borda esquerda do palco (Glassy Dashboard). No HTML (e no Tab) a ordem é a da tela: a barra de
-   cima, o dock e o palco, os três células deste grid (o .shell não tem caixa). */
+   cima, o dock e o palco, os três células deste grid (o .shell não tem caixa). Com o iPhone deitado a página vai até
+   as bordas da tela (viewport-fit=cover, index.html): o respiro dos lados não fica menor que a área segura do entalhe. */
 .app {
     display: grid;
     grid-template-columns: var(--dock-out) minmax(0, 1fr);
@@ -516,7 +517,7 @@ select {
     min-height: 100vh;
     min-height: 100dvh;
     margin: 0 auto;
-    padding: var(--top-y) var(--gutter) var(--sp-5)
+    padding: var(--top-y) max(var(--gutter), env(safe-area-inset-right, 0px)) var(--sp-5) max(var(--gutter), env(safe-area-inset-left, 0px))
 }
 
 /* Dock das seções: pílula de vidro só com os ícones, na linha do palco, presa ao rolar. */
@@ -3042,17 +3043,21 @@ main:focus {
 
 /* ---------- Avisos, espera e janelas ---------- */
 
+/* O aviso fica no meio, fora das áreas seguras dos lados (o entalhe do iPhone deitado). */
 .toast-region {
     position: fixed;
     left: 50%;
     bottom: calc(var(--tabbar-h) + var(--sp-5));
     z-index: 90;
     width: max-content;
-    max-width: min(36rem, calc(100vw - 2rem));
+    max-width: min(36rem, calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
     translate: -50% 0;
     pointer-events: none
 }
 
+/* O aviso flutua por cima da página, às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
+   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
+   está saindo ([data-motion-pop-id]). */
 .toast {
     display: flex;
     align-items: center;
@@ -3065,8 +3070,12 @@ main:focus {
     -webkit-backdrop-filter: var(--blur);
     backdrop-filter: var(--blur);
     font-size: var(--fs-2);
-    pointer-events: auto;
+    pointer-events: none;
     overflow-wrap: anywhere
+}
+
+.toast:not([data-motion-pop-id]) button {
+    pointer-events: auto
 }
 
 .toast button {
@@ -3189,6 +3198,13 @@ dialog[data-closing]::backdrop {
 /* A folha desce em 0,2 s: o fundo escurecido acompanha até ela sair da tela. */
 .sheet[data-closing]::backdrop {
     transition-duration: 200ms
+}
+
+/* Com a janela ou a folha aberta, a página de trás não rola: o arrasto no fundo escuro e a roda do mouse a levavam
+   para outro ponto, e ao fechar o aluno tinha de achar de novo onde estava. A folha alta continua rolando por dentro, e
+   o scrollbar-gutter da raiz guarda o lugar da barra de rolagem que some. */
+html:has(dialog[open]) {
+    overflow: hidden
 }
 
 /* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, o balão de espera) não recebe
@@ -3381,11 +3397,12 @@ main[data-instant] > .view[data-motion-pop-id] {
         outline-color: Highlight
     }
 
-    /* O fundo vira Canvas e o gradiente some: as barras do gráfico, o fio de progresso e o sublinhado da questão atual
-       voltam na cor do texto do sistema. */
+    /* O fundo vira Canvas e o gradiente some: as barras do gráfico, o fio de progresso, o sublinhado da questão atual e
+       o trecho que corre no fio da espera da IA voltam na cor do texto do sistema. */
     .chart-bar,
     .meter > span,
-    .dots span {
+    .dots span,
+    .wait-bar::after {
         forced-color-adjust: none;
         background: CanvasText
     }

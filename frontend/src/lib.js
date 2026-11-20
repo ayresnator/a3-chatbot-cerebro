@@ -149,6 +149,12 @@ export function rove(key, at, count) {
   return step ? (at + step + count) % count : -1;
 }
 
+// Um bloco de height px cabe na janela de viewport px acima da reserva da raiz (o scroll-padding-bottom calculado: no
+// celular, a barra de baixo e o "Próxima questão" preso; no computador, "auto", que não reserva nada)?
+export function fitsAbove(height, viewport, reserve) {
+  return height <= viewport - (parseFloat(reserve) || 0);
+}
+
 export function read(k, d) {
   try {
     return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d;

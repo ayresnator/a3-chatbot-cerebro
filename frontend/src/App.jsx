@@ -19,7 +19,7 @@ import {
 import {
   AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
-  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
@@ -228,7 +228,8 @@ function App() {
   // Marcas do caderno de erros já mostradas (chave e data do erro): na volta ao caderno só a de um erro novo desde a
   // última visita se desenha, as outras aparecem prontas. As que já estavam no caderno na abertura contam como vistas.
   const [penned] = useState(() => new Set(mistakes.map(m => m.key + m.date)));
-  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva].
+  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva] e, ao
+  // responder, o que rola até a vista (show e whole, no efeito abaixo).
   const focusAfter = useRef(null);
 
   // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário do caderno de erros
@@ -309,12 +310,17 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show] = focusAfter.current;
+    const [selector, fallback, show, whole] = focusAfter.current;
     focusAfter.current = null;
-    (document.querySelector(selector) || (fallback && document.querySelector(fallback)))?.focus();
-    // show: o último elemento que casa rola até a vista. No celular a margem dele (mobile.css) desconta a barra de baixo
-    // e o "Próxima questão" preso: as marcas ✓ e ✗ com a nota ficam acima deles, não por baixo.
-    if (show) [...document.querySelectorAll(show)].pop()?.scrollIntoView({ block: 'nearest' });
+    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
+    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
+    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css), ele vem todo, com o botão de seguir; senão,
+    // só o último elemento que casa, com as marcas ✓ e ✗ e a nota acima da faixa.
+    (document.querySelector(selector) || (fallback && document.querySelector(fallback)))?.focus({ preventScroll: !!show });
+    if (!show) return;
+    const box = whole && document.querySelector(whole);
+    const fits = box && fitsAbove(box.offsetHeight, innerHeight, getComputedStyle(document.documentElement).scrollPaddingBottom);
+    (fits ? box : [...document.querySelectorAll(show)].pop())?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -360,7 +366,7 @@ function App() {
     }
   }
 
-  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some enquanto o mouse ou o foco estão nele.
+  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some com o mouse no botão dele ou o foco nele.
   // O temporizador do aviso anterior é cancelado: ele apagava o aviso novo antes da hora.
   function toast(text, action) {
     clearTimeout(noticeTimer.current);
@@ -640,8 +646,9 @@ function App() {
     notebook(list => (ok
       ? clearMistake(list, mistakeKey(from.title, q.question), now)
       : addMistake(list, q, from.title, from.area, now)));
-    // Depois do foco, a página rola até a última linha com marca da caneta (ou o próprio retorno) ficar à vista.
-    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line'];
+    // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
+    // última linha com marca da caneta (ou o próprio retorno).
+    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
   }
 
   // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
@@ -1569,6 +1576,11 @@ function App() {
                                   animate="show"
                                 >
                                   <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  {/* Errou a opção: a certa também em texto, como no fim do quiz e no caderno de erros. No
+                                      celular deitado a marca dela podia ficar fora da vista. */}
+                                  {quiz.type !== 'short' && !answer.ok && (
+                                    <p className="answer-line">Resposta certa: {expectedText(quiz)}</p>
+                                  )}
                                   {quiz.type === 'short' && (
                                     <p className="answer-line">
                                       Resposta esperada: {expectedText(quiz)} <Pen kind="certo" note="certa" draw />
@@ -1923,6 +1935,8 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
+        {/* Só o mouse segura o aviso (sobre o botão dele: o corpo deixa o toque passar, styles.css), e o foco do
+            teclado. O toque virava "mouse em cima" e prendia o aviso por cima dos botões do cartão. */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
             <m.div
@@ -1932,8 +1946,8 @@ function App() {
               initial={appear()}
               animate="show"
               exit="exit"
-              onMouseEnter={holdNotice}
-              onMouseLeave={releaseNotice}
+              onPointerEnter={e => e.pointerType === 'mouse' && holdNotice()}
+              onPointerLeave={e => e.pointerType === 'mouse' && releaseNotice()}
               onFocus={holdNotice}
               onBlur={releaseNotice}
             >
