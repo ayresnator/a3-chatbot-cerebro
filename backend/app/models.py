@@ -1,6 +1,7 @@
 import re
+import unicodedata
 from typing import Annotated, Literal
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 Area = Literal["Tecnologia", "Administração", "Economia", "Matemática", "Direito", "Escolar"]
 Level = Literal["Básico", "Intermediário", "Avançado"]
@@ -20,18 +21,26 @@ class Trimmed(BaseModel):
     # e um material com textos em branco voltava HTTP 200.
     model_config = ConfigDict(str_strip_whitespace=True)
 
+def visible(text):
+    # Os caracteres invisíveis de formatação (categoria Unicode Cf) escondiam do aluno uma ordem para a IA (os de tag
+    # soletram uma frase que não aparece na tela), e o hífen invisível de texto copiado apagava o "No seu texto".
+    return "".join(char for char in text if unicodedata.category(char) != "Cf") if isinstance(text, str) else text
+
+# Texto do aluno que vai ao modelo. A limpeza roda antes do strip e do mínimo de caracteres: só invisíveis vale vazio.
+Clean = Annotated[str, BeforeValidator(visible)]
+
 class StudyInput(Trimmed):
-    content: str = Field(min_length=3, max_length=20000)
+    content: Clean = Field(min_length=3, max_length=20000)
     area: Area
     level: Level
 
 class ChatTurn(Trimmed):
     role: Literal["user", "assistant"]
-    text: str = Field(max_length=4000)
+    text: Clean = Field(max_length=4000)
 
 class ChatInput(Trimmed):
-    question: str = Field(min_length=1, max_length=20000)
-    content: str = Field(default="", max_length=20000)
+    question: Clean = Field(min_length=1, max_length=20000)
+    content: Clean = Field(default="", max_length=20000)
     area: Area
     level: Level
     # Últimas mensagens da conversa. Quem manda é o navegador: o servidor não guarda nada.
@@ -43,9 +52,9 @@ class ChatOutput(BaseModel):
 
 class GradeInput(Trimmed):
     # Revisão de uma questão de resposta curta: enunciado, gabarito e o que o aluno digitou.
-    question: str = Field(min_length=1, max_length=500)
-    expected: str = Field(min_length=1, max_length=200)
-    answer: str = Field(min_length=1, max_length=500)
+    question: Clean = Field(min_length=1, max_length=500)
+    expected: Clean = Field(min_length=1, max_length=200)
+    answer: Clean = Field(min_length=1, max_length=500)
     area: Area
     level: Level
 

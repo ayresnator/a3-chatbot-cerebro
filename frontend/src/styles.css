@@ -72,8 +72,6 @@
     --pen-text: #f06a5e;
     --ok: #74c295;
     --warn: #f0a04b;
-    /* Pastel da mesma paleta, só em destaque pontual: o cartão de número em destaque vai do ciano ao céu. */
-    --sky: #b9e2ff;
 
     /* Seções: todas no ciano (antes cada uma tinha a sua cor). Só a aberta é marcada, no dock e na barra de baixo. */
     --tab-estudar: var(--accent);
@@ -143,7 +141,15 @@
     --tabbar-h: 0rem;
     --content-w: 64rem;
     --control-h: 2.75rem;
+    /* Controles mais baixos: 40 px nas ferramentas do editor e da caixa do Dúvidas e no "Não entendi" (também a largura
+       mínima dos itens da barra de baixo em telefone estreito); 36 px nos botões de linha (link, Cancelar, Desfazer,
+       chips, nível), no estado da IA e no avatar. */
+    --control-h-tool: 2.5rem;
+    --control-h-inline: 2.25rem;
     --mark: 1.5rem;
+    /* Círculo da letra das opções do quiz e coluna do número do tópico no resumo. O recuo da nota da caneta embaixo da
+       opção, no celular, parte dele. */
+    --letter: 1.75rem;
     /* Dock: itens de 44 px, 4 px de respiro e 3 px entre eles. Ele sai 24 px para fora da borda do palco. */
     --dock-item: 2.75rem;
     --dock-pad: 4px;
@@ -151,7 +157,7 @@
     --dock-w: calc(var(--dock-item) + var(--dock-pad) * 2 + var(--hair) * 2);
     --dock-out: 1.5rem;
     /* Faixa de espera da IA (.busy): o botão Cancelar, o respiro e o fio. Ela fica centrada na altura da barra de cima. */
-    --busy-h: calc(2.25rem + var(--sp-1) * 2 + var(--hair) * 2);
+    --busy-h: calc(var(--control-h-inline) + var(--sp-1) * 2 + var(--hair) * 2);
     /* Fio: bordas e divisões. */
     --hair: 1px;
     /* Marca da questão atual: sublinhado de 2 px, 3 px abaixo dela. Barra do gráfico num dia sem resposta: 3 px. */
@@ -161,6 +167,16 @@
     /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard. */
     --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
     --main-x: clamp(1.5rem, 3.2vw, 3rem);
+    /* Camadas, de baixo para cima: os brilhos e a faixa atrás do conteúdo, a caixa presa do Dúvidas e a pílula de
+       espera dela, as listas que abrem por cima (atalhos e nível), o dock, a barra de baixo e, por cima de tudo, os
+       avisos e a faixa de espera. A janela e a folha ficam acima delas, na camada de cima do navegador (showModal). */
+    --z-behind: -1;
+    --z-composer: 5;
+    --z-chat-wait: 6;
+    --z-menu: 10;
+    --z-dock: 20;
+    --z-tabbar: 30;
+    --z-top: 90;
 
     /* Movimento (anim.js tem o mesmo em JS): chegada com --ease, saída com --ease-in, mais curta. Pressão do botão
        em 100 ms, retorno de 120 a 200 ms, troca de página numa mola de 0,3 s (0,45 s na abertura do app), caneta em
@@ -169,8 +185,34 @@
     --ease-in: cubic-bezier(.55, 0, 1, .45);
     --t-fast: 160ms;
     --t-press: 100ms;
-    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s. */
+    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s; o ícone dela escurece em 0,2 s, depois de 0,12 s,
+       para ficar preto quando ela chega. */
     --t-slide: 360ms;
+    --t-ink: 200ms;
+    --t-ink-delay: 120ms;
+    /* Só o fundo escuro da janela e da folha: entra em 0,2 s e sai em 0,14 s (0,2 s atrás da folha). Sem movimento
+       reduzido, a janela e a folha saem no mesmo tempo que ele (anim.js, MODAL): mudou aqui, mude lá. Com movimento
+       reduzido, elas somem antes, em 0,1 s (MODAL.calmOut), e levam o fundo no meio do esmaecer. */
+    --t-fade: 200ms;
+    --t-fade-out: 140ms;
+    /* O fio de progresso (cartões avaliados, questões respondidas) anda em 0,2 s. */
+    --t-meter: 200ms;
+    /* As barras do gráfico crescem do chão em 0,5 s, depois de 0,15 s. */
+    --t-grow: 500ms;
+    --t-grow-delay: 150ms;
+    /* A frase do atalho "Pergunte ao Cérebro" se escreve em 1,1 s, depois de 0,3 s; o cursor do editor pisca a cada 1 s. */
+    --t-typing: 1.1s;
+    --t-typing-delay: .3s;
+    --t-caret: 1s;
+    /* O fio da espera corre em 1,6 s, devagar nas pontas. */
+    --t-wait: 1.6s;
+    --ease-wait: cubic-bezier(.65, 0, .35, 1);
+    /* O que respira (a lua do Dúvidas, os pontos da resposta a caminho e o brilho do "Perguntar ao Cérebro") vai e volta
+       na mesma curva, devagar nas duas pontas. O brilho pulsa duas vezes: menos de 5 s. */
+    --ease-breathe: cubic-bezier(.42, 0, .58, 1);
+    --t-moon: 9s;
+    --t-dots: 1.2s;
+    --t-pulse: 2.4s;
     --press: .97;
     /* Esqueleto: branco a 7% por cima de qualquer vidro, parado. Fio da espera: o ciano do foco. */
     --sk: rgb(255 255 255 / .07);
@@ -286,7 +328,7 @@ body::before {
     content: '';
     position: fixed;
     inset: 0;
-    z-index: -1;
+    z-index: var(--z-behind);
     background: var(--backdrop);
     pointer-events: none
 }
@@ -383,18 +425,21 @@ button {
         color var(--t-fast) var(--ease), scale var(--t-press) var(--ease)
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled, [aria-disabled=true]) {
     background: var(--raised-2);
     border-color: var(--line-strong)
 }
 
 /* Pressão: o botão encolhe para 0,97 sob o dedo ou o mouse. Pelo teclado (foco visível) não: nada que o teclado
    dispara se move. Superfícies largas (cartão, opção do quiz, item do menu) encolhem menos. */
-button:active:not(:disabled):not(:focus-visible) {
+button:active:not(:disabled, [aria-disabled=true]):not(:focus-visible) {
     scale: var(--press)
 }
 
-button:disabled {
+/* aria-disabled: o botão desligado que fica com o foco (o pedido à IA em espera, o "Salvo"); na tela, igual ao
+   disabled. */
+button:disabled,
+button[aria-disabled=true] {
     cursor: default;
     color: var(--ink-3);
     background: none
@@ -424,7 +469,7 @@ button:disabled {
 
 /* Botão só com texto, para ir a outra página ("Ver meu desempenho"). */
 .link {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: 0 var(--sp-2);
     border-color: transparent;
     background: none;
@@ -503,6 +548,38 @@ select {
     outline: none
 }
 
+/* O título da página e o do material recebem o foco depois de uma troca de página: o anel abraça o texto, não a linha
+   toda. */
+.page-title,
+.result-header h2 {
+    width: fit-content
+}
+
+/* "Pular para o conteúdo" (App.jsx): fora da vista até receber o foco, no primeiro Tab da página; com ele, aparece na
+   altura da barra de cima, por cima dela, em fundo sólido. Fixo: fora do grid do .app e à vista em qualquer rolagem. */
+.skip-link {
+    position: fixed;
+    top: calc(var(--top-y) + (var(--top-h) - var(--control-h)) / 2);
+    left: var(--gutter);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    min-height: var(--control-h);
+    padding: 0 var(--sp-4);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-round);
+    background: var(--paper);
+    box-shadow: var(--shadow);
+    color: var(--ink-hi);
+    font-size: var(--fs-2);
+    font-weight: 650;
+    text-decoration: none
+}
+
+.skip-link:not(:focus) {
+    clip-path: inset(50%)
+}
+
 /* ---------- Estrutura: barra de cima, dock das seções, palco ---------- */
 
 /* O app numa coluna centrada. A barra de cima e o palco dividem as bordas; o dock fica na primeira coluna, de 24 px, e
@@ -523,7 +600,7 @@ select {
 .rail {
     position: sticky;
     top: var(--sp-5);
-    z-index: 20;
+    z-index: var(--z-dock);
     grid-column: 1;
     grid-row: 2;
     align-self: start;
@@ -656,7 +733,8 @@ select {
     border: 0;
     border-radius: 50%;
     justify-content: center;
-    transition: background-color var(--t-fast) var(--ease), color 200ms var(--ease) 120ms, scale var(--t-press) var(--ease)
+    transition: background-color var(--t-fast) var(--ease), color var(--t-ink) var(--ease) var(--t-ink-delay),
+        scale var(--t-press) var(--ease)
 }
 
 .rail .nav-item[aria-current=page],
@@ -745,8 +823,8 @@ select {
 .avatar {
     display: grid;
     place-items: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--control-h-inline);
+    height: var(--control-h-inline);
     flex: none;
     border: var(--hair) solid var(--line-strong);
     border-radius: 50%;
@@ -841,7 +919,7 @@ select {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    animation: typing 1.1s steps(19, end) .3s both
+    animation: typing var(--t-typing) steps(19, end) var(--t-typing-delay) both
 }
 
 @keyframes typing {
@@ -870,7 +948,7 @@ select {
     align-items: center;
     gap: var(--sp-2);
     min-width: 0;
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
     border: var(--hair) solid var(--line);
     border-radius: var(--r-round);
@@ -1049,12 +1127,14 @@ main:focus {
     color: var(--ink)
 }
 
-/* Frase de apoio: a regra do caderno de erros, o material de onde veio a questão, o aviso da revisão da IA. */
+/* Frase de apoio: a regra do caderno de erros, o material de onde veio a questão, o aviso da revisão da IA. pretty:
+   sem ele, a dica do teclado deixava "linha" sozinha na última linha numa janela estreita sem toque (de 432 a 464 px). */
 .hint {
     max-width: var(--measure);
     margin: var(--sp-2) 0;
     color: var(--ink-2);
-    font-size: var(--fs-2)
+    font-size: var(--fs-2);
+    text-wrap: pretty
 }
 
 /* Aviso fixo sob o que a IA escreveu. */
@@ -1202,7 +1282,7 @@ main:focus {
     margin-left: var(--sp-0);
     vertical-align: -.15em;
     background: var(--focus);
-    animation: caret-blink 1s steps(1) infinite
+    animation: caret-blink var(--t-caret) steps(1) infinite
 }
 
 @keyframes caret-blink {
@@ -1233,7 +1313,7 @@ main:focus {
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
    a escolha aparece pela borda e pelo brilho, não só pela cor do texto. */
 .chip {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
     background: none;
     color: var(--ink-2);
@@ -1261,7 +1341,7 @@ main:focus {
 /* O botão do nível: "Nível:" em cinza, o nível em branco e a seta, que vira quando o menu abre. */
 .level-button {
     gap: var(--sp-1);
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: 0 var(--sp-2) 0 var(--sp-3);
     border-color: transparent;
     background: none;
@@ -1296,7 +1376,7 @@ main:focus {
     position: absolute;
     top: calc(100% + var(--sp-2));
     right: 0;
-    z-index: 10;
+    z-index: var(--z-menu);
     display: grid;
     padding: var(--sp-1);
     border: var(--hair) solid var(--line);
@@ -1362,20 +1442,21 @@ main:focus {
 }
 
 .tool {
-    min-height: 2.5rem;
+    min-height: var(--control-h-tool);
     padding: 0 var(--sp-3);
     border-color: transparent;
     background: none;
     color: var(--ink-2)
 }
 
-.tool:hover:not(:disabled) {
+.tool:hover:not(:disabled, [aria-disabled=true]) {
     background: var(--raised);
     border-color: var(--line);
     color: var(--ink)
 }
 
-.tool:disabled {
+.tool:disabled,
+.tool[aria-disabled=true] {
     background: none
 }
 
@@ -1400,14 +1481,14 @@ main:focus {
 }
 
 .ask {
-    min-height: 2.5rem
+    min-height: var(--control-h-tool)
 }
 
 /* Com texto para enviar (o botão ligado), o "Perguntar ao Cérebro" fica com a borda e a seta ciano, e um brilho pulsa
    em volta dele duas vezes (menos de 5 s) e para. */
 .ask:enabled {
     border-color: var(--accent);
-    animation: ask-ready 2.4s ease-in-out 2
+    animation: ask-ready var(--t-pulse) var(--ease-breathe) 2
 }
 
 .ask:enabled:hover {
@@ -1530,10 +1611,10 @@ main:focus {
     white-space: nowrap
 }
 
-/* O primeiro cartão (a sequência de dias) em destaque: gradiente do ciano ao céu, texto preto. No esqueleto, não. */
+/* O primeiro cartão (a sequência de dias) em destaque: ciano liso, texto preto. No esqueleto, não. */
 .stat:first-child:has(strong) {
     border-color: transparent;
-    background: linear-gradient(140deg, var(--accent), var(--sky));
+    background: var(--accent);
     box-shadow: none;
     color: var(--on-accent)
 }
@@ -1636,7 +1717,7 @@ main:focus {
 
 .summary li {
     display: grid;
-    grid-template-columns: 1.75rem minmax(0, 1fr);
+    grid-template-columns: var(--letter) minmax(0, 1fr);
     gap: var(--sp-3);
     padding: var(--sp-4) 0;
     border-bottom: var(--hair) solid var(--line)
@@ -1697,7 +1778,7 @@ main:focus {
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 0 var(--sp-2);
-    min-height: 2.5rem;
+    min-height: var(--control-h-tool);
     padding-block: var(--sp-2);
     text-align: left
 }
@@ -1862,8 +1943,8 @@ main:focus {
 .letter {
     display: grid;
     place-items: center;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: var(--letter);
+    height: var(--letter);
     flex: none;
     border-radius: 50%;
     background: var(--raised-2);
@@ -1944,7 +2025,10 @@ main:focus {
     text-align: center
 }
 
+/* O título do fim do baralho e do quiz recebe o foco: com fit-content o anel abraça a frase, centrada. */
 .empty h2 {
+    width: fit-content;
+    margin-inline: auto;
     font-size: var(--fs-5)
 }
 
@@ -2079,7 +2163,7 @@ main:focus {
     position: absolute;
     top: calc(50% + 2rem);
     left: 50%;
-    z-index: -1;
+    z-index: var(--z-behind);
     width: min(var(--moon), 100%);
     aspect-ratio: 1;
     overflow: hidden;
@@ -2088,7 +2172,7 @@ main:focus {
     box-shadow: 0 0 5rem var(--moon-glow);
     translate: -50% -50%;
     pointer-events: none;
-    animation: moon-breathe 9s ease-in-out infinite alternate
+    animation: moon-breathe var(--t-moon) var(--ease-breathe) infinite alternate
 }
 
 /* O corpo é o mesmo disco um pouco mais abaixo: em cima sobra só a borda iluminada. */
@@ -2124,7 +2208,7 @@ main:focus {
     position: fixed;
     top: 0;
     left: 0;
-    z-index: -1;
+    z-index: var(--z-behind);
     width: 50rem;
     height: 50rem;
     margin: -25rem 0 0 -25rem;
@@ -2258,15 +2342,16 @@ main:focus {
     height: .375rem;
     border-radius: 50%;
     background: var(--ink-2);
-    animation: dot 1.2s ease-in-out infinite
+    animation: dot var(--t-dots) var(--ease-breathe) infinite
 }
 
+/* Cada ponto começa um oitavo do ciclo depois do anterior. */
 .dots span:nth-child(2) {
-    animation-delay: .15s
+    animation-delay: calc(var(--t-dots) / 8)
 }
 
 .dots span:nth-child(3) {
-    animation-delay: .3s
+    animation-delay: calc(var(--t-dots) / 4)
 }
 
 @keyframes dot {
@@ -2302,7 +2387,7 @@ main:focus {
 
 /* O Cancelar fica na ponta direita da espera: no esqueleto do material, onde fica o Salvar. */
 .wait .link {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     margin-left: auto
 }
 
@@ -2339,7 +2424,7 @@ main:focus {
     border-radius: inherit;
     background: var(--focus);
     translate: -100% 0;
-    animation: wait-run 1.6s cubic-bezier(.65, 0, .35, 1) infinite
+    animation: wait-run var(--t-wait) var(--ease-wait) infinite
 }
 
 @keyframes wait-run {
@@ -2406,8 +2491,8 @@ main:focus {
 }
 
 .sk-letter {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: var(--letter);
+    height: var(--letter);
     flex: none
 }
 
@@ -2496,7 +2581,7 @@ main:focus {
     background: var(--sec, var(--focus));
     transform-origin: left;
     scale: var(--p) 1;
-    transition: scale 200ms var(--ease)
+    transition: scale var(--t-meter) var(--ease)
 }
 
 /* A caixa e o que vem com ela: a pílula de espera e a lista de atalhos por cima, a dica, o erro e os chips embaixo. Com
@@ -2512,7 +2597,7 @@ main:focus {
 .chat-stage[data-state=conversa] .chat-dock {
     position: sticky;
     bottom: var(--tabbar-h);
-    z-index: 5;
+    z-index: var(--z-composer);
     padding: var(--sp-5) 0 var(--sp-4)
 }
 
@@ -2525,7 +2610,7 @@ main:focus {
     content: '';
     position: absolute;
     inset: 0 calc(-1 * var(--veil-out));
-    z-index: -1;
+    z-index: var(--z-behind);
     background: var(--chat-veil);
     -webkit-backdrop-filter: var(--blur);
     backdrop-filter: var(--blur);
@@ -2616,7 +2701,7 @@ main:focus {
    com os valores de partida a faixa cabe numa linha em 390 px. Onde o navegador não tem field-sizing, a faixa quebra. */
 .composer-bar select {
     field-sizing: content;
-    min-height: 2.5rem;
+    min-height: var(--control-h-tool);
     padding-right: calc(var(--sp-2) + var(--chevron-w) + var(--sp-1));
     border-radius: var(--r-round);
     background-position: right var(--sp-2) center;
@@ -2632,13 +2717,13 @@ main:focus {
 }
 
 .composer-bar .primary {
-    min-height: 2.5rem;
+    min-height: var(--control-h-tool);
     margin-left: auto
 }
 
 .shortcuts {
-    width: 2.5rem;
-    min-height: 2.5rem;
+    width: var(--control-h-tool);
+    min-height: var(--control-h-tool);
     padding: 0;
     border-color: transparent;
     background: none;
@@ -2678,7 +2763,7 @@ main:focus {
     right: var(--sp-4);
     bottom: calc(100% + var(--sp-2));
     left: var(--sp-4);
-    z-index: 10;
+    z-index: var(--z-menu);
     overflow: hidden;
     border: var(--hair) solid var(--line);
     border-radius: var(--r-list);
@@ -2715,7 +2800,7 @@ main:focus {
     right: 0;
     bottom: calc(100% + var(--sp-3));
     left: 0;
-    z-index: 6;
+    z-index: var(--z-chat-wait);
     display: flex;
     justify-content: center;
     pointer-events: none
@@ -2758,7 +2843,7 @@ main:focus {
 }
 
 .suggestions button {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: var(--sp-1) var(--sp-4);
     border-color: var(--line-quiet);
     background: var(--chip);
@@ -2902,7 +2987,7 @@ main:focus {
 .mistakes .drop {
     grid-column: 3;
     grid-row: 1;
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     white-space: nowrap
 }
 
@@ -2957,7 +3042,7 @@ main:focus {
     border-radius: var(--r-1) var(--r-1) 0 0;
     background: var(--accent);
     transform-origin: bottom;
-    animation: bar-grow 500ms var(--ease) 150ms backwards
+    animation: bar-grow var(--t-grow) var(--ease) var(--t-grow-delay) backwards
 }
 
 @keyframes bar-grow {
@@ -3065,8 +3150,10 @@ main:focus {
     color: var(--ink-2)
 }
 
+/* Claro sob o ponteiro, como os outros botões de ícone: o vermelho no app é o da caneta que corrige, não o de apagar
+   (o Desfazer protege a exclusão). */
 .library-item .icon-button:hover:not(:disabled) {
-    color: var(--pen-text)
+    color: var(--ink)
 }
 
 /* ---------- Avisos, espera e janelas ---------- */
@@ -3075,7 +3162,7 @@ main:focus {
     position: fixed;
     left: 50%;
     bottom: calc(var(--tabbar-h) + var(--sp-5));
-    z-index: 90;
+    z-index: var(--z-top);
     width: max-content;
     max-width: min(36rem, calc(100vw - 2rem));
     translate: -50% 0;
@@ -3099,7 +3186,7 @@ main:focus {
 }
 
 .toast button {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     border-color: var(--line-strong);
     white-space: nowrap
 }
@@ -3113,7 +3200,7 @@ main:focus {
     position: fixed;
     top: calc(var(--top-y) + (var(--top-h) - var(--busy-h)) / 2);
     left: calc(50% + var(--dock-out) / 2);
-    z-index: 90;
+    z-index: var(--z-top);
     display: flex;
     align-items: center;
     width: max-content;
@@ -3164,7 +3251,7 @@ main:focus {
 
 .busy .link,
 .chat-wait .link {
-    min-height: 2.25rem;
+    min-height: var(--control-h-inline);
     padding: 0 var(--sp-4);
     border-color: var(--line);
     border-radius: var(--r-round);
@@ -3197,7 +3284,7 @@ dialog {
    Só opacidade: vale também com movimento reduzido. Pelo teclado, aparece e some na hora. */
 dialog::backdrop {
     background: var(--veil);
-    transition: opacity 200ms var(--ease)
+    transition: opacity var(--t-fade) var(--ease)
 }
 
 @starting-style {
@@ -3212,12 +3299,12 @@ dialog[data-closing] {
 
 dialog[data-closing]::backdrop {
     opacity: 0;
-    transition: opacity 140ms var(--ease-in)
+    transition: opacity var(--t-fade-out) var(--ease-in)
 }
 
 /* A folha desce em 0,2 s: o fundo escurecido acompanha até ela sair da tela. */
 .sheet[data-closing]::backdrop {
-    transition-duration: 200ms
+    transition-duration: var(--t-fade)
 }
 
 /* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, o balão de espera) não recebe
@@ -3314,6 +3401,28 @@ main[data-instant] > .view[data-motion-pop-id] {
 /* A barra de baixo só existe no celular (mobile.css). */
 .tabbar {
     display: none
+}
+
+/* No toque, 44 px para o dedo nos botões mais usados que com o mouse têm de 34 a 40 px: as ferramentas e o "Perguntar
+   ao Cérebro" do editor, os botões de texto ("Ver meu desempenho"), os pedidos à IA ("Não entendi"), o Cancelar das
+   esperas, "Ver resposta" e "Tirar do caderno" no caderno de erros e o botão do aviso ("Desfazer"). Fica depois das
+   regras deles: com a mesma força, vale a última. A faixa de espera cresce com o Cancelar e continua centrada na barra
+   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). */
+@media (pointer: coarse) {
+    :root {
+        --busy-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
+    }
+
+    .tool,
+    .ask,
+    .link,
+    .ai-ask button,
+    .wait .link,
+    .mistakes summary,
+    .mistakes .drop,
+    .toast button {
+        min-height: var(--control-h)
+    }
 }
 
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver

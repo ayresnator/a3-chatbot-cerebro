@@ -46,7 +46,7 @@ Abra um terminal na raiz a3-chatbot-cerebro:
 ```powershell
 cd backend
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -c constraints.txt
 .\.venv\Scripts\python.exe -m app.check
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -102,8 +102,8 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 - AI_QUOTA_EXCEEDED: cota do projeto atingida. Confira os limites no AI Studio; trocar a chave do mesmo projeto não renova a cota.
 - AI_REQUEST_REJECTED: confira modelo, região e situação do projeto/plano.
 - AI_NETWORK_ERROR: verifique internet, proxy, firewall e certificados HTTPS.
-- AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho. Tente de novo.
-- "A IA demorou demais para responder", sem código nos detalhes: o navegador desiste depois de 105 segundos. Pode acontecer quando o backend precisa de várias chamadas seguidas ao Gemini no mesmo pedido. Tente de novo.
+- AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho, ou o pedido chegou ao teto de 6 chamadas ao Gemini ou 100 segundos. Tente de novo.
+- "A IA demorou demais para responder", sem código nos detalhes: o navegador desiste depois de 105 segundos. Ficou raro: o backend encerra cada pedido em 100 segundos, com AI_TIMEOUT. Se aparecer, confira o terminal do backend e tente de novo.
 - AI_PROVIDER_UNAVAILABLE: erro do lado do Gemini. Quando é sobrecarga (HTTP 503: aparece UNAVAILABLE ou HTTP_503 depois do código), o backend já tentou mais duas vezes sozinho: aguarde alguns minutos. Nos outros erros 5xx (INTERNAL, por exemplo) ele faz uma chamada só: vale tentar de novo.
 - AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - AI_EMPTY_RESPONSE: a IA não devolveu conteúdo. Se aparecer um motivo depois do código (SAFETY, por exemplo), o provedor bloqueou o pedido: reformule.
@@ -115,6 +115,7 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 - AI_NO_COMPATIBLE_MODEL: com AI_MODEL=auto (ou vazio, que no Gemini vale auto), a listagem não trouxe nenhum Gemini Flash estável. Veja "Modelo não encontrado (404)" e ponha em AI_MODEL um nome da listagem.
 - INVALID_INPUT: o pedido foi recusado antes de chegar à IA (texto vazio, longo demais ou campo inválido). A mensagem diz o que corrigir.
 - "O Cérebro não respondeu como esperado" (nos detalhes, resposta sem JSON) ou "O Cérebro não está ligado neste computador" (sem conexão): confira o terminal do Python e a porta 8000.
+- Invalid host header (HTTP 400, ou "O Cérebro não respondeu como esperado" na tela, com HTTP 400 nos detalhes técnicos): o backend só responde pelos nomes de ALLOWED_HOSTS, no .env (padrão 127.0.0.1 e localhost; a porta não conta). Isso impede que um site de fora use o backend pelo seu navegador. Abra pelo endereço do guia ou acrescente o nome em ALLOWED_HOSTS e reinicie o backend.
 - content.js com chrome-extension://: teste sem extensões; não desative CSP.
 
 ## Testes
@@ -122,7 +123,7 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 Na pasta backend:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -c constraints.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
@@ -134,6 +135,8 @@ npm run build
 ```
 
 Os testes simulam o provedor e não consomem cota. O GitHub Actions roda os mesmos testes e o build a cada envio ao repositório. O resultado da última execução está em docs/VALIDACAO.md.
+
+O `-c constraints.txt` faz o pip instalar as versões de backend/constraints.txt, as que passaram nos testes. O GitHub Actions instala as mesmas. Para subir uma versão: mude o número no requirements.txt ou no requirements-dev.txt, apague a pasta .venv e crie de novo, instale sem o `-c constraints.txt` e rode os testes. Se passarem, troque as linhas de versão do constraints.txt pela saída de `.\.venv\Scripts\python.exe -m pip freeze`, mantendo os comentários. A linha do uvloop, que só o Linux instala, vem do log do passo de instalação do GitHub Actions: se ele recusar a versão, apague a linha, envie de novo e copie a versão que o log mostrar.
 
 ## Avaliação da IA com chamadas reais
 
@@ -174,7 +177,7 @@ Os passos são os mesmos; mudam os comandos.
 cp .env.example .env
 cd backend
 python3 -m venv .venv
-./.venv/bin/python -m pip install -r requirements.txt
+./.venv/bin/python -m pip install -r requirements.txt -c constraints.txt
 ./.venv/bin/python -m app.check
 ./.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -187,4 +190,4 @@ npm ci
 npm run dev
 ```
 
-Testes: na pasta backend, `./.venv/bin/python -m pip install -r requirements-dev.txt` e depois `./.venv/bin/python -m unittest discover -s tests -v`; na pasta frontend, `npm test`. O grupo não rodou os comandos desta seção em macOS ou Linux. Em Linux, o GitHub Actions instala as dependências, roda os testes e faz o build a cada envio; ele não inicia o backend nem o frontend.
+Testes: na pasta backend, `./.venv/bin/python -m pip install -r requirements-dev.txt -c constraints.txt` e depois `./.venv/bin/python -m unittest discover -s tests -v`; na pasta frontend, `npm test`. O grupo não rodou os comandos desta seção em macOS ou Linux. Em Linux, o GitHub Actions instala as dependências, roda os testes e faz o build a cada envio; ele não inicia o backend nem o frontend.

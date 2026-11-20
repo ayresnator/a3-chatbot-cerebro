@@ -31,7 +31,7 @@ def refused(status):
 
 class PrivacyTests(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(app)
+        self.client = TestClient(app, base_url="http://127.0.0.1")
 
     @patch("app.providers.urlopen")
     def test_logs_and_error_answers_never_carry_student_text_model_text_provider_body_or_the_key(self, mock_open):

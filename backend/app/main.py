@@ -1,11 +1,15 @@
 import logging
 import random
 import re
+import time
 import unicodedata
+from collections import Counter
 
-from fastapi import FastAPI, HTTPException
+import anyio.from_thread
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -13,9 +17,13 @@ from .config import settings
 from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
                      QuizItem, StudyInput, StudyOutput, SummaryItem)
 from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
-from .providers import ai, calls_today, fail, quota_exhausted, resolve_gemini_model
+from .providers import ai, budget, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
+# O uvicorn só configura os loggers dele: sem isto, os avisos do Cérebro saíam sem data e hora, e os de INFO sumiam.
+# O INFO vale só para os loggers do Cérebro: na raiz, viria o de outras bibliotecas, como o httpx a cada pedido dos testes.
+logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("cerebro").setLevel(logging.INFO)
 # Esquema enviado ao provedor: o material já chega no formato que o backend valida.
 # O chat fica sem esquema de propósito: com ele as respostas vinham sem quebras de linha (6 de 7 nos testes).
 STUDY_SCHEMA = StudyOutput.model_json_schema()
@@ -43,6 +51,25 @@ POINTS_ASIDE = re.compile(r"\b(?:acima|abaixo)\b", re.IGNORECASE)
 FIELDS = {"content": "conteúdo", "question": "pergunta", "area": "área", "level": "nível", "history": "histórico",
           "expected": "gabarito", "answer": "resposta"}
 
+class RequestBudget:
+    # Abre o teto de cada pedido (providers.next_call_timeout): no máximo request_calls chamadas à IA, até
+    # request_seconds, e nenhuma chamada nova depois que a tela desistiu. Middleware ASGI puro, para o teto (um
+    # ContextVar) e o receive da ligação chegarem intactos à rota.
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        request = Request(scope, receive)
+        # As rotas da IA são def: rodam numa thread do AnyIO, de onde o gone() pergunta ao laço se a ligação caiu.
+        token = budget.set({"deadline": time.monotonic() + settings.request_seconds, "calls": settings.request_calls,
+                            "gone": lambda: anyio.from_thread.run(request.is_disconnected)})
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            budget.reset(token)
+
 app = FastAPI(title="Cérebro API", version="1.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -51,6 +78,10 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.add_middleware(RequestBudget)
+# Fecha o DNS rebinding: só os nomes de ALLOWED_HOSTS passam (a porta não conta), e o resto volta 400 sem chegar à IA.
+# Fica por último porque o último adicionado roda por fora e recusa antes de tudo.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
 @app.exception_handler(RequestValidationError)
 def invalid_input(_, exc: RequestValidationError):
@@ -79,8 +110,10 @@ def unreadable_body(*_):
     # milhares de dígitos). Nenhum erro deste backend usa 400: vale a resposta do corpo que não é JSON.
     return JSONResponse(status_code=422, content={"detail": {"code": "INVALID_INPUT", "message": "Pedido em formato inválido.", "provider_status": ""}})
 
+# async: roda no laço do servidor, sem esperar vaga na fila de threads das chamadas à IA. Rota def, com 45 pedidos à IA
+# no ar, levou 6,8 s, e a tela desiste em 5 s ("Cérebro desligado"). Por isso nada aqui pode esperar rede ou disco.
 @app.get("/api/health")
-def health():
+async def health():
     # Somente estado local: não confirma validade de chave ou cota no provedor. quota_exhausted só repete o último
     # AI_QUOTA_EXCEEDED que este backend recebeu no dia da cota.
     # Com AI_MODEL=auto o modelo é escolhido na primeira chamada à IA. Esta rota nunca chama o provedor: só usa a
@@ -116,6 +149,15 @@ def build_material(raw: dict) -> StudyOutput:
                 dropped += reasons(exc, name, position)
         if dropped:
             logger.warning("generate: %s de %s itens de %s descartados %s", len(items) - len(kept), len(items), name, dropped)
+        if name != "summary":
+            # Cartão ou questão que repete a pergunta de outro também sai (sem contar maiúsculas, acentos e espaços a
+            # mais). O tópico não tem pergunta. O log leva só as contagens: as perguntas são texto da IA.
+            first = {}
+            for item in kept:
+                first.setdefault(plain(item.question), item)
+            if len(first) < len(kept):
+                logger.warning("generate: %s de %s itens de %s com pergunta repetida descartados", len(kept) - len(first), len(items), name)
+            kept = list(first.values())
         material[name] = kept
     return StudyOutput.model_validate(material)
 
@@ -183,7 +225,14 @@ def generate(data: StudyInput):
     # Texto em português sem nenhum acento = o modelo "comeu" a acentuação (4 de 23 respostas nos testes).
     # Tenta mais uma vez; se a segunda falhar, fica com a primeira (sem acento é melhor que erro).
     # O trecho de origem fica fora da conta: é cópia do texto do aluno e tem acento mesmo quando o resto veio sem.
-    if not ACCENTS.search(material.model_dump_json(exclude={"summary": {"__all__": {"source"}}})):
+    # A mesma nova chamada, uma só, vale para metade ou mais dos cartões com a mesma resposta: na rodada real de 17/11
+    # uma ordem escondida no texto pôs "ABACAXI" nos 6 cartões. Se a repetição voltar, fica o segundo material:
+    # recusar puniria casos legítimos, como vários cartões com a resposta "2" em Matemática.
+    same = max(Counter(plain(card.answer) for card in material.flashcards).values())
+    repeated = same * 2 >= len(material.flashcards)
+    if repeated:
+        logger.warning("generate: %s de %s cartões com a mesma resposta; nova chamada", same, len(material.flashcards))
+    if repeated or not ACCENTS.search(material.model_dump_json(exclude={"summary": {"__all__": {"source"}}})):
         try:
             material = build_material(ask())
         except (HTTPException, ValidationError):

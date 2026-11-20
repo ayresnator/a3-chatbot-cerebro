@@ -19,13 +19,17 @@ class Settings:
     api_key: str = field(repr=False)
     allowed_origins: list[str]
     # Resposta normal leva até 22 s. Cada chamada ao provedor desiste depois de 45 s sem resposta, e uma ida
-    # (providers.request_json) faz até 4 chamadas. Duas desistências mais as pausas do 503 já somam 99 s; o tempo
-    # que os 503 levam para chegar entra por fora. Na conta simples, com cada chamada em até 45 s, dá
-    # 4 x 45 + 9 = 189 s, mas não é um teto: o limite vale para cada espera da rede, e uma resposta que chega
-    # aos poucos pode levar mais. Um pedido ainda pode fazer mais de uma ida (catálogo com AI_MODEL=auto, JSON
-    # quebrado, material recusado, falta de acento, interrupção por RECITATION na geração, revisão fora do formato
-    # em /api/grade). Por isso o total pode passar dos 105 s que o navegador espera.
+    # (providers.request_json) faz até 4 chamadas. Um pedido pode fazer mais de uma ida (catálogo com AI_MODEL=auto,
+    # JSON quebrado, material recusado, falta de acento, interrupção por RECITATION, revisão fora do formato), e sem
+    # teto um clique chegou a 32 chamadas. Por isso o pedido inteiro tem teto: request_calls chamadas e request_seconds,
+    # abaixo dos 105 s em que o navegador desiste (requestAPI, em frontend/src/App.jsx). Cada chamada espera o menor
+    # entre timeout_seconds e o tempo que sobra; o limite vale para cada espera da rede, não para a resposta inteira.
     timeout_seconds: float = 45.0
+    request_seconds: float = 100.0
+    request_calls: int = 6
+    # Nomes aceitos no cabeçalho Host, sem a porta. Fecha o DNS rebinding: um site de fora que aponta o próprio nome
+    # para 127.0.0.1 passaria pelo CORS como se fosse da mesma origem e gastaria a cota.
+    allowed_hosts: list[str] = field(default_factory=lambda: ["127.0.0.1", "localhost"])
 
 def load_settings():
     # "AI_PROVIDER=" sem valor no .env vale o padrão, como já acontece com AI_MODEL.
@@ -49,6 +53,8 @@ def load_settings():
         "ALLOWED_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
     ).split(",") if s.strip()]
-    return Settings(provider=provider, model=model, api_key=key, allowed_origins=origins)
+    # "ALLOWED_HOSTS=" sem valor vale o padrão: a lista vazia recusaria até o proxy do Vite.
+    hosts = [s.strip() for s in os.getenv("ALLOWED_HOSTS", "").split(",") if s.strip()] or ["127.0.0.1", "localhost"]
+    return Settings(provider=provider, model=model, api_key=key, allowed_origins=origins, allowed_hosts=hosts)
 
 settings = load_settings()
