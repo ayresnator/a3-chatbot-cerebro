@@ -6,12 +6,13 @@ import {
 } from 'motion/react';
 import { BrandMark, Icon } from './icons.jsx';
 import { Pen } from './marks.jsx';
+import { ChatComposer } from './components/ui/chat-composer.jsx';
 import {
-  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, EASE_IN, EASE_OUT,
+  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT,
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
-  Stat, UndoRow, Wait, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
+  Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
   PerfilSkeleton,
 } from './ui.jsx';
 import {
@@ -77,7 +78,7 @@ async function requestAPI(path, payload, stop) {
   }
 }
 
-// As oito seções, na ordem do menu: a página e o nome do ícone e da cor da divisória (styles.css, --tab-*).
+// As oito seções, na ordem do menu: a página e o nome do ícone e da cor da seção (styles.css, --tab-*).
 const SECTIONS = [
   ['Estudar', 'estudar'], ['Dúvidas', 'duvidas'], ['Resumos', 'resumos'], ['Flashcards', 'flashcards'],
   ['Quizzes', 'quizzes'], ['Erros', 'erros'], ['Desempenho', 'desempenho'], ['Biblioteca', 'biblioteca'],
@@ -140,8 +141,9 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, since }. kind é o botão que pediu (resumo, flashcards, quiz,
-  // why, review), para a espera aparecer nele; label vai na espera; since é a hora do pedido, para os segundos.
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o botão que pediu (resumo, flashcards,
+  // quiz, why, review), para a espera aparecer nele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Wait); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
@@ -214,6 +216,7 @@ function App() {
   const { view: viewIn, title: titleIn, rise } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
   const pop = calm ? POP_CALM : POP;
   const focusIn = calm ? FOCUS_CALM : FOCUS;
+  const hero = calm ? HERO_CALM : HERO;
   const errorBox = useRef(null);
   const cardText = useRef(null);
   // Movimento pedido para o próximo desenho do cartão (virar ou passar para o seguinte).
@@ -262,8 +265,9 @@ function App() {
   }, []);
 
   // A conversa ocupa a página, com a caixa de pergunta presa embaixo: sem isto a resposta nova chegava fora da vista.
+  // Sem mensagens não rola: o herói começa do título.
   useEffect(() => {
-    if (page === 'Dúvidas') chatEnd.current?.scrollIntoView({ block: 'end' });
+    if (page === 'Dúvidas' && chat.length) chatEnd.current?.scrollIntoView({ block: 'end' });
   }, [chat, asking, page]);
 
   // A página nova começa do topo; a entrada dela é a do m.div da página (key, anim.js: ROUTINE).
@@ -292,7 +296,7 @@ function App() {
   // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
   useEffect(() => setError(''), [input]);
 
-  // O texto do cartão virado ou do seguinte muda com movimento, em 0,16 s, e a folha fica parada: o aluno faz isso
+  // O texto do cartão virado ou do seguinte muda com movimento, em 0,16 s, e o cartão fica parado: o aluno faz isso
   // muitas vezes (anim.js, enter).
   useLayoutEffect(() => {
     if (cardMotion.current) enter(cardText.current, cardMotion.current);
@@ -470,7 +474,7 @@ function App() {
     // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
     // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
     const wait = !reuse && !!API_BASE;
-    setBusy({ kind, label: 'Gerando o material…', since: Date.now(), prior: result });
+    setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
       restart();
@@ -685,7 +689,7 @@ function App() {
     if (waiting) return;
     const from = origin(item);
     setWhy({ item });
-    setBusy({ kind: 'why', label: 'Esperando a explicação…', since: Date.now() });
+    setBusy({ kind: 'why', label: 'Esperando a explicação…', orb: 'composing', since: Date.now() });
     try {
       const data = await callAI('/api/chat', {
         question: text, content, area: from.area, level: from.level, history: [],
@@ -710,7 +714,7 @@ function App() {
     // O aluno pode seguir adiante, ou refazer a questão, enquanto espera: só muda a resposta que foi revista.
     // Na tela ela é reconhecida pelo próprio objeto; no que está gravado, por ser anterior a este pedido.
     const asked = new Date().toISOString();
-    setBusy({ kind: 'review', label: 'Esperando a revisão…', since: Date.now(), answer: mine });
+    setBusy({ kind: 'review', label: 'Esperando a revisão…', orb: 'solving', since: Date.now(), answer: mine });
     try {
       const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
       if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
@@ -875,6 +879,32 @@ function App() {
   const waitInline = making ? MATERIAL.includes(page)
     : busy?.kind === 'why' ? (page === 'Resumos' && topics.includes(why?.item)) || (page === 'Quizzes' && !done && why?.item === quiz)
     : busy?.kind === 'review' && page === 'Quizzes' && !done && answer === busy.answer;
+  const band = !!busy && !waitInline;
+  // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
+  // Dúvidas o atalho também sai (styles.css). Se o foco estava nele, vai para o item da página aberta no menu, o mesmo
+  // destino, em vez de cair no body; fora do toque, quem chega ao Dúvidas pelo atalho segue para a caixa (focusAfter).
+  // Antes da pintura: o foco não chega a sumir da tela.
+  useLayoutEffect(() => {
+    const was = document.activeElement;
+    if (!was?.closest('.topbar') || getComputedStyle(was).visibility !== 'hidden') return;
+    [...document.querySelectorAll('.rail [aria-current=page], .tabbar [aria-current=page], .tabbar [data-current]')]
+      .find(item => item.getClientRects().length)?.focus();
+  }, [band, page]);
+  // A pílula de espera do chat sai quando a resposta chega ou o aluno cancela: se o foco estava no Cancelar dela, vai
+  // para a caixa, onde a pergunta cancelada volta, em vez de cair no body. No toque fica, para o teclado não abrir.
+  useLayoutEffect(() => {
+    if (!asking && !TOUCH && document.activeElement?.closest('.chat-status')) document.getElementById('pergunta')?.focus();
+  }, [asking]);
+  // Dica do dock (styles.css): o Esc esconde a que está aberta sem mexer no ponteiro nem no foco (WCAG 1.4.13).
+  useEffect(() => {
+    const hide = e => {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('.rail .nav-item:hover, .rail .nav-item:focus-visible')
+        .forEach(item => item.setAttribute('data-dica-fora', ''));
+    };
+    document.addEventListener('keydown', hide);
+    return () => document.removeEventListener('keydown', hide);
+  }, []);
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
@@ -943,9 +973,11 @@ function App() {
   return (
     <MotionConfig reducedMotion="user">
     <LazyMotion features={domAnimation} strict>
-    <div className="app">
-      <div className="rail">
-        <div className="rail-inner">
+    <div className="app" data-page={slug}>
+      <div className="shell">
+        <header className="topbar">
+          {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
+              Dúvidas estão na folha "Mais". */}
           <a
             className="brand"
             href="#"
@@ -955,34 +987,62 @@ function App() {
             }}
           >
             <BrandMark />
-            <span>Cérebro</span>
+            <span className="brand-name">
+              Cérebro
+              <small>Meu espaço</small>
+            </span>
           </a>
-          <nav aria-label="Seções">{SECTIONS.map(s => navButton(s, 'nav-item'))}</nav>
-          {profileButton(() => setLogin(true))}
-        </div>
-      </div>
-      <div className="shell">
-        <header className="topbar">
-          {/* No celular, sem o menu da esquerda, a barra de cima mostra a marca e o nome do app: o título logo abaixo
-              já diz a página (mobile.css). */}
-          <p className="crumbs">
-            <BrandMark />
-            <span className="crumb-brand">Cérebro</span>
-            <span className="crumb-root">Meu espaço</span>
-            <span className="crumb-sep" aria-hidden="true">/</span>
-            <span className="crumb-page">{page}</span>
-          </p>
-          {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
-          {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
-          <p className="ai-status" data-tone={status.tone}>
-            <span className="status-dot" aria-hidden="true"></span>
-            <AnimatePresence mode="popLayout" initial={false}>
-              <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
-                {status.text}
-              </m.span>
-            </AnimatePresence>
-          </p>
+          {/* Atalho para o Dúvidas, pelo mesmo caminho do menu (go). Quem chega por ele vem perguntar: o foco vai para a
+              caixa (no toque, para o Dúvidas do dock, e o teclado não abre sozinho). No Dúvidas ele some (styles.css). */}
+          <button
+            type="button"
+            className="ask-pill"
+            onClick={() => {
+              if (!TOUCH) focusAfter.current = ['#pergunta'];
+              go('Dúvidas');
+            }}
+          >
+            <span className="orb" aria-hidden="true"></span>
+            <span className="ask-pill-text">Pergunte ao Cérebro</span>
+            <Icon name="buscar" />
+          </button>
+          <div className="top-actions">
+            {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
+            {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
+            <p className="ai-status" data-tone={status.tone}>
+              <span className="status-dot" aria-hidden="true"></span>
+              <AnimatePresence mode="popLayout" initial={false}>
+                <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
+                  {status.text}
+                </m.span>
+              </AnimatePresence>
+            </p>
+            {profileButton(() => setLogin(true))}
+          </div>
         </header>
+        {/* As seções num dock de vidro preso à esquerda do palco, só com os ícones: o nome de cada uma continua no botão
+            e aparece numa dica (styles.css). --i leva a pílula ciano até a seção aberta. Ele vem depois da barra de
+            cima, como na tela: o Tab passa pela barra, pelo dock e então pela página. No celular o dock sai e fica a
+            barra de baixo (mobile.css).
+            A dica sai depois da escolha, para não ficar sobre a página nova, e com o Esc (useEffect acima); volta
+            quando o ponteiro ou o foco deixam o item. */}
+        <nav
+          className="rail"
+          aria-label="Seções"
+          style={{ '--i': SECTIONS.findIndex(([n]) => n === page) }}
+          onClick={e => e.target.closest('.nav-item')?.setAttribute('data-dica-fora', '')}
+          onPointerOut={e => {
+            const item = e.target.closest('.nav-item');
+            if (item && !item.contains(e.relatedTarget)) item.removeAttribute('data-dica-fora');
+          }}
+          onBlur={e => {
+            // Com o ponteiro ainda parado no item a dica continua fora; o onPointerOut a devolve quando ele sair.
+            const item = e.target.closest('.nav-item');
+            if (!item?.matches(':hover')) item?.removeAttribute('data-dica-fora');
+          }}
+        >
+          {SECTIONS.map(s => navButton(s, 'nav-item'))}
+        </nav>
         {/* data-instant: a página que sai some sem movimento (styles.css). */}
         <main style={{ '--sec': 'var(--tab-' + slug + ')' }} data-instant={calm || still || undefined}>
           {/* Cada página é um m.div novo (key): a entrada roda quando ela abre e só então. Os filhos com
@@ -1001,12 +1061,15 @@ function App() {
               animate="show"
               exit="exit"
             >
-              <m.div className="page-head" variants={titleIn}>
-                <h1 className="page-title">{TITLES[page] || page}</h1>
-                {page === 'Estudar' && (
-                  <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
-                )}
-              </m.div>
+              {/* O Dúvidas tem o título dele, no herói do chat. */}
+              {page !== 'Dúvidas' && (
+                <m.div className="page-head" variants={titleIn}>
+                  <h1 className="page-title">{TITLES[page] || page}</h1>
+                  {page === 'Estudar' && (
+                    <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                  )}
+                </m.div>
+              )}
               {/* No Estudar o erro aparece junto dos botões de gerar; no Dúvidas, junto da caixa de pergunta. */}
               {page !== 'Estudar' && page !== 'Dúvidas' && errorBanner}
               {page === 'Estudar' && (
@@ -1039,7 +1102,11 @@ function App() {
                       <div className="editor-tools">
                         {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                         <button type="button" className="tool" onClick={dictation}>
-                          <Icon name="falar" />
+                          {/* Enquanto ouve, o orbe da IA toma o lugar do microfone, nos mesmos 20 px; o nome do botão já
+                              diz "Parar ditado". */}
+                          {listening
+                            ? <Orb state="listening" />
+                            : <Icon name="falar" />}
                           <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
                           <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
                         </button>
@@ -1188,8 +1255,8 @@ function App() {
                 <m.div variants={rise}>
                   {/* Esqueleto, vazio ou material: a troca entre eles esmaece no lugar (popLayout tira do fluxo o que
                       sai). Na abertura da página nada disso anima à parte (live false: a entrada é a da página). O
-                      initial fica em cada folha e não no AnimatePresence: lá ele valeria para tudo o que monta depois
-                      dentro da folha (o fim do baralho e do quiz, a explicação), que então entraria sem movimento. */}
+                      initial fica em cada painel e não no AnimatePresence: lá ele valeria para tudo o que monta depois
+                      dentro do painel (o fim do baralho e do quiz, a explicação), que então entraria sem movimento. */}
                   <AnimatePresence mode="popLayout" custom={byKeyboard()}>
                     {making ? (
                       <m.section
@@ -1201,12 +1268,12 @@ function App() {
                         animate="show"
                         exit="exit"
                       >
-                        {/* O fio da espera corre na borda de cima da folha; o Cancelar fica onde fica o Salvar. */}
+                        {/* O fio da espera corre na borda de cima do painel; o Cancelar fica onde fica o Salvar. */}
                         <div className="result-header">
                           <div>
                             <Sk w="55%" className="sk-title" />
                             <div role="status">
-                              <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
+                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
                             </div>
                           </div>
                         </div>
@@ -1314,7 +1381,7 @@ function App() {
                             </>
                           )}
                           {page === 'Flashcards' && (session.pos >= session.queue.length ? (
-                            // Fim do baralho (Jhey): a folha sobe com um balanço curto e a caneta passa por cada cartão.
+                            // Fim do baralho (Jhey): o painel sobe com um balanço curto e a caneta passa por cada cartão.
                             <m.div className="empty deck-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2>Baralho concluído</h2>
                               <p>{deckSummary(session)}</p>
@@ -1377,7 +1444,7 @@ function App() {
                             </>
                           ))}
                           {page === 'Quizzes' && (done ? (
-                            // Fim do quiz (Jhey): a folha sobe com um balanço curto e a caneta marca cada erro, em fila.
+                            // Fim do quiz (Jhey): o painel sobe com um balanço curto e a caneta marca cada erro, em fila.
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
                               <p>{right} de {answers.length} respostas corretas.</p>
@@ -1510,7 +1577,7 @@ function App() {
                                     <div className="review-wait">
                                       <Sk className="sk-read" />
                                       <Sk w="72%" className="sk-read" />
-                                      <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
+                                      <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
                                     </div>
                                   )}
                                   {answer.review?.verdict && (
@@ -1563,103 +1630,135 @@ function App() {
                 </m.div>
               )}
               {page === 'Dúvidas' && (
-                <m.section className="panel chat-panel" variants={rise}>
+                // Sem mensagens, o herói (#57): o título, a saudação e a caixa no meio do palco, com a lua atrás. Com
+                // mensagens, o mesmo título encolhe no alto, a conversa ocupa a coluna e a caixa fica presa embaixo.
+                // A caixa é o mesmo elemento nos dois estados: o foco continua nela quando a primeira pergunta sai.
+                <section className="chat-stage" data-state={chat.length ? 'conversa' : 'heroi'}>
+                  <span className="moon" aria-hidden="true"></span>
                   <div className="chat-head">
-                    <p>Área: {area} · Nível: {level}. As respostas consideram o conteúdo no editor.</p>
-                    <button
-                      type="button"
-                      disabled={!chat.length || asking}
-                      onClick={() => {
-                        setChat([]);
-                        setTips({ key: '', list: [] });
-                      }}
-                    >
-                      Nova conversa
-                    </button>
-                  </div>
-                  <div className="chat" role="log" aria-live="polite">
-                    <div className="message assistant">
-                      <small>Cérebro</small>
-                      <p>{greeting}</p>
+                    {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
+                    <div className="chat-title-box">
+                      <m.h1 id="chat-titulo" className="chat-title" tabIndex={-1} variants={hero.title}>
+                        Como posso ajudar hoje?
+                      </m.h1>
+                      {!chat.length && <m.span className="chat-rule" aria-hidden="true" variants={hero.rule}></m.span>}
                     </div>
-                    {/* Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam
-                        na conversa quando a página abriu não animam à parte (initial false). A pergunta enviada pelo
-                        teclado aparece parada. A resposta toma o lugar do balão de espera, que esmaece por cima dela. */}
-                    <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
-                      {chat.map((msg, i) => (
-                        <m.div
-                          key={i}
-                          className={'message ' + msg.role}
-                          variants={pop}
-                          initial={msg.role === 'user' ? appear() : 'hidden'}
-                          animate="show"
-                        >
-                          <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
-                          <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
-                        </m.div>
-                      ))}
-                      {asking && (
-                        <m.div
-                          key="espera"
-                          className="message assistant thinking"
-                          variants={pop}
-                          initial={appear()}
-                          animate="show"
-                          exit="exit"
-                        >
-                          <small>Cérebro</small>
-                          <span className="sk-lines">
-                            <Sk className="sk-read" />
-                            <Sk w="86%" className="sk-read" />
-                            <Sk w="54%" className="sk-read" />
-                          </span>
-                          <Wait label="Cérebro está escrevendo…" since={asking} onCancel={cancelAI} />
-                        </m.div>
-                      )}
-                    </AnimatePresence>
+                    {chat.length ? (
+                      <button
+                        type="button"
+                        disabled={asking}
+                        onClick={() => {
+                          setChat([]);
+                          setTips({ key: '', list: [] });
+                          // O botão sai com o cabeçalho compacto: o foco vai para a caixa (no toque, para o título,
+                          // sem abrir o teclado).
+                          focusAfter.current = [TOUCH ? '#chat-titulo' : '#pergunta'];
+                        }}
+                      >
+                        Nova conversa
+                      </button>
+                    ) : (
+                      <m.p className="chat-lead" variants={hero.lead}>{greeting}</m.p>
+                    )}
                   </div>
-                  {/* Uma só rolagem, a da página: a caixa de pergunta fica presa embaixo (acima da barra, no celular). */}
-                  <div className="dock">
-                    {aiNote}
-                    {API_BASE && (
-                      <div className="suggestions" role="group" aria-label="Sugestões de perguntas">
-                        {chatHints.map((h, i) => (
-                          <button key={i} type="button" disabled={waiting} onClick={() => ask(h)}>{h}</button>
-                        ))}
+                  <div className="chat-thread">
+                    {/* A saudação volta como a primeira mensagem, fora do log: ela não é lida de novo quando a conversa
+                        começa (no herói ela já estava na tela, embaixo do título). */}
+                    {chat.length > 0 && (
+                      <div className="message assistant">
+                        <small>Cérebro</small>
+                        <p>{greeting}</p>
                       </div>
                     )}
+                    <div className="chat" role="log" aria-live="polite">
+                      {/* Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam
+                          na conversa quando a página abriu não animam à parte (initial false). A pergunta enviada pelo
+                          teclado aparece parada. A resposta toma o lugar do balão de espera, que esmaece por cima dela. */}
+                      <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
+                        {chat.map((msg, i) => (
+                          <m.div
+                            key={i}
+                            className={'message ' + msg.role}
+                            variants={pop}
+                            initial={msg.role === 'user' ? appear() : 'hidden'}
+                            animate="show"
+                          >
+                            <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
+                            <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
+                          </m.div>
+                        ))}
+                        {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula
+                            acima da caixa, uma vez só para o leitor de tela. */}
+                        {asking && (
+                          <m.div
+                            key="espera"
+                            className="message assistant thinking"
+                            aria-hidden="true"
+                            variants={pop}
+                            initial={appear()}
+                            animate="show"
+                            exit="exit"
+                          >
+                            <span className="dots"><span></span><span></span><span></span></span>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                  {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
+                  <div className="chat-dock">
+                    <ChatComposer
+                      value={question}
+                      onChange={setQuestion}
+                      onSend={() => ask()}
+                      hints={chatHints}
+                      area={area}
+                      onArea={setArea}
+                      level={level}
+                      onLevel={setLevel}
+                      waiting={waiting}
+                      touch={TOUCH}
+                      variants={hero.box}
+                      pop={pop}
+                      note={aiNote}
+                      status={
+                        // A pílula da espera, logo acima da caixa: o orbe, o que acontece, os segundos e o Cancelar.
+                        // O role status fica sempre na página, para a pílula que entra ser anunciada.
+                        <div className="chat-status" role="status">
+                          <AnimatePresence custom={byKeyboard()}>
+                            {asking && (
+                              <m.div key="espera" className="chat-wait" variants={pop} initial={appear()} animate="show" exit="exit">
+                                <Wait label="Cérebro está escrevendo…" orb="composing" since={asking} onCancel={cancelAI} />
+                              </m.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      }
+                    />
                     {errorBanner}
-                    <form
-                      className="ask-form"
-                      onSubmit={e => {
-                        e.preventDefault();
-                        ask();
-                      }}
-                    >
-                      <input
-                        aria-label="Sua dúvida"
-                        onKeyDown={e => {
-                          if (
-                            e.key === 'Enter' &&
-                            (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229 || e.repeat)
-                          ) {
-                            e.preventDefault();
-                          }
-                        }}
-                        value={question}
-                        onChange={e => setQuestion(e.target.value)}
-                        placeholder="O que você quer entender?"
-                        maxLength={4000}
-                        required
-                      />
-                      <button type="submit" className="primary" disabled={waiting || !question.trim()}>
-                        <span>Enviar</span>
-                        <Icon name="seta" />
-                      </button>
-                    </form>
+                    {API_BASE && (
+                      <m.div className="suggestions" role="group" aria-label="Sugestões de perguntas" variants={hero.chips}>
+                        {chatHints.map((h, i) => (
+                          <m.button
+                            key={i}
+                            type="button"
+                            variants={hero.chip}
+                            disabled={waiting}
+                            onClick={() => {
+                              // O chip fica desligado durante a espera, e o foco iria para o body: vai para a caixa (no
+                              // toque não, para o teclado da tela não abrir sozinho).
+                              if (!TOUCH) document.getElementById('pergunta').focus();
+                              ask(h);
+                            }}
+                          >
+                            {h}
+                          </m.button>
+                        ))}
+                      </m.div>
+                    )}
                   </div>
                   <div ref={chatEnd} className="chat-end"></div>
-                </m.section>
+                </section>
               )}
               {page === 'Erros' && (
                 <m.section className="panel" variants={rise}>
@@ -1785,7 +1884,7 @@ function App() {
       </div>
       <nav className="tabbar" aria-label="Seções">
         {BAR.map(s => navButton(s, 'tab-item', true))}
-        {/* Com a página aberta dentro da folha, "Mais" leva a cor dela. */}
+        {/* Com a página aberta dentro da folha, "Mais" fica marcado como ela (data-current, a pílula ciano). */}
         <button
           type="button"
           className="tab-item"
@@ -1801,12 +1900,13 @@ function App() {
         </button>
       </nav>
       {/* Espera de um pedido à IA longe do lugar da resposta (o aluno saiu da página dela): a faixa de cima, com o fio,
-          os segundos e o Cancelar; o estado da IA esmaece por baixo dela (styles.css). Com a espera no lugar da resposta
-          (waitInline) a faixa não existe, e sai na hora quando a espera volta para lá. */}
+          os segundos e o Cancelar, no lugar do atalho do Dúvidas; o atalho sai e o estado da IA esmaece enquanto ela
+          está lá (styles.css). Com a espera no lugar da resposta (waitInline) a faixa não existe, e sai na hora quando
+          a espera volta para lá. */}
       <AnimatePresence custom={byKeyboard() || waitInline}>
-        {busy && !waitInline && (
+        {band && (
           <m.div key="espera" className="busy" role="status" variants={pop} initial={appear()} animate="show" exit="exit">
-            <Wait label={busy.label} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
+            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
           </m.div>
         )}
       </AnimatePresence>
@@ -2055,7 +2155,7 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
             <Sk w="90%" className="sk-read" />
             <Sk w="62%" className="sk-read" />
           </span>
-          {wait?.kind === 'why' && <Wait label={wait.label} since={wait.since} onCancel={onCancel} />}
+          {wait?.kind === 'why' && <Wait label={wait.label} orb={wait.orb} since={wait.since} onCancel={onCancel} />}
         </>
       )}
     </m.div>

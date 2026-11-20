@@ -1,78 +1,91 @@
-/* Cérebro, app de estudo: o caderno de folhas pretas como ferramenta de trabalho.
-   Do caderno vêm só a paleta, os tipos, a densidade e a caneta vermelha que corrige (marks.jsx); o menu, as abas e os
-   controles são os de um app web comum. As fontes vêm do index.html. mobile.css (carregado depois) cuida das telas
-   estreitas e das janelas baixas. Toda cor, tamanho e raio sai das variáveis abaixo. */
+/* Cérebro, app de estudo: tema escuro de vidro, ciano sobre preto (issue #54, no estilo do Glassy Dashboard do
+   21st.dev). O fundo é preto com brilhos ciano fracos; a barra de cima, o dock das seções e o palco de cada página são
+   de vidro, e os painéis ficam dentro do palco. O ciano marca o principal e a seção aberta; verde, vermelho e laranja
+   continuam dizendo certo, errado e aviso, e a caneta que corrige continua (marks.jsx). As fontes vêm do index.html.
+   mobile.css (carregado depois) cuida das telas estreitas. Toda cor, tamanho e raio sai das variáveis abaixo. */
 
 :root {
     color-scheme: dark;
 
-    /* Superfícies */
-    --ground: #0c0c10;
-    --paper: #101116;
-    /* Base sob o grão (--grain): o grão clareia uns 10 níveis em média, e a folha com grão fica em #101116-#111216
-       medido nos pixels, a mesma folha preta das superfícies lisas. Sobre --paper ela subia para #1a1b20. */
-    --paper-under: #06070c;
-    --raised: #16171e;
-    --raised-2: #1c1d26;
-    --field: #0a0a0d;
-    --ok-bg: #0f1a14;
-    --err-bg: #1f1214;
-    --warn-bg: #1d170e;
-    --veil: rgb(5 5 8 / .74);
-    --shadow: 0 2px 4px rgb(0 0 0 / .45), 0 12px 32px rgb(0 0 0 / .5);
+    /* Superfícies (paleta candy-on-black da taste-skill): fundo preto puro e superfície #0d0d0d. Certo, errado e aviso
+       ganham a própria cor a 12% por cima do vidro. */
+    --ground: #000000;
+    --paper: #0d0d0d;
+    --ok-bg: rgb(116 194 149 / .12);
+    --err-bg: rgb(229 72 58 / .12);
+    --warn-bg: rgb(240 160 75 / .12);
+    --veil: rgb(0 0 0 / .7);
+    --shadow: 0 2px 6px rgb(0 0 0 / .5), 0 16px 40px rgb(0 0 0 / .6);
 
-    /* Linhas. --line-strong é a borda dos campos: 3,6:1 ou mais sobre todas as superfícies. */
-    --line: #262836;
-    --line-strong: #6b6e86;
-    --rule-line: rgb(236 235 227 / .075);
+    /* Fundo da página (body::before): três brilhos ciano e verde-água bem fracos, parados e sem imagem de fora (o app
+       roda local). O do canto de cima à esquerda é o ponto mais claro do fundo: os contrastes foram medidos sobre ele
+       e sobre o preto. */
+    --backdrop:
+        radial-gradient(56rem 36rem at 4% -6%, rgb(147 241 247 / .12), transparent 70%),
+        radial-gradient(44rem 36rem at 102% 34%, rgb(88 214 200 / .07), transparent 70%),
+        radial-gradient(64rem 30rem at 38% 112%, rgb(147 241 247 / .06), transparent 70%);
 
-    /* Tinta (medido sobre --paper): 15,8:1, 7,9:1 e 5,7:1. A mais fraca ainda passa de 5:1 em --raised-2. */
-    --ink: #ecebe3;
-    --ink-2: #a9a89f;
-    --ink-3: #8f8e86;
+    /* Vidro: cor translúcida, borda clara fina, luz na quina de cima e sombra na de baixo (--edge) e um brilho em
+       diagonal por cima (--shine). --glass é a barra de cima, o dock e o palco; --glass-float, o que passa por cima do
+       texto (barra de baixo, folha, janela, aviso, espera, caixa do chat, dica do dock). O desfoque (--blur) fica na
+       barra de cima, no dock e no que passa por cima do texto (sem ele, as letras de trás apareciam). O palco não
+       desfoca: atrás dele só há o brilho liso do fundo, e desfocar a página inteira a cada quadro da rolagem pesava sem
+       mudar nada na tela. Dentro do palco nada desfoca: --panel é o painel, --raised o vidro elevado dos botões,
+       --raised-2 o mesmo sob o ponteiro e --field o fundo interno dos campos. */
+    --glass: rgb(13 13 13 / .62);
+    --glass-float: rgb(13 13 13 / .86);
+    --panel: rgb(255 255 255 / .025);
+    --raised: rgb(255 255 255 / .055);
+    --raised-2: rgb(255 255 255 / .07);
+    --field: rgb(0 0 0 / .3);
+    --blur: blur(14px) saturate(1.2);
+    --shine: linear-gradient(155deg, rgb(255 255 255 / .04), transparent 19% 77%, rgb(255 255 255 / .02));
+    --edge: inset 1px 1px 1px rgb(255 255 255 / .06), inset -1px -1px 1px rgb(0 0 0 / .3);
+    --stage-shadow: 0 22px 72px rgb(0 0 0 / .55);
 
-    /* Estados */
-    --violet: #6251df;
-    --violet-hover: #6d5ee6;
-    --violet-press: #5546c9;
-    --violet-off: #2b2858;
-    --on-violet: #ffffff;
-    --focus: #9d92ff;
+    /* Linhas. --line-strong é a borda dos campos: 3:1 ou mais sobre o vidro, também no ponto mais claro do fundo. */
+    --line: rgb(255 255 255 / .1);
+    --line-strong: rgb(255 255 255 / .4);
+
+    /* Tinta: branco nos títulos e números; #f2f2f2 no texto (no preto puro o branco ofusca a leitura longa); #999 no
+       secundário, 4,5:1 ou mais até no vidro mais claro. --ink-3 fica nos ícones, no exemplo dos campos e no que está
+       desligado. */
+    --ink-hi: #ffffff;
+    --ink: #f2f2f2;
+    --ink-2: #999999;
+    --ink-3: #8c8c8c;
+
+    /* Estados: o ciano de destaque, com texto preto. */
+    --accent: #93f1f7;
+    --accent-hover: #b6f8fb;
+    --accent-press: #7fe3ea;
+    --accent-off: rgb(147 241 247 / .14);
+    --accent-soft: rgb(147 241 247 / .07);
+    --on-accent: #000000;
+    --focus: #93f1f7;
     /* Anel de foco: espessura e afastamento. */
     --ring: 2px;
     --pen: #e5483a;
-    --pen-text: #ec5b4e;
+    /* O vermelho da caneta quando é texto: mais claro que o traço, 4,5:1 até no fundo vermelho da opção errada. */
+    --pen-text: #f06a5e;
     --ok: #74c295;
     --warn: #f0a04b;
+    /* Pastel da mesma paleta, só em destaque pontual: o cartão de número em destaque vai do ciano ao céu. */
+    --sky: #b9e2ff;
 
-    /* Divisórias coloridas das seções: marca de 4 px no menu e sublinhado do título */
-    --tab-estudar: #6251df;
-    --tab-duvidas: #e497bd;
-    --tab-resumos: #f2c84b;
-    --tab-flashcards: #74c295;
-    --tab-quizzes: #7cb0e6;
-    --tab-erros: #e5483a;
-    --tab-desempenho: #f0a04b;
-    --tab-biblioteca: #c8a27a;
-    --tab-mais: #8f8e86;
+    /* Seções: todas no ciano (antes cada uma tinha a sua cor). Só a aberta é marcada, no dock e na barra de baixo. */
+    --tab-estudar: var(--accent);
+    --tab-duvidas: var(--accent);
+    --tab-resumos: var(--accent);
+    --tab-flashcards: var(--accent);
+    --tab-quizzes: var(--accent);
+    --tab-erros: var(--accent);
+    --tab-desempenho: var(--accent);
+    --tab-biblioteca: var(--accent);
+    --tab-mais: var(--accent);
 
-    /* Brilho do topo da coluna principal (pedido do dono, 18/11/2026): pêssego, rosa e lavanda bem fracos, unidos ao
-       violeta, apagando no fundo da noite. Fica só atrás do título da página (main::before), nunca atrás de texto
-       corrido, e nunca vira cor de letra. */
-    --peach: #ffdab9;
-    --pink: #ffb6c1;
-    --lavender: #e0bbe4;
-    --glow:
-        radial-gradient(40% 120% at 10% 0%, color-mix(in srgb, var(--violet) 38%, transparent), transparent),
-        radial-gradient(32% 110% at 33% 0%, color-mix(in srgb, var(--pink) 10%, transparent), transparent),
-        radial-gradient(32% 110% at 55% 0%, color-mix(in srgb, var(--peach) 8%, transparent), transparent),
-        radial-gradient(34% 120% at 77% 0%, color-mix(in srgb, var(--lavender) 9%, transparent), transparent);
-
-    /* Tipos: Atkinson Hyperlegible Next para tudo, Bricolage Grotesque condensada nos títulos de página, Kalam só
-       nas notas da caneta. */
-    --font-ui: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-title: 'Bricolage Grotesque', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
-    --font-pen: 'Kalam', 'Segoe Print', 'Bradley Hand', cursive;
+    /* Tipos: Manrope em tudo, até nas notas da caneta. */
+    --font-ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
     /* --fs-0 só nos nomes da barra de baixo em telefone de 360 a 380 px. */
     --fs-0: .75rem;
     --fs-1: .8125rem;
@@ -80,15 +93,15 @@
     --fs-3: 1rem;
     --fs-4: 1.125rem;
     --fs-5: 1.375rem;
-    --fs-6: 2.25rem;
+    /* Título da página: de 40 a 48 px conforme a largura (no celular, 32 px: mobile.css). */
+    --fs-6: clamp(2.5rem, 3.35vw, 3rem);
+    /* Número dos cartões de número (Desempenho e "Seu progresso"). */
+    --fs-num: clamp(2rem, 2.6vw, 2.5rem);
     --lh-ui: 1.45;
     --lh-read: 1.65;
-    /* Pauta do editor: uma linha de texto, e a linha de base da Atkinson a 16 px dentro dela (19 px, medido no Chrome):
-       o fio da pauta fica ali, embaixo das letras. */
+    /* Altura da linha do editor. */
     --rule: 1.75rem;
-    --rule-base: 1.1875rem;
-    /* Medida de leitura: 33em dão de 65 a 75 caracteres por linha na Atkinson (medido no resumo). Em ch passava de
-       90: o "0" dela é largo. */
+    /* Medida de leitura: 33em dão de 65 a 75 caracteres por linha (medido no resumo). Em ch passava de 90. */
     --measure: 33em;
     /* Largura da frase de abertura (.lead, 33em a 16 px): o aviso logo abaixo dos seletores (.note), em letra menor,
        termina na mesma margem. Com a medida dele, 33em a 14 px, ele quebrava em uns 410 px numa coluna de 1024. */
@@ -104,35 +117,48 @@
     --sp-6: 2rem;
     --sp-7: 3rem;
 
-    /* Raios. --r-0 é o canto das abas coloridas (--tab-mark de espessura). */
+    /* Raios. --r-0 é o canto dos fios (espera, progresso, gráfico); --r-2, o dos campos; --r-3, o dos painéis;
+       --r-stage, o do palco; --r-round, o das pílulas (botões, barra de cima, dock, chips). */
     --r-0: 2px;
-    --r-1: 6px;
-    --r-2: 10px;
-    --r-3: 14px;
+    --r-1: 8px;
+    --r-2: 14px;
+    --r-3: 20px;
+    --r-stage: 32px;
     --r-round: 999px;
 
     /* Medidas do app */
-    --rail-w: 15.5rem;
-    --top-h: 3.5rem;
+    /* Margem da coluna do app e a barra de cima: a distância dela ao topo, a altura e o respiro de dentro (6 px em
+       cima e embaixo, 9 à direita e 13 à esquerda, como no Glassy Dashboard). */
+    --gutter: clamp(1rem, 2.5vw, 2.25rem);
+    --top-y: var(--sp-4);
+    --top-h: 3.75rem;
+    --top-pad: 6px 9px 6px 13px;
+    /* Logo da barra de cima (35 px) e o orbe do atalho "Pergunte ao Cérebro" (25 px). */
+    --logo: 2.1875rem;
+    --orb: 1.5625rem;
+    /* Respiro do controle segmentado (as abas do material) e da barra de baixo em telefone estreito. */
+    --seg-pad: 3px;
     --tabbar-h: 0rem;
     --content-w: 64rem;
     --control-h: 2.75rem;
     --mark: 1.5rem;
+    /* Dock: itens de 44 px, 4 px de respiro e 3 px entre eles. Ele sai 24 px para fora da borda do palco. */
+    --dock-item: 2.75rem;
+    --dock-pad: 4px;
+    --dock-gap: 3px;
+    --dock-w: calc(var(--dock-item) + var(--dock-pad) * 2 + var(--hair) * 2);
+    --dock-out: 1.5rem;
     /* Faixa de espera da IA (.busy): o botão Cancelar, o respiro e o fio. Ela fica centrada na altura da barra de cima. */
     --busy-h: calc(2.25rem + var(--sp-1) * 2 + var(--hair) * 2);
-    /* Espessura da aba colorida da seção (menu, barra de baixo, abas do material, sublinhado do título). */
-    --tab-mark: 4px;
-    /* Fio: bordas, divisões e a pauta do editor. */
+    /* Fio: bordas e divisões. */
     --hair: 1px;
     /* Marca da questão atual: sublinhado de 2 px, 3 px abaixo dela. Barra do gráfico num dia sem resposta: 3 px. */
     --underline: 2px;
     --underline-gap: 3px;
     --bar-min: 3px;
-    /* Respiro de cima e dos lados da coluna principal, e a distância do título ao sublinhado: o brilho do topo
-       (main::before) termina no sublinhado, antes de qualquer texto. */
-    --main-top: var(--sp-6);
-    --main-x: var(--sp-6);
-    --title-gap: var(--sp-3);
+    /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard. */
+    --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
+    --main-x: clamp(1.5rem, 3.2vw, 3rem);
 
     /* Movimento (anim.js tem o mesmo em JS): chegada com --ease, saída com --ease-in, mais curta. Pressão do botão
        em 100 ms, retorno de 120 a 200 ms, troca de página numa mola de 0,3 s (0,45 s na abertura do app), caneta em
@@ -141,21 +167,80 @@
     --ease-in: cubic-bezier(.55, 0, 1, .45);
     --t-fast: 160ms;
     --t-press: 100ms;
+    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s. */
+    --t-slide: 360ms;
     --press: .97;
-    /* Esqueleto: tinta a 7% por cima de qualquer superfície, parado. Fio da espera: o violeta do foco. */
-    --sk: rgb(236 235 227 / .07);
-    --wait-track: rgb(157 146 255 / .16);
+    /* Esqueleto: branco a 7% por cima de qualquer vidro, parado. Fio da espera: o ciano do foco. */
+    --sk: rgb(255 255 255 / .07);
+    --wait-track: rgb(147 241 247 / .16);
+
+    /* Tela Dúvidas (#57). --chat-w é a coluna da conversa e da caixa; --r-box, o canto da caixa; --r-list, o da lista
+       de atalhos. A lua (atrás da caixa, só CSS) tem o corpo escuro, a luz de borda ciano em cima (--moon-rim, o ponto
+       mais claro dela) e um brilho externo fraco (--moon-glow); --pointer-glow é o centro do brilho que segue o
+       ponteiro. O título do herói vai do branco até --hero-end, com 7:1 ou mais até sobre a borda da lua com o brilho
+       do ponteiro por cima (contraste57.mjs, na pasta das fotos da #57). */
+    --chat-w: 47.5rem;
+    --r-box: 22px;
+    --r-list: 12px;
+    --moon: clamp(18rem, 40vw, 34rem);
+    --moon-body: #030707;
+    --moon-shade: #0a1515;
+    --moon-rim: rgb(147 241 247 / .08);
+    --moon-glow: rgb(147 241 247 / .04);
+    --pointer-glow: rgb(147 241 247 / .025);
+    --hero-end: #c2c2c2;
+    --rule-ink: rgb(255 255 255 / .2);
+    /* A barra de cima e o dock discretos no Dúvidas (--quiet, --line-quiet), o vidro bem leve dos chips (--chip,
+       escuro: o branco clareava o fundo e o cinza do texto caía abaixo de 4,5:1 sobre a lua), o vidro escuro da lista de
+       atalhos (--palette) e a faixa que escurece a conversa atrás da caixa presa (--chat-veil). */
+    --quiet: rgb(13 13 13 / .3);
+    --line-quiet: rgb(255 255 255 / .05);
+    --chip: rgb(0 0 0 / .2);
+    --palette: rgb(5 5 5 / .94);
+    --chat-veil: rgb(0 0 0 / .55);
 
     /* Seta das listas de opções (select): o "abaixo" de icons.jsx, traço de 1,75 px em --ink-2. Vai como imagem
        porque o select não aceita filho; sem ela ficava a seta do sistema. */
-    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a9a89f' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 10l5 5 5-5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999999' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 10l5 5 5-5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
     --chevron-w: 1.25rem;
-
-    /* Grão de fibra da folha preta: ruído branco a ~4%. */
-    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85 .28' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .085 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
 }
 
-/* Cor de cada seção, para a marca do menu, a aba e o botão de gerar. */
+/* Transparência reduzida ou contraste alto no sistema: o vidro fica sólido, sem transparência e sem desfoque. No alto
+   contraste forçado as cores são do sistema; tirar o desfoque evita o borrão por trás delas. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+    :root {
+        --glass: #0d0d0d;
+        --glass-float: #0d0d0d;
+        --panel: #141414;
+        --raised: #1c1c1c;
+        --raised-2: #262626;
+        --field: #050505;
+        --accent-off: #1d3537;
+        --accent-soft: #142829;
+        --ok-bg: #121d17;
+        --err-bg: #221010;
+        --warn-bg: #241a0e;
+        --quiet: #0d0d0d;
+        --chip: #141414;
+        --palette: #050505;
+        --chat-veil: #050505;
+        --blur: none;
+        --shine: none
+    }
+}
+
+/* Contraste alto pedido no sistema: além do vidro sólido (acima), o cinza do texto e as bordas ficam mais claros, também
+   as bordas discretas do Dúvidas (a barra de cima, o dock e os chips). */
+@media (prefers-contrast: more) {
+    :root {
+        --ink-2: #c2c2c2;
+        --ink-3: #ababab;
+        --line: rgb(255 255 255 / .35);
+        --line-quiet: var(--line)
+    }
+}
+
+/* Cor de cada seção (hoje todas no ciano): o ícone dos botões de gerar e o fio de progresso do material (--sec). */
 [data-tab=estudar] { --tab: var(--tab-estudar) }
 [data-tab=duvidas] { --tab: var(--tab-duvidas) }
 [data-tab=resumos] { --tab: var(--tab-resumos) }
@@ -172,15 +257,17 @@
     box-sizing: border-box
 }
 
+/* scrollbar-gutter: o app é centrado, e sem o espaço da barra de rolagem guardado ele andava 7 px para o lado entre uma
+   página que rola e uma que não rola. */
 html {
     background: var(--ground);
     scrollbar-color: var(--line-strong) var(--ground);
+    scrollbar-gutter: stable;
     -webkit-text-size-adjust: 100%
 }
 
 body {
     margin: 0;
-    background: var(--ground);
     color: var(--ink);
     font-family: var(--font-ui);
     font-size: var(--fs-3);
@@ -191,9 +278,19 @@ body {
     overflow-wrap: break-word
 }
 
+/* Os brilhos do fundo, presos à janela numa camada só: rolar a página não redesenha o fundo. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--backdrop);
+    pointer-events: none
+}
+
 ::selection {
-    background: var(--violet);
-    color: var(--on-violet)
+    background: var(--accent);
+    color: var(--on-accent)
 }
 
 h1,
@@ -206,12 +303,14 @@ h3 {
 
 h2 {
     font-size: var(--fs-4);
-    font-weight: 700
+    font-weight: 750;
+    letter-spacing: -.02em
 }
 
 h3 {
     font-size: var(--fs-3);
-    font-weight: 700
+    font-weight: 700;
+    letter-spacing: -.01em
 }
 
 p {
@@ -269,11 +368,11 @@ button {
     min-height: var(--control-h);
     padding: 0 var(--sp-4);
     border: var(--hair) solid var(--line);
-    border-radius: var(--r-2);
+    border-radius: var(--r-round);
     background: var(--raised);
     color: var(--ink);
     font-size: var(--fs-2);
-    font-weight: 600;
+    font-weight: 650;
     line-height: 1.2;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -295,27 +394,28 @@ button:active:not(:disabled):not(:focus-visible) {
 button:disabled {
     cursor: default;
     color: var(--ink-3);
-    background: var(--paper)
+    background: none
 }
 
+/* O principal: pílula ciano com texto preto. */
 .primary {
-    background: var(--violet);
-    border-color: var(--violet);
-    color: var(--on-violet)
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent)
 }
 
 .primary:hover:not(:disabled) {
-    background: var(--violet-hover);
-    border-color: var(--violet-hover)
+    background: var(--accent-hover);
+    border-color: var(--accent-hover)
 }
 
 .primary:active:not(:disabled) {
-    background: var(--violet-press)
+    background: var(--accent-press)
 }
 
 .primary:disabled {
-    background: var(--violet-off);
-    border-color: var(--violet-off);
+    background: var(--accent-off);
+    border-color: transparent;
     color: var(--ink-2)
 }
 
@@ -367,6 +467,12 @@ textarea::placeholder {
     opacity: 1
 }
 
+/* A lista aberta do select é do sistema: fundo sólido, para ela não depender do fundo translúcido do campo. */
+option {
+    background: var(--paper);
+    color: var(--ink)
+}
+
 input:disabled {
     color: var(--ink-2);
     border-color: var(--line)
@@ -394,42 +500,92 @@ select {
     outline: none
 }
 
-/* ---------- Estrutura: menu à esquerda, barra de cima, conteúdo ---------- */
+/* ---------- Estrutura: barra de cima, dock das seções, palco ---------- */
 
+/* O app numa coluna centrada. A barra de cima e o palco dividem as bordas; o dock fica na primeira coluna, de 24 px, e
+   passa por cima da borda esquerda do palco (Glassy Dashboard). No HTML (e no Tab) a ordem é a da tela: a barra de
+   cima, o dock e o palco, os três células deste grid (o .shell não tem caixa). */
 .app {
     display: grid;
-    grid-template-columns: var(--rail-w) minmax(0, 1fr);
-    min-height: 100vh
+    grid-template-columns: var(--dock-out) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    max-width: 84rem;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: var(--top-y) var(--gutter) var(--sp-5)
 }
 
+/* Dock das seções: pílula de vidro só com os ícones, na linha do palco, presa ao rolar. */
 .rail {
-    background: var(--grain), var(--paper-under);
-    border-right: var(--hair) solid var(--line)
-}
-
-.rail-inner {
     position: sticky;
-    top: 0;
+    top: var(--sp-5);
+    z-index: 20;
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    height: 100dvh;
-    padding: var(--sp-5) var(--sp-3) var(--sp-3);
-    overflow-y: auto
+    gap: var(--dock-gap);
+    width: var(--dock-w);
+    margin-top: var(--sp-6);
+    padding: var(--dock-pad);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-round);
+    background: var(--shine), var(--glass);
+    box-shadow: var(--edge), var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur)
 }
 
+/* A pílula ciano da seção aberta desliza até ela (--i, App.jsx), por transform. */
+.rail::before {
+    content: '';
+    position: absolute;
+    top: var(--dock-pad);
+    left: var(--dock-pad);
+    width: var(--dock-item);
+    height: var(--dock-item);
+    border-radius: 50%;
+    background: var(--accent);
+    translate: 0 calc(var(--i, 0) * (var(--dock-item) + var(--dock-gap)));
+    transition: translate var(--t-slide) var(--ease)
+}
+
+/* min-width e overflow: numa barra apertada o nome corta embaixo do estado da IA em vez de passar por cima dele. O link
+   tem 44 px de altura com o logo de 35: o respiro de cima e de baixo volta pela margem negativa, e a barra não cresce. */
 .brand {
     display: flex;
+    justify-self: start;
     align-items: center;
     gap: var(--sp-3);
-    padding: 0 var(--sp-2) var(--sp-6);
-    border-radius: var(--r-2);
-    text-decoration: none;
-    font-family: var(--font-title);
-    font-stretch: 75%;
-    font-weight: 700;
-    font-size: var(--fs-5);
-    letter-spacing: .01em
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 var(--sp-3) 0 0;
+    padding-block: calc((var(--control-h) - var(--logo)) / 2);
+    margin-block: calc((var(--logo) - var(--control-h)) / 2);
+    border-radius: var(--r-round);
+    color: var(--ink-hi);
+    text-decoration: none
+}
+
+/* "CÉREBRO" em caixa alta e espaçado, com "Meu espaço" embaixo, em cinza. */
+.brand-name {
+    display: grid;
+    min-width: 0;
+    font-size: var(--fs-1);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    white-space: nowrap
+}
+
+.brand-name small {
+    color: var(--ink-2);
+    font-weight: 550;
+    letter-spacing: 0;
+    text-transform: none
 }
 
 .brand-mark {
@@ -438,26 +594,29 @@ select {
     flex: none
 }
 
-.brand-mark rect {
-    fill: var(--violet)
+.brand .brand-mark {
+    width: var(--logo);
+    height: var(--logo)
+}
+
+.brand-mark circle {
+    fill: var(--accent)
 }
 
 .brand-mark path {
     fill: none;
-    stroke: var(--on-violet);
+    stroke: var(--on-accent);
     stroke-width: 2.2;
     stroke-linecap: round
 }
 
-.rail nav,
 .sheet-nav {
     display: flex;
     flex-direction: column;
     gap: var(--sp-0)
 }
 
-/* Item do menu: ícone e nome. A divisória colorida da seção aparece como uma aba de 4 px na borda direita do menu,
-   como as abas de um caderno; a da página aberta fica inteira e mais alta. */
+/* Item do menu: ícone e nome (na folha "Mais"). O da página aberta é a pílula ciano, com o ícone e o nome em preto. */
 .nav-item {
     --press: .98;
     position: relative;
@@ -469,27 +628,7 @@ select {
     background: none;
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 600
-}
-
-.nav-item .icon {
-    color: var(--ink-3)
-}
-
-/* A aba tem sempre 1,75rem e encolhe para 1rem (scale) quando a seção não está aberta: cresce por transform, sem
-   mexer na altura. */
-.nav-item::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: calc(-1 * var(--sp-3));
-    width: var(--tab-mark);
-    height: 1.75rem;
-    translate: 0 -50%;
-    scale: 1 calc(1 / 1.75);
-    border-radius: var(--r-0) 0 0 var(--r-0);
-    background: color-mix(in srgb, var(--tab) 40%, var(--paper));
-    transition: scale var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease)
+    font-weight: 650
 }
 
 .nav-item:hover:not(:disabled) {
@@ -498,32 +637,82 @@ select {
     color: var(--ink)
 }
 
-.nav-item[aria-current=page] {
-    background: var(--raised-2);
-    color: var(--ink)
+.nav-item[aria-current=page],
+.nav-item[aria-current=page]:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--on-accent)
 }
 
-.nav-item[aria-current=page] .icon {
-    color: var(--tab)
+/* No dock, só o ícone: o botão é um círculo de 44 px e a pílula da seção aberta é a que desliza (.rail::before). O
+   ícone fica preto quando ela chega, não antes. */
+.rail .nav-item {
+    width: var(--dock-item);
+    height: var(--dock-item);
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    justify-content: center;
+    transition: background-color var(--t-fast) var(--ease), color 200ms var(--ease) 120ms, scale var(--t-press) var(--ease)
 }
 
-.nav-item[aria-current=page]::after {
-    scale: 1;
-    background: var(--tab)
+.rail .nav-item[aria-current=page],
+.rail .nav-item[aria-current=page]:hover:not(:disabled) {
+    background: none
 }
 
+/* O nome da seção: no nome do botão e, no hover e no foco do teclado, numa dica ao lado do dock, em fundo sólido.
+   Escondida, ela fica recortada (clip-path), nunca com display: none. Como passa por cima da página, segue a WCAG
+   1.4.13: o ponteiro vai até ela sem que ela suma, o Esc a esconde sem tirar o ponteiro nem o foco, e ela também sai
+   depois da escolha da seção (App.jsx, data-dica-fora). */
+.rail .nav-item > span {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + var(--dock-pad) + var(--sp-3));
+    clip-path: inset(50%);
+    white-space: nowrap;
+    translate: 0 -50%;
+    padding: var(--sp-1) var(--sp-3);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-round);
+    background: var(--paper);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    font-size: var(--fs-1)
+}
+
+/* Ponte invisível sobre o vão entre o botão e a dica: ela é parte do botão, então o hover não cai no caminho. */
+.rail .nav-item > span::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    width: calc(var(--dock-pad) + var(--sp-3) + var(--hair) * 2)
+}
+
+/* No toque o hover fica preso depois do toque, com a página nova já aberta: lá a dica só vem pelo foco do teclado. */
+@media (hover: hover) {
+    .rail .nav-item:hover:not([data-dica-fora]) > span {
+        clip-path: none
+    }
+}
+
+.rail .nav-item:focus-visible:not([data-dica-fora]) > span {
+    clip-path: none
+}
+
+/* Perfil: na folha "Mais", a linha inteira com o nome; na barra de cima, só o avatar (abaixo). */
 .profile {
     --press: .98;
     justify-content: flex-start;
-    gap: var(--sp-3);
-    width: 100%;
-    min-height: 3.5rem;
-    margin-top: auto;
-    padding: var(--sp-2);
+    gap: var(--sp-2);
+    min-width: 0;
+    padding: 0 var(--sp-3) 0 var(--sp-1);
     border-color: transparent;
     background: none;
     text-align: left;
-    font-weight: 600
+    font-weight: 650
 }
 
 .profile:hover:not(:disabled) {
@@ -535,13 +724,15 @@ select {
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.25
 }
 
 .profile small {
     display: block;
     color: var(--ink-2);
-    font-weight: 400
+    font-weight: 500
 }
 
 .profile .icon {
@@ -557,72 +748,130 @@ select {
     border: var(--hair) solid var(--line-strong);
     border-radius: 50%;
     background: var(--raised-2);
-    color: var(--ink);
-    font-weight: 700
+    color: var(--ink-hi);
+    font-weight: 750
 }
 
+/* Na barra de cima o perfil é um botão redondo de 44 px, como as ações do Glassy Dashboard: sobra lugar para o estado
+   da IA inteiro. O nome continua no botão, fora da vista. */
+.topbar .profile {
+    justify-content: center;
+    width: var(--control-h);
+    padding: 0
+}
+
+.topbar .profile-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap
+}
+
+.topbar .profile > .icon {
+    display: none
+}
+
+/* Sem caixa: a barra de cima, o dock e o palco são células do .app. */
 .shell {
-    display: flex;
-    flex-direction: column;
-    min-width: 0
+    display: contents
 }
 
+/* Barra de cima: pílula de vidro em três colunas, a marca, o atalho "Pergunte ao Cérebro" e as ações. As laterais
+   dividem o que sobra por igual, com o atalho no meio (até 25 rem e 30vw), mas nunca ficam menores que o conteúdo: o
+   estado da IA vai inteiro, também o texto longo do backend ("IA ativa · modelo · N chamadas hoje"), e quem cede é o
+   atalho, que encolhe e sai um pouco do meio. Ela não fica presa ao rolar: a faixa de espera (.busy) é que fica. */
 .topbar {
-    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: minmax(min-content, 1fr) minmax(0, min(25rem, 30vw)) minmax(min-content, 1fr);
     align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-4);
+    gap: var(--sp-3);
+    min-width: 0;
     min-height: var(--top-h);
-    padding: 0 var(--sp-6);
-    border-bottom: var(--hair) solid var(--line);
+    margin-bottom: var(--sp-4);
+    padding: var(--top-pad);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-round);
+    background: var(--shine), var(--glass);
+    box-shadow: var(--edge);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
     font-size: var(--fs-2)
 }
 
-.crumbs {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: var(--sp-2);
-    font-weight: 600
-}
-
-.crumbs .brand-mark {
-    display: none;
-    width: 1.75rem;
-    height: 1.75rem
-}
-
-/* O nome do app só aparece no celular, no lugar do caminho (mobile.css). */
-.crumb-brand {
-    display: none;
-    font-family: var(--font-title);
-    font-stretch: 75%;
-    font-weight: 700;
-    font-size: var(--fs-4);
-    letter-spacing: .01em
-}
-
-.crumb-root {
+/* O atalho do Dúvidas tem cara de busca: o orbe ciano, a frase que se escreve sozinha na abertura e a lupa. */
+.ask-pill {
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+    padding: 0 var(--sp-4) 0 var(--sp-2);
+    background: var(--field);
     color: var(--ink-2);
-    font-weight: 400
+    font-weight: 550
 }
 
-.crumb-sep {
-    color: var(--ink-3)
+.ask-pill:hover:not(:disabled) {
+    background: var(--field);
+    color: var(--ink)
+}
+
+.ask-pill .icon {
+    margin-left: auto
+}
+
+.orb {
+    width: var(--orb);
+    height: var(--orb);
+    flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, var(--ink-hi), var(--accent) 38%, var(--accent-off) 78%);
+    box-shadow: 0 0 .75rem var(--accent-off)
+}
+
+/* A frase aparece da esquerda para a direita em 19 passos, como se fosse digitada, uma vez. É um passo por letra em
+   média: a Manrope não é monoespaçada, então um passo pode cortar uma letra no meio por um instante. */
+.ask-pill-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    animation: typing 1.1s steps(19, end) .3s both
+}
+
+@keyframes typing {
+    from {
+        clip-path: inset(0 100% 0 0)
+    }
+
+    to {
+        clip-path: inset(0)
+    }
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    min-width: 0
 }
 
 /* Estado da IA: o texto vai sempre escrito; o ponto só reforça. position: o texto que sai esmaece no lugar dele
-   (App.jsx, popLayout). Esmaece por baixo da faixa de espera (.busy) e volta quando ela sai. */
+   (App.jsx, popLayout). Esmaece enquanto a faixa de espera (.busy) está na barra e volta quando ela sai. */
 .ai-status {
     position: relative;
     display: flex;
     align-items: center;
     gap: var(--sp-2);
     min-width: 0;
-    padding: var(--sp-1) var(--sp-3);
+    min-height: 2.25rem;
+    padding: 0 var(--sp-3);
     border: var(--hair) solid var(--line);
     border-radius: var(--r-round);
-    background: var(--paper);
+    background: var(--field);
     color: var(--ink-2);
     transition: opacity var(--t-fast) var(--ease)
 }
@@ -668,58 +917,64 @@ select {
     text-overflow: ellipsis
 }
 
+/* No Dúvidas (#57) o chat chama mais atenção que o resto: a barra de cima e o dock das seções perdem o vidro forte, a
+   sombra e parte da borda, e o ponteiro ou o foco dentro deles devolve o realce. Nada de opacity no elemento: o texto
+   continua em 4,5:1 e os ícones em 3:1 sobre o fundo que fica. O atalho "Pergunte ao Cérebro" some (o aluno já está
+   aqui) sem tirar o lugar dele da grade da barra. */
+.app[data-page=duvidas] :is(.topbar, .rail):not(:hover, :focus-within) {
+    border-color: var(--line-quiet);
+    background: var(--quiet);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none
+}
+
+/* O dock passa por cima da borda esquerda do palco: com o vidro discreto a borda aparecia por dentro dele, e as duas
+   metades ficavam com tons diferentes. Fundo opaco, só nele. */
+.app[data-page=duvidas] .rail:not(:hover, :focus-within) {
+    background: var(--ground)
+}
+
+.app[data-page=duvidas] .ask-pill {
+    visibility: hidden
+}
+
+/* O palco: o vidro grande onde cada página abre, sem desfoque (veja --blur). À esquerda o respiro passa da parte do
+   dock que entra nele. */
 main {
     position: relative;
     isolation: isolate;
-    flex: 1;
-    padding: var(--main-top) var(--main-x) var(--sp-7)
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    padding: var(--main-top) var(--main-x) var(--sp-7) max(var(--main-x), var(--dock-w) - var(--dock-out) + var(--sp-4));
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-stage);
+    background: var(--shine), var(--glass);
+    box-shadow: var(--edge), var(--stage-shadow)
 }
 
 main:focus {
     outline: none
 }
 
-/* O brilho do topo: a luz desce da borda de cima da coluna e se apaga até o sublinhado do título, por trás dele
-   (z-index -1 dentro do main isolado). A altura é a do bloco do título; a máscara zera o brilho no fim, então nenhum
-   texto abaixo do título fica sobre ele. Os painéis têm fundo próprio. */
-main::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto;
-    z-index: -1;
-    height: calc(var(--main-top) + var(--fs-6) * 1.05 + var(--title-gap) + var(--tab-mark) + var(--sp-2));
-    background: var(--glow);
-    -webkit-mask-image: linear-gradient(black 25%, transparent);
-    mask-image: linear-gradient(black 25%, transparent);
-    pointer-events: none
-}
-
+/* A página no meio do palco: em tela larga o palco passa da largura dela, e sobrava tudo à direita. */
 .view {
-    max-width: var(--content-w)
+    max-width: var(--content-w);
+    margin-inline: auto
 }
 
 .page-head {
     margin-bottom: var(--sp-5)
 }
 
-/* Título da página na letra condensada, sublinhado com a cor da seção. */
+/* Título grande e apertado, como o cabeçalho de vista do Glassy Dashboard. */
 .page-title {
-    font-family: var(--font-title);
-    font-stretch: 75%;
-    font-weight: 700;
+    color: var(--ink-hi);
     font-size: var(--fs-6);
-    line-height: 1.05;
-    letter-spacing: -.01em
-}
-
-.page-title::after {
-    content: '';
-    display: block;
-    width: 3rem;
-    height: var(--tab-mark);
-    margin-top: var(--title-gap);
-    border-radius: var(--r-0);
-    background: var(--sec, var(--tab-estudar))
+    font-weight: 780;
+    line-height: 1.03;
+    letter-spacing: -.05em
 }
 
 .lead {
@@ -730,13 +985,15 @@ main::before {
     text-wrap: balance
 }
 
-/* Folha preta com grão: o contêiner dos conteúdos de cada página. */
+/* Painel de vidro dentro do palco: o contêiner dos conteúdos de cada página. Sem desfoque e sem brilho próprios: atrás
+   dele só há o palco, e o brilho dos dois somado tirava o contraste do texto cinza. */
 .panel {
     margin-bottom: var(--sp-5);
     padding: var(--sp-5);
     border: var(--hair) solid var(--line);
     border-radius: var(--r-3);
-    background: var(--grain), var(--paper-under)
+    background: var(--panel);
+    box-shadow: var(--edge)
 }
 
 .panel-head {
@@ -788,16 +1045,18 @@ main::before {
     font-size: var(--fs-2)
 }
 
+/* Chip em pílula ("Pergunta", "Múltipla escolha"). */
 .tag {
     display: inline-flex;
     align-items: center;
-    padding: 0 var(--sp-2);
+    padding: 0 var(--sp-3);
     min-height: 1.5rem;
     border: var(--hair) solid var(--line);
-    border-radius: var(--r-1);
+    border-radius: var(--r-round);
+    background: var(--panel);
     color: var(--ink-2);
     font-size: var(--fs-1);
-    font-weight: 600
+    font-weight: 650
 }
 
 /* Erro: junto do controle que falhou, com o ícone e a borda da caneta vermelha. */
@@ -822,13 +1081,12 @@ main::before {
 
 /* ---------- Estudar ---------- */
 
-/* O editor é uma folha preta pautada: as linhas de 28 px rolam junto com o texto e cada uma passa na linha de base
-   do texto (--rule-base), com as letras apoiadas nela. A borda do campo e o anel de foco ficam na folha inteira
-   (texto e ferramentas). --pad é o respiro de cima do texto, de onde a pauta conta. */
+/* O editor é um campo grande, de fundo interno translúcido: a borda e o anel de foco ficam no campo inteiro (texto e
+   ferramentas). --pad é o respiro de cima do texto. */
 .editor {
     border: var(--hair) solid var(--line-strong);
-    border-radius: var(--r-3);
-    background: var(--paper)
+    border-radius: var(--r-2);
+    background: var(--field)
 }
 
 .editor:has(textarea:focus-visible) {
@@ -844,12 +1102,8 @@ main::before {
     resize: vertical;
     padding: var(--pad) var(--sp-5);
     border: 0;
-    border-radius: var(--r-3) var(--r-3) 0 0;
-    background-color: var(--paper-under);
-    background-image: linear-gradient(var(--rule-line) var(--hair), transparent var(--hair)), var(--grain);
-    background-size: 100% var(--rule), auto;
-    background-position: 0 calc(var(--pad) + var(--rule-base)), 0 0;
-    background-attachment: local, local;
+    border-radius: var(--r-2) var(--r-2) 0 0;
+    background: none;
     line-height: var(--rule)
 }
 
@@ -913,7 +1167,7 @@ main::before {
     gap: var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 600
+    font-weight: 650
 }
 
 .selectors select {
@@ -939,7 +1193,7 @@ main::before {
 }
 
 /* As ações de gerar: um grupo de botões comuns, Resumir em destaque. O ícone das outras leva a cor da seção onde o
-   material abre. */
+   material abre (--tab, hoje o ciano em todas). */
 .actions {
     display: flex;
     flex-wrap: wrap;
@@ -970,17 +1224,13 @@ main::before {
     font-size: var(--fs-3)
 }
 
-/* Uma folha só, com os contadores em frase separados por fios. Quando a linha não cabe, eles quebram e se esticam até
-   encher cada linha: o fio de cima e o da esquerda (sombra de 1 px, cortada na borda da folha) separam vizinhos e
-   linhas, sem cartão sobrando sozinho. */
+/* Cartões de número: o número grande em cima e a frase embaixo, em colunas iguais que quebram quando não cabem (duas
+   até em 320 px). space-between: os números de uma linha ficam na mesma altura mesmo quando uma frase quebra. */
 .stats {
-    display: flex;
-    flex-wrap: wrap;
-    margin-bottom: var(--sp-5);
-    overflow: hidden;
-    border: var(--hair) solid var(--line);
-    border-radius: var(--r-2);
-    background: var(--grain), var(--paper-under)
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-5)
 }
 
 .progress .stats {
@@ -989,21 +1239,40 @@ main::before {
 
 .stat {
     display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: var(--sp-2);
-    min-height: var(--control-h);
-    padding: var(--sp-2) var(--sp-4);
-    box-shadow: calc(-1 * var(--hair)) 0 0 var(--line), 0 calc(-1 * var(--hair)) 0 var(--line);
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--sp-1);
+    min-height: 6.5rem;
+    padding: var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-3);
+    background: var(--panel);
+    box-shadow: var(--edge);
     color: var(--ink-2);
-    font-size: var(--fs-2)
+    font-size: var(--fs-1);
+    font-weight: 550
 }
 
 .stat strong {
-    color: var(--ink);
-    font-size: var(--fs-3);
+    color: var(--ink-hi);
+    font-size: var(--fs-num);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap
+}
+
+/* O primeiro cartão (a sequência de dias) em destaque: gradiente do ciano ao céu, texto preto. No esqueleto, não. */
+.stat:first-child:has(strong) {
+    border-color: transparent;
+    background: linear-gradient(140deg, var(--accent), var(--sky));
+    box-shadow: none;
+    color: var(--on-accent)
+}
+
+.stat:first-child:has(strong) strong {
+    color: var(--on-accent)
 }
 
 .day-marks {
@@ -1041,22 +1310,26 @@ main::before {
     font-size: var(--fs-2)
 }
 
-/* Abas de verdade (role="tab"): a selecionada ganha o sublinhado na cor da sua seção. */
+/* Abas de verdade (role="tab") num controle segmentado em pílula: a selecionada em ciano, com texto preto. */
 .tabs {
     display: flex;
-    gap: var(--sp-1);
+    width: fit-content;
+    max-width: 100%;
+    gap: var(--sp-0);
     margin: var(--sp-4) 0 var(--sp-5);
-    border-bottom: var(--hair) solid var(--line);
+    padding: var(--seg-pad);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-round);
+    background: var(--field);
     overflow-x: auto
 }
 
 .tabs [role=tab] {
-    position: relative;
+    min-height: var(--control-h);
     border: 0;
-    border-radius: var(--r-1) var(--r-1) 0 0;
     background: none;
     color: var(--ink-2);
-    font-size: var(--fs-3)
+    font-size: var(--fs-2)
 }
 
 .tabs [role=tab]:hover {
@@ -1065,23 +1338,18 @@ main::before {
 }
 
 .tabs [role=tab][aria-selected=true] {
-    color: var(--ink)
+    background: var(--accent);
+    color: var(--on-accent)
 }
 
-.tabs [role=tab][aria-selected=true]::after {
-    content: '';
-    position: absolute;
-    left: var(--sp-3);
-    right: var(--sp-3);
-    bottom: 0;
-    height: var(--tab-mark);
-    border-radius: var(--r-0) var(--r-0) 0 0;
-    background: var(--tab)
-}
-
-/* A faixa das abas rola de lado (overflow): o anel por fora seria cortado nela, então vai por dentro da aba. */
+/* A faixa das abas rola de lado (overflow): o anel por fora seria cortado nela, então vai por dentro da aba; na aba
+   ciano ele é preto. */
 .tabs [role=tab]:focus-visible {
-    outline-offset: calc(-1 * var(--ring))
+    outline-offset: calc(-2 * var(--ring))
+}
+
+.tabs [role=tab][aria-selected=true]:focus-visible {
+    outline-color: var(--on-accent)
 }
 
 .topic-count {
@@ -1141,13 +1409,13 @@ main::before {
     display: inline-flex;
     align-items: center;
     min-height: 1.5rem;
-    padding: 0 var(--sp-2);
+    padding: 0 var(--sp-3);
     border: var(--hair) solid var(--warn);
-    border-radius: var(--r-1);
+    border-radius: var(--r-round);
     background: var(--warn-bg);
     color: var(--warn);
     font-size: var(--fs-1);
-    font-weight: 600
+    font-weight: 650
 }
 
 /* Botões que chamam a IA de dentro do estudo: "Não entendi, me explique" e "Pedir revisão da IA". */
@@ -1221,7 +1489,7 @@ main::before {
 }
 
 .marks .pen.current {
-    background: linear-gradient(var(--tab-quizzes), var(--tab-quizzes)) bottom / 100% var(--underline) no-repeat
+    background: linear-gradient(var(--accent), var(--accent)) bottom / 100% var(--underline) no-repeat
 }
 
 .marks .pen--novo.current {
@@ -1237,20 +1505,20 @@ main::before {
     padding: var(--sp-6) var(--sp-5);
     border-color: var(--line-strong);
     border-radius: var(--r-3);
-    background: var(--grain), var(--paper-under);
+    background: var(--panel);
     font-weight: 400;
     text-align: center
 }
 
-/* Sob o ponteiro, o grão sobre a folha lisa: um tom acima. */
+/* Sob o ponteiro, o vidro elevado: um tom acima. */
 .flashcard:hover:not(:disabled) {
-    background: var(--grain), var(--paper)
+    background: var(--raised)
 }
 
-/* Virado, o cartão leva a borda verde, também sob o ponteiro (antes o button:hover a trocava pela cinza). */
+/* Virado, o cartão leva a borda ciano, também sob o ponteiro (antes o button:hover a trocava pela cinza). */
 .flashcard.flipped,
 .flashcard.flipped:hover:not(:disabled) {
-    border-color: var(--tab-flashcards)
+    border-color: var(--accent)
 }
 
 .face-text {
@@ -1278,7 +1546,7 @@ main::before {
 }
 
 .verdicts .primary .icon {
-    color: var(--on-violet)
+    color: var(--on-accent)
 }
 
 .quiz-question {
@@ -1311,7 +1579,7 @@ main::before {
     min-height: 3.25rem;
     padding: var(--sp-3) var(--sp-4);
     border-color: var(--line-strong);
-    background: var(--paper);
+    border-radius: var(--r-2);
     font-size: var(--fs-3);
     font-weight: 400;
     line-height: var(--lh-ui);
@@ -1319,7 +1587,7 @@ main::before {
 }
 
 .option:disabled {
-    background: var(--paper);
+    background: var(--panel);
     color: var(--ink-2)
 }
 
@@ -1329,11 +1597,11 @@ main::before {
     width: 1.75rem;
     height: 1.75rem;
     flex: none;
-    border-radius: var(--r-1);
+    border-radius: 50%;
     background: var(--raised-2);
     color: var(--ink);
     font-size: var(--fs-2);
-    font-weight: 700
+    font-weight: 750
 }
 
 .option-text {
@@ -1492,11 +1760,10 @@ main::before {
     color: var(--ink-3)
 }
 
-/* Nota à mão, em Kalam: "certa", "sua resposta", "errei". */
+/* Nota da caneta, na mesma Manrope: "certa", "sua resposta", "errei". */
 .pen-note {
-    font-family: var(--font-pen);
-    font-size: var(--fs-4);
-    font-weight: 700;
+    font-size: var(--fs-2);
+    font-weight: 750;
     line-height: 1;
     white-space: nowrap
 }
@@ -1508,27 +1775,172 @@ main::before {
 
 /* ---------- Dúvidas ---------- */
 
-.chat-panel {
-    padding-bottom: 0
+/* O palco vira coluna e a página do Dúvidas ocupa a altura dele: sem mensagens o herói fica no meio, com elas a caixa
+   desce até o pé. O :has deixa a página que sai (popLayout) com a arrumação dela. */
+.app[data-page=duvidas] main {
+    display: flex;
+    flex-direction: column
 }
 
+.view:has(> .chat-stage) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%
+}
+
+/* O corte em cima e embaixo segura a lua dentro do palco (sem ele a página ganhava rolagem); dos lados não há corte,
+   para o anel de foco da caixa, que no celular vai de uma borda à outra, não sumir. */
+.chat-stage {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--sp-1);
+    overflow-y: clip
+}
+
+.chat-stage[data-state=heroi] {
+    justify-content: safe center
+}
+
+/* A lua ciano, só CSS: o corpo escuro, a luz de borda em cima e um brilho externo fraco. Fica atrás da caixa e respira
+   devagar (só a opacidade). Com mensagens ela sobe para a borda de cima do palco e fica só o brilho, sem o corpo: um
+   disco escuro atrás da conversa aparecia como um círculo cortando os balões. */
+.moon {
+    position: absolute;
+    top: calc(50% + 2rem);
+    left: 50%;
+    z-index: -1;
+    width: min(var(--moon), 100%);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 50%;
+    background: radial-gradient(circle closest-side, transparent 70%, var(--moon-glow) 90%, var(--moon-rim));
+    box-shadow: 0 0 5rem var(--moon-glow);
+    translate: -50% -50%;
+    pointer-events: none;
+    animation: moon-breathe 9s ease-in-out infinite alternate
+}
+
+/* O corpo é o mesmo disco um pouco mais abaixo: em cima sobra só a borda iluminada. */
+.moon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 15%, var(--moon-shade), var(--moon-body) 60%);
+    translate: 0 3%
+}
+
+@keyframes moon-breathe {
+    from {
+        opacity: .72
+    }
+}
+
+.chat-stage[data-state=conversa] .moon {
+    top: 0;
+    background: radial-gradient(closest-side, var(--moon-glow), transparent);
+    box-shadow: none;
+    animation: none
+}
+
+.chat-stage[data-state=conversa] .moon::before {
+    display: none
+}
+
+/* Brilho que segue o ponteiro com o foco na caixa (chat-composer.jsx): preso à janela, atrás do texto e por cima do
+   vidro do palco. O esfumado é o próprio gradiente, sem desfoque. */
+.pointer-glow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    width: 50rem;
+    height: 50rem;
+    margin: -25rem 0 0 -25rem;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--pointer-glow), transparent);
+    pointer-events: none
+}
+
+/* O herói: o título com degradê do branco ao cinza claro, o fio que se desenha embaixo dele e a saudação do Cérebro. */
 .chat-head {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
     gap: var(--sp-3);
-    padding-bottom: var(--sp-4);
-    border-bottom: var(--hair) solid var(--line);
+    width: 100%;
+    max-width: var(--chat-w);
+    margin: 0 auto var(--sp-7);
+    text-align: center
+}
+
+.chat-title-box {
+    display: grid;
+    gap: var(--sp-2)
+}
+
+/* padding-bottom: o "j" de "hoje" não perde a ponta no recorte do degradê. */
+.chat-title {
+    padding-bottom: .08em;
+    background: linear-gradient(90deg, var(--ink-hi), var(--hero-end));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 750;
+    line-height: 1.1;
+    letter-spacing: -.04em
+}
+
+.chat-rule {
+    display: block;
+    height: var(--hair);
+    background: linear-gradient(90deg, transparent, var(--rule-ink), transparent);
+    transform-origin: left
+}
+
+.chat-lead {
+    max-width: 34rem;
     color: var(--ink-2);
-    font-size: var(--fs-2)
+    font-size: var(--fs-2);
+    line-height: var(--lh-read);
+    text-wrap: balance
+}
+
+/* Com mensagens: o mesmo título, menor, e o "Nova conversa" do lado. */
+.chat-stage[data-state=conversa] .chat-head {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: var(--sp-5);
+    text-align: left
+}
+
+.chat-stage[data-state=conversa] .chat-title {
+    font-size: var(--fs-5)
+}
+
+/* A conversa numa coluna centrada. O respiro de baixo guarda o lugar da pílula de espera, que fica por cima dele. */
+.chat-thread {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    width: 100%;
+    max-width: var(--chat-w);
+    margin-inline: auto
+}
+
+.chat-stage[data-state=conversa] .chat-thread {
+    flex: 1;
+    padding-bottom: var(--sp-7)
 }
 
 .chat {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
-    padding: var(--sp-5) 0
+    gap: var(--sp-3)
 }
 
 .message {
@@ -1543,12 +1955,14 @@ main::before {
 
 .message.assistant {
     align-self: flex-start;
-    background: var(--paper)
+    background: var(--raised)
 }
 
+/* A pergunta do aluno num vidro levemente ciano. */
 .message.user {
     align-self: flex-end;
-    background: var(--raised-2)
+    border-color: var(--accent-off);
+    background: var(--accent-soft)
 }
 
 .message small {
@@ -1561,9 +1975,43 @@ main::before {
     margin-top: var(--sp-1)
 }
 
-/* Balão de espera da resposta: o esqueleto de três linhas e a espera, na largura de uma resposta curta. */
+/* Balão de espera da resposta: só os três pontos, que pulsam um depois do outro (parados com movimento reduzido). */
 .message.thinking {
-    width: min(28rem, 85%)
+    padding: var(--sp-4)
+}
+
+.dots {
+    display: flex;
+    gap: var(--sp-1)
+}
+
+.dots span {
+    width: .375rem;
+    height: .375rem;
+    border-radius: 50%;
+    background: var(--ink-2);
+    animation: dot 1.2s ease-in-out infinite
+}
+
+.dots span:nth-child(2) {
+    animation-delay: .15s
+}
+
+.dots span:nth-child(3) {
+    animation-delay: .3s
+}
+
+@keyframes dot {
+    0%,
+    100% {
+        opacity: .3;
+        scale: .85
+    }
+
+    50% {
+        opacity: .9;
+        scale: 1.1
+    }
 }
 
 /* ---------- Esperas e esqueletos ---------- */
@@ -1578,7 +2026,10 @@ main::before {
     gap: var(--sp-1) var(--sp-3);
     padding-top: var(--sp-3);
     color: var(--ink-2);
-    font-size: var(--fs-2)
+    font-size: var(--fs-2);
+    /* Numa espera estreita (o esqueleto do material num celular de 390 px, com o orbe) o texto quebra sem deixar o
+       "min" sozinho na última linha. */
+    text-wrap: pretty
 }
 
 /* O Cancelar fica na ponta direita da espera: no esqueleto do material, onde fica o Salvar. */
@@ -1589,6 +2040,15 @@ main::before {
 
 .elapsed {
     font-variant-numeric: tabular-nums
+}
+
+/* Orbe da IA no começo do texto da espera (ui.jsx, Wait): os 20 px dele presos no topo da linha e descidos metade da
+   sobra, então ele fica no centro da linha (20,3 px na faixa, 23,1 px no retorno do quiz) e a linha não cresce. As
+   margens vão separadas: num navegador sem a unidade lh só a de cima cai, e o orbe fica no topo da linha. */
+.wait-orb {
+    vertical-align: top;
+    margin-top: calc((1lh - 20px) / 2);
+    margin-right: var(--sp-2)
 }
 
 .wait-bar {
@@ -1712,15 +2172,17 @@ main::before {
     padding: var(--sp-3) var(--sp-4);
     border: var(--hair) solid var(--line);
     border-radius: var(--r-2);
-    background: var(--paper)
+    background: var(--panel)
 }
 
+/* A barra do esqueleto fica parada: só a do gráfico pronto cresce. */
 .chart .sk-bar {
     display: block;
-    background: var(--sk)
+    background: var(--sk);
+    animation: none
 }
 
-/* Material a caminho: o fio corre na borda de cima da folha, e o texto da espera fica onde fica "Área · Nível". */
+/* Material a caminho: o fio corre na borda de cima do painel, e o texto da espera fica onde fica "Área · Nível". */
 .material-wait {
     position: relative;
     overflow: hidden
@@ -1769,49 +2231,285 @@ main::before {
     transition: scale 200ms var(--ease)
 }
 
-/* Caixa de pergunta presa ao pé da tela enquanto a conversa rola. */
-.dock {
+/* A caixa e o que vem com ela: a pílula de espera e a lista de atalhos por cima, a dica, o erro e os chips embaixo. Com
+   mensagens ela fica presa ao pé da tela (acima da barra de baixo, no celular), sobre uma faixa que escurece e desfoca
+   a conversa que passa por trás. A faixa é um ::before com máscara: a borda de cima dela esmaece em vez de cortar o
+   texto, e a máscara não recorta a lista e a pílula, que saem da caixa para cima. */
+.chat-dock {
+    width: 100%;
+    max-width: var(--chat-w);
+    margin-inline: auto
+}
+
+.chat-stage[data-state=conversa] .chat-dock {
     position: sticky;
     bottom: var(--tabbar-h);
     z-index: 5;
-    margin: 0 calc(-1 * var(--sp-5));
-    padding: var(--sp-3) var(--sp-5) var(--sp-4);
-    border-top: var(--hair) solid var(--line);
-    border-radius: 0 0 var(--r-3) var(--r-3);
-    background: var(--grain), var(--paper-under)
+    padding: var(--sp-5) 0 var(--sp-4)
 }
 
-.dock .ai-note {
-    margin: 0 0 var(--sp-2)
+/* A faixa passa um pouco da coluna (--veil-out) e esmaece também dos lados: com borda reta ela aparecia como um
+   retângulo mais escuro no vidro do palco. --veil-foot esmaece a borda de baixo onde a conversa aparece por baixo da
+   caixa presa (acima da barra de baixo, mobile.css); no computador a caixa fica no pé da janela. */
+.chat-stage[data-state=conversa] .chat-dock::before {
+    --veil-out: var(--sp-6);
+    --veil-foot: 0px;
+    content: '';
+    position: absolute;
+    inset: 0 calc(-1 * var(--veil-out));
+    z-index: -1;
+    background: var(--chat-veil);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    -webkit-mask-image: linear-gradient(transparent, #000 var(--sp-5) calc(100% - var(--veil-foot)), transparent),
+        linear-gradient(90deg, transparent, #000 var(--veil-out) calc(100% - var(--veil-out)), transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(transparent, #000 var(--sp-5) calc(100% - var(--veil-foot)), transparent),
+        linear-gradient(90deg, transparent, #000 var(--veil-out) calc(100% - var(--veil-out)), transparent);
+    mask-composite: intersect
 }
 
-.dock .error {
-    margin: var(--sp-2) 0
+/* Janela baixa (celular deitado, zoom de 200% a 400%): a caixa presa e a barra de baixo cobriam a conversa inteira, e
+   o campo saía da tela. A caixa fica no fim da conversa e rola com a página, como no herói, sem a faixa de trás. */
+@media (max-height: 36rem) {
+    .chat-stage[data-state=conversa] .chat-dock {
+        position: static
+    }
+
+    .chat-stage[data-state=conversa] .chat-dock::before {
+        display: none
+    }
 }
 
+.chat-dock .error {
+    margin: var(--sp-3) 0 0
+}
+
+.composer {
+    position: relative
+}
+
+/* A caixa: vidro que passa por cima do texto, canto de 22 px, borda clara de campo (3:1) e sombra grande e escura. O
+   anel de foco fica na caixa inteira, como no editor do Estudar. */
+.composer-box {
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-box);
+    background: var(--shine), var(--glass-float);
+    box-shadow: var(--edge), var(--stage-shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur)
+}
+
+/* Com mensagens a faixa de trás já desfoca a conversa: um segundo desfoque na caixa presa só pesava na rolagem. */
+.chat-stage[data-state=conversa] .composer-box {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none
+}
+
+.composer-box:has(textarea:focus-visible) {
+    outline: var(--ring) solid var(--focus);
+    outline-offset: var(--ring)
+}
+
+/* De 60 a 200 px (chat-composer.jsx, fit): o JS dá a altura do texto e estes limites seguram. */
+.composer-box textarea {
+    display: block;
+    width: 100%;
+    min-height: 3.75rem;
+    max-height: 12.5rem;
+    padding: var(--sp-4) var(--sp-5);
+    border: 0;
+    border-radius: var(--r-box) var(--r-box) 0 0;
+    background: none;
+    line-height: var(--lh-ui);
+    resize: none
+}
+
+.composer-box textarea:focus-visible {
+    outline: none
+}
+
+/* O exemplo do campo em --ink-2: a caixa é vidro por cima do que passar atrás dela, e --ink-3 ficava abaixo de 4,5:1. */
+.composer-box textarea::placeholder {
+    color: var(--ink-2)
+}
+
+/* A faixa de baixo da caixa: atalhos, área e nível à esquerda, Enviar à direita; quebra a linha quando não cabe. */
+.composer-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-top: var(--hair) solid var(--line)
+}
+
+/* field-sizing: cada lista fica da largura da opção escolhida, não da mais longa ("Administração", "Intermediário"):
+   com os valores de partida a faixa cabe numa linha em 390 px. Onde o navegador não tem field-sizing, a faixa quebra. */
+.composer-bar select {
+    field-sizing: content;
+    min-height: 2.5rem;
+    padding-right: calc(var(--sp-2) + var(--chevron-w) + var(--sp-1));
+    border-radius: var(--r-round);
+    background-position: right var(--sp-2) center;
+    color: var(--ink);
+    font-size: var(--fs-2)
+}
+
+/* No toque, 16 px como os outros campos: com menos, o Safari do iPhone amplia a página no foco e ela fica ampliada. */
+@media (pointer: coarse) {
+    .composer-bar select {
+        font-size: var(--fs-3)
+    }
+}
+
+.composer-bar .primary {
+    min-height: 2.5rem;
+    margin-left: auto
+}
+
+.shortcuts {
+    width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--ink-2)
+}
+
+.shortcuts:hover:not(:disabled),
+.shortcuts[aria-expanded=true] {
+    border-color: var(--line);
+    background: var(--raised);
+    color: var(--ink)
+}
+
+/* Embaixo da caixa: a dica do teclado (aria-describedby do campo) e o aviso de que a IA pode errar. */
+.composer-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--sp-1) var(--sp-4);
+    margin-top: var(--sp-2);
+    padding-inline: var(--sp-3);
+    color: var(--ink-2);
+    font-size: var(--fs-1)
+}
+
+.composer-foot .ai-note {
+    max-width: none;
+    margin: 0;
+    font-size: inherit
+}
+
+/* Lista de atalhos, a paleta de comandos do Animated AI Chat: vidro escuro acima da caixa, dentro da tela (rola por
+   dentro quando passa da altura). O item marcado (pelas setas ou pelo ponteiro, chat-composer.jsx) fica claro, com o
+   fio ciano à esquerda: ele é o foco do campo (aria-activedescendant) e precisa de 3:1, que o fundo sozinho não dava. */
+.palette {
+    position: absolute;
+    right: var(--sp-4);
+    bottom: calc(100% + var(--sp-2));
+    left: var(--sp-4);
+    z-index: 10;
+    overflow: hidden;
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-list);
+    background: var(--palette);
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur)
+}
+
+.palette [role=listbox] {
+    max-height: min(22rem, 45dvh);
+    overflow-y: auto;
+    padding: var(--sp-1)
+}
+
+.palette [role=option] {
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-1);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    cursor: pointer
+}
+
+.palette [role=option][aria-selected=true] {
+    background: var(--raised-2);
+    box-shadow: inset var(--ring) 0 0 var(--focus);
+    color: var(--ink-hi)
+}
+
+/* A pílula de espera acima da caixa (App.jsx): o orbe, o que acontece, os segundos e o Cancelar. Quem se move é o
+   orbe; o fio da espera fica de fora. */
+.chat-status {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--sp-3));
+    left: 0;
+    z-index: 6;
+    display: flex;
+    justify-content: center;
+    pointer-events: none
+}
+
+.chat-wait {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    max-width: 100%;
+    min-height: var(--busy-h);
+    padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-3);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-round);
+    background: var(--glass-float);
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    font-size: var(--fs-2);
+    pointer-events: auto
+}
+
+.chat-wait .wait-bar {
+    display: none
+}
+
+/* Chips de sugestão (só com a IA): vidro bem leve em pílula, cinza que clareia sob o ponteiro. No herói ficam
+   centrados embaixo da caixa; com mensagens, alinhados à esquerda. */
 .suggestions {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--sp-2);
-    margin-bottom: var(--sp-3)
+    margin-top: var(--sp-5)
+}
+
+.chat-stage[data-state=conversa] .suggestions {
+    justify-content: flex-start;
+    margin-top: var(--sp-3)
 }
 
 .suggestions button {
     min-height: 2.25rem;
-    padding: var(--sp-1) var(--sp-3);
-    border-radius: var(--r-round);
-    font-weight: 400;
+    padding: var(--sp-1) var(--sp-4);
+    border-color: var(--line-quiet);
+    background: var(--chip);
+    color: var(--ink-2);
+    font-weight: 500;
     text-align: left;
     overflow-wrap: anywhere
 }
 
-.ask-form {
-    display: flex;
-    gap: var(--sp-2)
+.suggestions button:hover:not(:disabled) {
+    border-color: var(--line);
+    background: var(--raised);
+    color: var(--ink)
 }
 
-.ask-form input {
-    flex: 1
+/* Durante a espera os chips ficam desligados como os outros botões (button:disabled), que a regra acima cobria. */
+.suggestions button:disabled {
+    background: none;
+    color: var(--ink-3)
 }
 
 .chat-end {
@@ -1982,13 +2680,22 @@ main::before {
     text-align: center
 }
 
-/* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. */
+/* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. A barra cresce do chão
+   quando o gráfico aparece (só ela, por transform); a do esqueleto fica parada. */
 .chart-bar {
     width: 100%;
     max-width: 3.5rem;
     height: max(var(--bar-min), calc(var(--h) * 7.5rem));
     border-radius: var(--r-1) var(--r-1) 0 0;
-    background: var(--tab-desempenho)
+    background: var(--accent);
+    transform-origin: bottom;
+    animation: bar-grow 500ms var(--ease) 150ms backwards
+}
+
+@keyframes bar-grow {
+    from {
+        scale: 1 0
+    }
 }
 
 .chart-note {
@@ -2114,8 +2821,10 @@ main::before {
     padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
     border: var(--hair) solid var(--line-strong);
     border-radius: var(--r-3);
-    background: var(--raised-2);
+    background: var(--glass-float);
     box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
     font-size: var(--fs-2);
     pointer-events: auto;
     overflow-wrap: anywhere
@@ -2124,29 +2833,33 @@ main::before {
 .toast button {
     min-height: 2.25rem;
     border-color: var(--line-strong);
-    background: var(--paper);
     white-space: nowrap
 }
 
 /* Espera de um pedido à IA longe do lugar da resposta: o que está acontecendo, os segundos, o limite e o Cancelar,
-   com o fio correndo na borda de baixo da pílula. Fica na faixa da barra de cima, no lugar do estado da IA, que
-   esmaece enquanto isso: com a página no topo ela não cobre texto nenhum. Quando a espera está no lugar da resposta
-   (o esqueleto do material, a explicação, a revisão), esta faixa não existe (App.jsx, waitInline). */
+   com o fio correndo na borda de baixo da pílula. Fica presa no alto da janela, no meio da barra de cima, no lugar do
+   atalho "Pergunte ao Cérebro", que sai enquanto isso (o estado da IA esmaece): com a página no topo ela não cobre
+   texto nenhum. Quando a espera está no lugar da resposta (o esqueleto do material, a explicação, a revisão), esta
+   faixa não existe (App.jsx, waitInline). */
 .busy {
     position: fixed;
-    top: calc((var(--top-h) - var(--busy-h)) / 2);
-    right: var(--main-x);
+    top: calc(var(--top-y) + (var(--top-h) - var(--busy-h)) / 2);
+    left: calc(50% + var(--dock-out) / 2);
     z-index: 90;
     display: flex;
     align-items: center;
-    max-width: calc(100% - var(--main-x) * 2);
+    width: max-content;
+    max-width: min(36rem, calc(100% - var(--gutter) * 2));
     min-height: var(--busy-h);
     padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-4);
     overflow: hidden;
     border: var(--hair) solid var(--line-strong);
     border-radius: var(--r-round);
-    background: var(--raised-2);
+    background: var(--glass-float);
     box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    translate: -50% 0;
     font-size: var(--fs-2)
 }
 
@@ -2154,7 +2867,15 @@ main::before {
     opacity: 0
 }
 
-.busy .wait {
+/* Fora da vista e fora do Tab enquanto a faixa está no lugar dele. Se o foco estava nele, vai para o item da página
+   aberta no dock (App.jsx), em vez de cair no body. */
+.app:has(> .busy) .ask-pill {
+    visibility: hidden
+}
+
+/* Dentro da faixa e da pílula de espera do chat (.chat-wait): a mesma linha, com o Cancelar em pílula. */
+.busy .wait,
+.chat-wait .wait {
     position: static;
     flex-wrap: nowrap;
     min-width: 0;
@@ -2168,11 +2889,13 @@ main::before {
     right: var(--sp-4)
 }
 
-.busy .wait-text {
+.busy .wait-text,
+.chat-wait .wait-text {
     color: var(--ink)
 }
 
-.busy .link {
+.busy .link,
+.chat-wait .link {
     min-height: 2.25rem;
     padding: 0 var(--sp-4);
     border-color: var(--line);
@@ -2182,20 +2905,24 @@ main::before {
     text-decoration: none
 }
 
-.busy .link:hover:not(:disabled) {
+.busy .link:hover:not(:disabled),
+.chat-wait .link:hover:not(:disabled) {
     border-color: var(--line-strong);
-    background: var(--paper)
+    background: var(--raised-2)
 }
 
+/* Janela e folha: vidro quase opaco por cima do fundo escurecido. */
 dialog {
     width: min(28rem, calc(100vw - 2rem));
     max-width: none;
     padding: 0;
-    border: var(--hair) solid var(--line-strong);
+    border: var(--hair) solid var(--line);
     border-radius: var(--r-3);
-    background: var(--grain), var(--paper-under);
+    background: var(--shine), var(--glass-float);
     color: var(--ink);
-    box-shadow: var(--shadow)
+    box-shadow: var(--edge), var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur)
 }
 
 /* O fundo escuro esmaece ao abrir (@starting-style) e ao fechar ([data-closing], App.jsx, Modal), junto da janela.
@@ -2260,7 +2987,7 @@ main[data-instant] > .view[data-motion-pop-id] {
     gap: var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 600
+    font-weight: 650
 }
 
 .profile-dialog input,
@@ -2309,7 +3036,10 @@ main[data-instant] > .view[data-motion-pop-id] {
 }
 
 .sheet .profile {
+    width: 100%;
+    min-height: 3.5rem;
     margin-top: var(--sp-2);
+    padding: var(--sp-2);
     border-color: var(--line)
 }
 
@@ -2318,9 +3048,10 @@ main[data-instant] > .view[data-motion-pop-id] {
     display: none
 }
 
-/* Pelo teclado nada se move (anim.js marca <html data-input>): a aba do menu, o fio de progresso, a seta de "Ver
-   resposta", o fundo da janela e o estado da IA sob a faixa de espera mudam na hora. */
-:root[data-input=teclado] .nav-item::after,
+/* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
+   resposta", o fundo da janela, o estado da IA sob a faixa de espera e as barras do gráfico mudam na hora. */
+:root[data-input=teclado] .rail::before,
+:root[data-input=teclado] .rail .nav-item,
 :root[data-input=teclado] .meter > span,
 :root[data-input=teclado] .mistakes summary .icon,
 :root[data-input=teclado] dialog::backdrop,
@@ -2328,12 +3059,18 @@ main[data-instant] > .view[data-motion-pop-id] {
     transition: none
 }
 
-/* Movimento reduzido: sem deslize, sem pressão e sem o fio correndo (fica o trilho parado e os segundos contando);
-   o esqueleto já é parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda pode esmaecer. */
+:root[data-input=teclado] .chart-bar {
+    animation: none
+}
+
+/* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo, sem as barras crescendo e sem o fio
+   correndo (fica o trilho parado e os segundos contando); o esqueleto já é parado e as marcas da caneta já aparecem
+   prontas (marks.jsx). Opacidade ainda pode esmaecer. */
 @media (prefers-reduced-motion: reduce) {
     button,
     .mistakes summary .icon,
-    .nav-item::after,
+    .rail::before,
+    .rail .nav-item,
     .meter > span {
         transition: none
     }
@@ -2342,17 +3079,72 @@ main[data-instant] > .view[data-motion-pop-id] {
         scale: none
     }
 
+    .ask-pill-text,
+    .chart-bar,
+    .moon,
+    .dots span {
+        animation: none
+    }
+
     .wait-bar::after {
         animation: none;
         opacity: 0
     }
 }
 
-/* Alto contraste do sistema: as superfícies somem, e as bordas e o foco ficam com as cores do sistema. */
+/* Contraste alto e cores forçadas: o título do Dúvidas vira texto sólido, e a lua e o brilho do ponteiro saem. */
+@media (prefers-contrast: more), (forced-colors: active) {
+    .chat-title {
+        background: none;
+        -webkit-background-clip: border-box;
+        background-clip: border-box;
+        color: var(--ink-hi)
+    }
+
+    .moon,
+    .pointer-glow {
+        display: none
+    }
+}
+
+/* Alto contraste do sistema: as superfícies somem (a pílula ciano também), e as bordas e o foco ficam com as cores do
+   sistema. */
 @media (forced-colors: active) {
     .nav-item[aria-current=page],
+    .tab-item[aria-current=page],
+    .tab-item[data-current],
     .tabs [role=tab][aria-selected=true] {
         outline: var(--ring) solid CanvasText
+    }
+
+    /* O item aberto com o foco: sem isto o anel ficava no mesmo CanvasText de sempre, só 2 px mais longe. */
+    .nav-item[aria-current=page]:focus-visible {
+        outline-color: Highlight
+    }
+
+    /* O fundo vira Canvas e o gradiente some: as barras do gráfico, o fio de progresso e o sublinhado da questão atual
+       voltam na cor do texto do sistema. */
+    .chart-bar,
+    .meter > span,
+    .dots span {
+        forced-color-adjust: none;
+        background: CanvasText
+    }
+
+    .chat-title {
+        color: CanvasText
+    }
+
+    /* O item marcado da lista de atalhos: sem isto o fundo dele virava Canvas, igual aos outros. */
+    .palette [role=option][aria-selected=true] {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText
+    }
+
+    .marks .pen.current {
+        forced-color-adjust: none;
+        background: linear-gradient(CanvasText, CanvasText) bottom / 100% var(--underline) no-repeat
     }
 
     .pen svg,

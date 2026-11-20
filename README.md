@@ -126,7 +126,7 @@ Cada solicitação considera:
 
 O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero.
 
-O chat abre com uma saudação do Cérebro. Com a IA ativa, acima da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. A demonstração não mostra sugestões.
+O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
 
 ### 6. Caderno de erros
 
@@ -180,6 +180,7 @@ Ao gerar um material novo, o anterior que ainda não tinha sido salvo é guardad
 | Vite | Ambiente de desenvolvimento e geração do frontend |
 | CSS | Estilização e adaptação da interface |
 | Motion | Animações e transições da interface |
+| thinking-orbs | Orbe animado nas esperas da IA |
 | Python | Implementação do backend |
 | FastAPI | Criação das rotas de comunicação |
 | Pydantic | Validação dos dados recebidos e dos materiais gerados |
@@ -234,7 +235,8 @@ a3-chatbot-cerebro/
 │   │   ├── anim.js
 │   │   ├── lib.js
 │   │   ├── styles.css
-│   │   └── mobile.css
+│   │   ├── mobile.css
+│   │   └── components/ui/chat-composer.jsx
 │   ├── tests/
 │   ├── public/
 │   ├── index.html
@@ -273,6 +275,7 @@ a3-chatbot-cerebro/
 | `frontend/src/App.jsx` | Interface React: tela principal e estado do app |
 | `frontend/src/Biblioteca.jsx`, `Desempenho.jsx` e `Perfil.jsx` | Páginas Biblioteca e Desempenho e formulário do perfil, carregados à parte |
 | `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
+| `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
 | `frontend/tests/` | Testes das regras de `lib.js` |

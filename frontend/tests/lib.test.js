@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
-  areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, hello,
+  areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote,
@@ -470,6 +470,35 @@ test('hints: com a chave trocada ou sem sugestões da IA, entram as três fixas'
   assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Direito', tips }), FIXED_HINTS);
   const empty = { ...tips, list: [] };
   assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips: empty }), FIXED_HINTS);
+});
+
+const STARTER_HINTS = ['Me introduza ao assunto', 'O que são hardware e software?', 'Como a internet funciona?'];
+
+test('slashHints: só "/" mostra todas as sugestões, na ordem', () => {
+  assert.deepEqual(slashHints(STARTER_HINTS, '/'), STARTER_HINTS);
+});
+
+test('slashHints: filtra pelo que vem depois da barra, sem ligar para maiúsculas e acentos', () => {
+  assert.deepEqual(slashHints(STARTER_HINTS, '/sao'), ['O que são hardware e software?']);
+  assert.deepEqual(slashHints(STARTER_HINTS, '/INTERNET'), ['Como a internet funciona?']);
+  assert.deepEqual(slashHints(STARTER_HINTS, '/introdu'), ['Me introduza ao assunto']);
+  assert.deepEqual(slashHints(STARTER_HINTS, '/o'), STARTER_HINTS);
+  assert.deepEqual(slashHints(['Explique a fotossíntese'], '/FOTOSSINTESE'), ['Explique a fotossíntese']);
+  // Acento e cedilha digitados depois da barra, o caso de quem escreve em português.
+  assert.deepEqual(slashHints(STARTER_HINTS, '/SÃO'), ['O que são hardware e software?']);
+  assert.deepEqual(slashHints(['Função afim', 'Funil de vendas'], '/funç'), ['Função afim']);
+});
+
+test('slashHints: sem nenhuma sugestão que case, a lista fica vazia', () => {
+  assert.deepEqual(slashHints(STARTER_HINTS, '/xyz'), []);
+});
+
+test('slashHints: texto que não começa com "/" ou que já tem espaço ou quebra de linha não abre a lista', () => {
+  assert.equal(slashHints(STARTER_HINTS, ''), null);
+  assert.equal(slashHints(STARTER_HINTS, 'O que é /etc?'), null);
+  assert.equal(slashHints(STARTER_HINTS, ' /como'), null);
+  assert.equal(slashHints(STARTER_HINTS, '/como a'), null);
+  assert.equal(slashHints(STARTER_HINTS, '/como\n'), null);
 });
 
 test('hello: com nome e sem nome', () => {
