@@ -185,14 +185,18 @@
     --ease-in: cubic-bezier(.55, 0, 1, .45);
     --t-fast: 160ms;
     --t-press: 100ms;
-    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s; o ícone dela escurece depois de 0,12 s, para ficar
-       preto quando ela chega. */
+    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s; o ícone dela escurece em 0,2 s, depois de 0,12 s,
+       para ficar preto quando ela chega. */
     --t-slide: 360ms;
+    --t-ink: 200ms;
     --t-ink-delay: 120ms;
-    /* 0,2 s: a cor do ícone do dock, o fio de progresso e o fundo escuro da janela, que sai em 0,14 s (0,2 s atrás da
-       folha). A janela e a folha saem no mesmo tempo que o fundo (anim.js, MODAL): mudou aqui, mude lá. */
+    /* Só o fundo escuro da janela e da folha: entra em 0,2 s e sai em 0,14 s (0,2 s atrás da folha). Sem movimento
+       reduzido, a janela e a folha saem no mesmo tempo que ele (anim.js, MODAL): mudou aqui, mude lá. Com movimento
+       reduzido, elas somem antes, em 0,1 s (MODAL.calmOut), e levam o fundo no meio do esmaecer. */
     --t-fade: 200ms;
     --t-fade-out: 140ms;
+    /* O fio de progresso (cartões avaliados, questões respondidas) anda em 0,2 s. */
+    --t-meter: 200ms;
     /* As barras do gráfico crescem do chão em 0,5 s, depois de 0,15 s. */
     --t-grow: 500ms;
     --t-grow-delay: 150ms;
@@ -694,7 +698,7 @@ select {
     border: 0;
     border-radius: 50%;
     justify-content: center;
-    transition: background-color var(--t-fast) var(--ease), color var(--t-fade) var(--ease) var(--t-ink-delay),
+    transition: background-color var(--t-fast) var(--ease), color var(--t-ink) var(--ease) var(--t-ink-delay),
         scale var(--t-press) var(--ease)
 }
 
@@ -1072,7 +1076,7 @@ main:focus {
 }
 
 /* Frase de apoio: a regra do caderno de erros, o material de onde veio a questão, o aviso da revisão da IA. pretty:
-   sem ele, a dica do teclado deixava "linha" sozinha na última linha em algumas larguras do celular. */
+   sem ele, a dica do teclado deixava "linha" sozinha na última linha numa janela estreita sem toque (de 432 a 464 px). */
 .hint {
     max-width: var(--measure);
     margin: var(--sp-2) 0;
@@ -2509,7 +2513,7 @@ main:focus {
     background: var(--sec, var(--focus));
     transform-origin: left;
     scale: var(--p) 1;
-    transition: scale var(--t-fade) var(--ease)
+    transition: scale var(--t-meter) var(--ease)
 }
 
 /* A caixa e o que vem com ela: a pílula de espera e a lista de atalhos por cima, a dica, o erro e os chips embaixo. Com
