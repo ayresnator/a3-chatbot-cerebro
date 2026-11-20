@@ -334,10 +334,13 @@ body::before {
     pointer-events: none
 }
 
-/* Fundo em ondas (issue #92; Waves em ui.jsx, shader em waves.js): canvas preso à janela atrás de tudo, só no layout de
-   computador. Enquanto ele roda (data-waves no html), a barra de cima, o dock e o palco ficam com o tom escuro de antes,
-   mas opacos: as ondas aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a
-   #eaf9ff). Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que ninguém vê. */
+/* Fundo em ondas (issue #92; Waves em ui.jsx, shader em waves.js): canvas preso à janela atrás de tudo, só no
+   computador com mouse. data-waves no html entra com o primeiro quadro do shader; até lá, e sem WebGL na GPU, ficam os
+   brilhos de cima. Com ele, a barra de cima, o dock e o palco ficam com o tom escuro de antes, mas opacos: as ondas
+   aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
+   espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
+   no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
+   ninguém vê. */
 .waves {
     position: fixed;
     inset: 0;
@@ -362,7 +365,11 @@ body::before {
     display: none
 }
 
-:root[data-waves] :is(.topbar, .rail) {
+:root[data-waves] .busy {
+    --glass-float: #0b0b0b
+}
+
+:root[data-waves] :is(.topbar, .rail, .busy) {
     -webkit-backdrop-filter: none;
     backdrop-filter: none
 }
@@ -1316,7 +1323,8 @@ main:focus {
 }
 
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
-   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. */
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da janela do perfil (App.jsx)
+   é um chip de ligar e desligar: ligado, fica marcado e ganha o ✓. */
 .chip {
     min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
@@ -1332,7 +1340,9 @@ main:focus {
 }
 
 .chip[aria-checked=true],
-.chip[aria-checked=true]:hover {
+.chip[aria-checked=true]:hover,
+.chip[aria-pressed=true],
+.chip[aria-pressed=true]:hover {
     border-color: var(--accent);
     background: var(--accent-off);
     color: var(--ink-hi)
@@ -3358,6 +3368,10 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .profile-dialog .primary {
     margin-top: var(--sp-2)
+}
+
+.profile-dialog .chip {
+    align-self: flex-start
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o

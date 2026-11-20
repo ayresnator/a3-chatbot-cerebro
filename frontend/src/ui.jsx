@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { m } from 'motion/react';
 import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
@@ -259,40 +259,42 @@ export function PerfilSkeleton() {
   );
 }
 
-// Fundo em ondas (issue #92): só no layout de computador, onde o fundo aparece em volta do palco. No celular o texto fica
-// direto sobre o fundo e as ondas claras derrubariam o contraste; em cores forçadas o fundo é do sistema. O shader vem
-// num pedaço à parte do JS (waves.js), baixado só quando entra. Enquanto ele roda, data-waves no html deixa o vidro da
-// barra de cima, do dock e do palco opaco (styles.css): as ondas ficam só em volta deles.
-export function Waves() {
+// Onde o fundo em ondas roda: a tela larga do computador, com mouse. Na tela estreita o texto fica direto sobre o fundo,
+// e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
+// forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
+const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)']
+  .map(query => window.matchMedia(query));
+function watchWavesMedia(change) {
+  WAVES_MEDIA.forEach(list => list.addEventListener('change', change));
+  return () => WAVES_MEDIA.forEach(list => list.removeEventListener('change', change));
+}
+export function useWavesAllowed() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches);
+}
+
+// Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
+// desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
+// quando entra. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco (styles.css), e as ondas
+// ficam só em volta deles: ele entra com o primeiro quadro e sai quando o contexto do WebGL se perde. Numa troca de
+// animate ele fica: o canvas guarda o último quadro até o do novo começo sair.
+export function Waves({ on, animate }) {
   const canvas = useRef(null);
   useEffect(() => {
-    const root = document.documentElement;
-    const wide = window.matchMedia('(min-width: 851px)');
-    const forced = window.matchMedia('(forced-colors: active)');
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const show = active => document.documentElement.toggleAttribute('data-waves', active);
+    if (!on) {
+      show(false);
+      return;
+    }
     let stop = null;
-    let run = 0;
-    const sync = () => {
-      const mine = ++run;
-      stop?.();
-      stop = null;
-      root.removeAttribute('data-waves');
-      if (!wide.matches || forced.matches) return;
-      import('./waves.js').then(({ startWaves }) => {
-        if (mine !== run || !canvas.current) return;
-        stop = startWaves(canvas.current, { animate: !still.matches });
-        if (stop) root.setAttribute('data-waves', '');
-      }, () => {});
-    };
-    sync();
-    const queries = [wide, forced, still];
-    queries.forEach(q => q.addEventListener('change', sync));
+    let live = true;
+    import('./waves.js').then(({ startWaves }) => {
+      if (live) stop = startWaves(canvas.current, { animate, onActive: show });
+    }, () => show(false));
     return () => {
-      run++;
-      queries.forEach(q => q.removeEventListener('change', sync));
+      live = false;
       stop?.();
-      root.removeAttribute('data-waves');
     };
-  }, []);
+  }, [on, animate]);
+  useEffect(() => () => document.documentElement.removeAttribute('data-waves'), []);
   return <canvas ref={canvas} className="waves" aria-hidden="true" />;
 }

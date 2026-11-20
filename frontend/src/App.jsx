@@ -14,10 +14,10 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Waves,
+  PerfilSkeleton, Waves, useWavesAllowed,
 } from './ui.jsx';
 import {
-  AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
+  AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, libraryCount, hints, hello, healthLabel, errorText, dictate, dictationError,
@@ -148,6 +148,10 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
+  // (WCAG 2.2.2) e fica gravado no navegador; sem nada gravado, elas andam.
+  const wavesAllowed = useWavesAllowed();
+  const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
@@ -1124,7 +1128,7 @@ function App() {
       >
         Pular para o conteúdo
       </a>
-      <Waves />
+      <Waves on={wavesAllowed} animate={fundo && !calm} />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
@@ -2152,6 +2156,22 @@ function App() {
               <Suspense fallback={<PerfilSkeleton />}>
                 <Perfil name={name} setName={setName} area={area} onSave={saveProfile} />
               </Suspense>
+              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem. Vale na
+                  hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
+              {wavesAllowed && !calm && (
+                <button
+                  type="button"
+                  className="chip"
+                  aria-pressed={fundo}
+                  onClick={() => {
+                    setFundo(!fundo);
+                    persist('fundo', !fundo);
+                  }}
+                >
+                  {fundo && <Icon name="check" />}
+                  Fundo animado
+                </button>
+              )}
             </div>
           </Modal>
         )}
