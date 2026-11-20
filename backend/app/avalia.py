@@ -1,5 +1,6 @@
 """Rodada de avaliação da IA com casos fixos. Sem --rodar só mostra o plano; com --rodar chama a IA e consome cota."""
 import argparse
+import asyncio
 import json
 import math
 import re
@@ -327,7 +328,7 @@ def main(argv=None, folder=PROJECT_DIR / "docs"):
     except KeyboardInterrupt:
         # Ctrl+C: o que já rodou gastou cota e segue para a tabela e o arquivo; o resto fica marcado como não rodado.
         results += [{**case, "output": None, "error": "INTERRUPTED", "calls": 0} for case in cases[len(results):]]
-    numbers, today, model = measures(results), date.today(), health()["model_in_use"]
+    numbers, today, model = measures(results), date.today(), asyncio.run(health())["model_in_use"]
     print(f"\n## Rodada de avaliação da IA ({today:%d/%m/%Y})")
     print(f"Modelo: {model}. Comando: python -m app.avalia --rodar.")
     print(table(numbers))
