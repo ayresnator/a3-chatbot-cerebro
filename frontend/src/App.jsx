@@ -9,7 +9,7 @@ import { Pen } from './marks.jsx';
 import { ChatComposer } from './components/ui/chat-composer.jsx';
 import { PromptComposer } from './components/ui/prompt-composer.jsx';
 import {
-  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT,
+  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT, MODAL,
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
@@ -2239,15 +2239,15 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     dialog.showModal();
     if (!byKeyboard()) {
       if (reduced()) {
-        animate(dialog, { opacity: [0, 1] }, { duration: 0.15 });
+        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn });
       } else if (sheet) {
         // A curva da folha do iOS: sai rápido da barra e assenta devagar.
-        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: 0.3, ease: [0.32, 0.72, 0, 1] });
+        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: MODAL.sheetEase });
       } else {
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();
         if (o?.width) dialog.style.transformOrigin = (o.left + o.width / 2 - d.left) + 'px ' + (o.top + o.height / 2 - d.top) + 'px';
-        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: 0.24, ease: EASE_OUT })
+        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: MODAL.in, ease: EASE_OUT })
           .then(() => (dialog.style.filter = ''));
       }
     }
@@ -2266,7 +2266,7 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
       // Reaberta no meio da saída: volta ao normal.
       if ('closing' in dialog.dataset) {
         delete dialog.dataset.closing;
-        animate(dialog, { opacity: 1, transform: 'none' }, { duration: 0.12, ease: EASE_OUT });
+        animate(dialog, { opacity: 1, transform: 'none' }, { duration: MODAL.settle, ease: EASE_OUT });
       }
       return;
     }
@@ -2277,7 +2277,8 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     }
     dialog.dataset.closing = '';
     const exit = reduced() ? { opacity: 0 } : sheet ? { transform: 'translateY(100%)' } : { opacity: 0, transform: 'scale(0.98)' };
-    animate(dialog, exit, { duration: reduced() ? 0.1 : sheet ? 0.2 : 0.14, ease: EASE_IN }).then(safeToRemove);
+    animate(dialog, exit, { duration: reduced() ? MODAL.calmOut : sheet ? MODAL.sheetOut : MODAL.out, ease: EASE_IN })
+      .then(safeToRemove);
   }, [present]);
   return (
     <dialog

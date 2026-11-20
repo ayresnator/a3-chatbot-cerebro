@@ -39,7 +39,7 @@
         right: var(--sp-2);
         bottom: calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
         left: var(--sp-2);
-        z-index: 30;
+        z-index: var(--z-tabbar);
         display: grid;
         grid-auto-columns: minmax(max-content, 1fr);
         grid-auto-flow: column;
@@ -543,7 +543,7 @@
 
     .option .pen {
         flex-basis: 100%;
-        padding-left: calc(1.75rem + var(--sp-3))
+        padding-left: calc(var(--letter) + var(--sp-3))
     }
 
     .feedback {
@@ -633,7 +633,7 @@
     }
 
     .tab-item {
-        min-width: 2.5rem;
+        min-width: var(--control-h-tool);
         padding: 0 var(--sp-0);
         font-size: var(--fs-0)
     }
