@@ -24,7 +24,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 1. Diga em uma frase o que é o Cérebro: transforma um texto em resumo, flashcards e quiz, e mostra onde o aluno erra.
 2. Na página Estudar, escolha a área e o nível e clique em "Usar um exemplo". A IA escreve um texto curto sobre um tema sorteado da área, e o aviso no pé da tela diz o tema. Se ele disser que a IA não respondeu, entrou um exemplo pronto da área: siga com ele. Mostre o aviso embaixo do editor: o texto vai para o Google Gemini.
 3. Clique em "Resumir".
-4. No resumo, mostre um tópico com "No seu texto: ...". Se algum tópico ficou sem trecho, ele traz a etiqueta "Explicação da IA: confira"; ela pode não aparecer, porque na rodada de 17/11 os 64 tópicos vieram com trecho. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
+4. No resumo, mostre um tópico com o trecho que o sustenta. Como o texto veio da IA, o trecho aparece como "No exemplo escrito pela IA: ...", com a etiqueta "Explicação da IA: confira", e o aviso sob o título diz que o material foi feito de um exemplo escrito pela IA: a IA citando o próprio texto não confere nada. Com o exemplo pronto, o trecho aparece como "No texto de exemplo: ...", e com um texto do aluno, como "No seu texto: ..."; nos dois casos, só o tópico sem trecho leva a etiqueta. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
 
@@ -62,7 +62,7 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "O serviço de IA está temporariamente indisponível" (`AI_PROVIDER_UNAVAILABLE`) | É erro do lado do Gemini. Tente de novo uma vez. Se repetir, abra um material importado na Biblioteca. |
 | `AI_QUOTA_EXCEEDED` ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "Backend desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat, os botões "Não entendi, me explique" e "Pedir revisão da IA" e o trecho "No seu texto". Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
@@ -71,7 +71,7 @@ Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICI
 
 **Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
-**Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, o tópico que fica sem trecho ao lado de outros com trecho ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
+**Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 
 **E se o aluno colar "ignore as instruções" no texto?** O texto do aluno vai separado das instruções, como dado. O formato da resposta é garantido por código. Se o modelo obedece ou não à ordem escondida, a rodada de avaliação mede com uma palavra-canário. Na rodada de 17/11 ele ignorou a ordem no chat e em uma geração, e obedeceu em outra: os 6 flashcards vieram com a palavra como resposta.
 
