@@ -157,6 +157,14 @@ export function askKey(e) {
     !e.isComposing && e.keyCode !== 229;
 }
 
+// Um bloco de height px cabe na janela de viewport px acima da reserva da raiz (o scroll-padding-bottom calculado: no
+// celular, a barra de baixo e o "Próxima questão" preso; no computador, "auto", que não reserva nada)? strip é a faixa
+// presa que fica dentro do próprio bloco: ela sai da reserva, senão contaria duas vezes. No computador a faixa não é
+// presa, e a reserva continua 0.
+export function fitsAbove(height, viewport, reserve, strip = 0) {
+  return height <= viewport - Math.max(0, (parseFloat(reserve) || 0) - strip);
+}
+
 export function read(k, d) {
   try {
     return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d;
@@ -195,6 +203,40 @@ export function sameMaterial(a, b) {
   return content(a) === content(b);
 }
 
+// Aviso fixo onde há texto escrito pela IA.
+export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu material.';
+
+// O trecho do tópico está no texto? Sem maiúsculas, sem acentos e com os espaços em sequência reduzidos a um, como o
+// backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend os tira do texto antes de
+// conferir (models.py, visible), e o exemplo guardado na tela pode tê-los.
+export function inText(source, text) {
+  const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
+  return !!plain(source) && plain(text).includes(plain(source));
+}
+
+// O trecho de um exemplo do "Usar um exemplo" não é do aluno: o tópico com trecho no texto que a IA escreveu (ai) leva
+// a marca ia, e o com trecho no exemplo pronto (ready), a marca pronto. O App passa o último exemplo que pôs no editor.
+export function markExample(summary, ai, ready) {
+  return summary.map(s =>
+    inText(s.source, ai) ? { ...s, ia: true } : inText(s.source, ready) ? { ...s, pronto: true } : s);
+}
+
+// O rótulo do trecho diz de que texto ele saiu.
+export function sourceLabel(s) {
+  const from = s.ia ? 'No exemplo escrito pela IA' : s.pronto ? 'No texto de exemplo' : 'No seu texto';
+  return from + ': "' + s.source.trim() + '"';
+}
+
+// O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), de um
+// exemplo pronto (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um
+// tema, ou material de antes dos trechos).
+export function originNote(summary) {
+  if (summary.some(s => s.ia)) return 'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.';
+  if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
+  if (summary.some(s => s.source?.trim())) return AI_NOTE;
+  return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+}
+
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
 export function validEvent(e) {
   return !!e && isText(e.kind) && e.kind !== '' && typeof e.ok === 'boolean' && isDate(e.date);
@@ -226,6 +268,10 @@ export function readDraft() {
   const texts = list => Array.isArray(list) && list.every(isText);
   return {
     input: isText(d.input) && d.input.length <= MAX_INPUT ? d.input : '',
+    // O último exemplo que a IA escreveu e pôs no editor: o trecho que sai dele não é do aluno (App, aiExample).
+    exemplo: isText(d.exemplo) && d.exemplo.length <= MAX_INPUT ? d.exemplo : '',
+    // O mesmo para o último exemplo pronto (App, readyExample).
+    exemploPronto: isText(d.exemploPronto) && d.exemploPronto.length <= MAX_INPUT ? d.exemploPronto : '',
     area: AREAS.includes(d.area) ? d.area : '',
     level: LEVELS.includes(d.level) ? d.level : '',
     result,
@@ -281,7 +327,8 @@ export function demo(text) {
   const pieces = sentences.slice(0, 8);
   return {
     title: clause(sentences[0]),
-    summary: pieces.map(s => ({ concept: clause(s), text: s })),
+    // O trecho de cada tópico é a própria frase: a tela diz se ela saiu do texto do aluno ou do exemplo pronto.
+    summary: pieces.map(s => ({ concept: clause(s), text: s, source: s })),
     flashcards: pieces.map((s, i) => ({
       question: 'Complete o trecho ' + (i + 1) + ': ' + s.split(' ').slice(0, 4).join(' ') + '…',
       answer: s,
@@ -298,6 +345,8 @@ export function demo(text) {
       explanation: 'Trecho do material: ' + s,
       steps: [],
     })),
+    // Material sem nada escrito pela IA: é o único que abre sem o aviso de conteúdo gerado por IA (App).
+    semIA: true,
   };
 }
 
@@ -459,33 +508,69 @@ export function hello({ user, area, level, input, api }) {
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
 }
 
+// Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
+const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+
 // Estado da IA no cabeçalho, a partir da resposta de /api/health: null enquanto ela não chegou, false se a consulta
-// falhou ou não veio JSON. tone é a classe do ponto colorido.
+// falhou ou não veio JSON. tone é a classe do ponto colorido, e note, a dica do selo. Com a IA ativa, model e count são
+// partes do text: na barra estreita o modelo sai da vista (styles.css, @container), e o text, chave da troca animada,
+// fica inteiro.
 export function healthLabel(health) {
   if (health == null) return { text: 'Conferindo a IA…', tone: '' };
-  if (!health) return { text: 'Backend desligado', tone: 'off' };
+  if (!health) return { text: 'Cérebro desligado', tone: 'off' };
   if (!health.ai_configured) return { text: 'IA não configurada', tone: 'warn' };
+  if (health.quota_exhausted) return { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE };
   const calls = health.calls_today;
-  return {
-    text: [
-      'IA ativa',
-      health.model_in_use || health.model,
-      typeof calls === 'number' && calls + (calls === 1 ? ' chamada hoje' : ' chamadas hoje'),
-    ].filter(Boolean).join(' · '),
-    tone: 'ok',
-  };
+  const model = health.model_in_use || health.model || '';
+  const count = typeof calls === 'number' ? calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador' : '';
+  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone: 'ok', model, count, note: QUOTA_NOTE };
 }
 
-// Erro do backend em texto para o aluno: a frase em português e, entre colchetes, o código e o estado do provedor.
-// detail em lista é o formato antigo (erros de validação em inglês, um por campo): vira uma frase só.
+// Frase de cada erro para o aluno: o que houve e o que ele consegue fazer. As frases do backend falam de .env, proxy e
+// Python para quem instala (python -m app.check mostra as mesmas) e ficam nos detalhes técnicos. Código fora daqui já
+// vem do backend com uma frase simples.
+const SETUP = 'A IA recusou o pedido por um problema de configuração. Mostre os detalhes técnicos a quem instalou o Cérebro.';
+const SHAPE = 'A IA respondeu fora do formato esperado. Tente de novo.';
+export const ERRORS = {
+  AI_RATE_LIMITED: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
+  AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+  AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
+    'Enquanto isso, use a demonstração.',
+  AI_NETWORK_ERROR: 'O Cérebro não conseguiu falar com a IA. Confira a internet deste computador e tente de novo.',
+  AI_PROVIDER_ERROR: 'A IA não atendeu o pedido. Tente de novo; se repetir, mostre os detalhes técnicos a quem ' +
+    'instalou o Cérebro.',
+  AI_AUTH_ERROR: SETUP,
+  AI_MODEL_NOT_FOUND: SETUP,
+  AI_REQUEST_REJECTED: SETUP,
+  AI_NO_COMPATIBLE_MODEL: SETUP,
+  AI_INVALID_RESPONSE: SHAPE,
+  AI_INVALID_JSON: SHAPE,
+};
+
+// Falhas que a própria tela percebe, sem resposta do backend (App.jsx, requestAPI). A resposta sem JSON costuma ser o
+// proxy do Vite respondendo no lugar do Python desligado.
+export const FAILS = {
+  off: 'O Cérebro não está ligado neste computador. Abra o iniciar.ps1 de novo e tente outra vez.',
+  noJson: 'O Cérebro não respondeu como esperado. Abra o iniciar.ps1 de novo e tente outra vez.',
+  timeout: 'A IA demorou demais para responder. Tente de novo.',
+};
+
+// Erro do backend para a tela: message é a frase para o aluno; tech, os detalhes técnicos (o código, o estado do
+// provedor e a frase original do backend, ou o HTTP sem código); wait, os segundos que o backend mandou esperar no
+// limite por minuto (retry_after), ou 0. detail em lista é o formato antigo (erros de validação em inglês, um por
+// campo): vira uma frase só.
 export function errorText(detail, status) {
-  const message = typeof detail === 'string' ? detail
+  const said = typeof detail === 'string' ? detail
     : Array.isArray(detail) ? 'Pedido recusado: confira o texto e tente de novo.'
     : detail?.message;
   const code = detail?.code;
-  const provider = detail?.provider_status;
-  return (message || 'Falha no backend (HTTP ' + status + ').') +
-    (code ? ' [' + code + (provider ? ' · ' + provider : '') + ']' : '');
+  const message = ERRORS[code] || said || 'O Cérebro não conseguiu atender o pedido. Tente de novo.';
+  return {
+    message,
+    tech: [code || 'HTTP ' + status, detail?.provider_status, said !== message && said].filter(Boolean).join(' · '),
+    wait: detail?.retry_after > 0 ? Math.ceil(detail.retry_after) : 0,
+  };
 }
 
 // Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
