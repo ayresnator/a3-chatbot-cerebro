@@ -204,8 +204,8 @@ function App() {
   const recognition = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
-  // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto): o trecho do material
-  // que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
+  // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
+  // trecho do material que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
   const aiExample = useRef(DRAFT.exemplo);
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
@@ -1198,8 +1198,15 @@ function App() {
                           disabled={!input}
                           onClick={() => {
                             const before = input;
+                            // O exemplo da IA sai junto com o texto: o que o aluno escrever depois é dele. O Desfazer
+                            // devolve os dois.
+                            const example = aiExample.current;
+                            aiExample.current = '';
                             setInput('');
-                            offerUndo('texto', 'Texto apagado', () => setInput(before));
+                            offerUndo('texto', 'Texto apagado', () => {
+                              aiExample.current = example;
+                              setInput(before);
+                            });
                           }}
                         >
                           <Icon name="limpar" />
