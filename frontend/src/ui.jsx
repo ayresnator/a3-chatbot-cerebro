@@ -1,11 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { m } from 'motion/react';
 import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
 
 // Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, o
-// "Desfazer", a espera de um pedido à IA e os esqueletos.
+// "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
+
+// Campo de várias linhas (field é o ref dele) que cresce com o texto entre o mínimo e o máximo do CSS e volta ao mínimo
+// quando esvazia: a caixa do Dúvidas e o editor do Estudar. Medir encolhe o campo por um instante: a rolagem da página
+// volta ao lugar em vez de pular.
+export function useFit(field, value) {
+  function fit() {
+    const el = field.current;
+    const top = window.scrollY;
+    el.style.height = '0px';
+    el.style.height = el.scrollHeight + 'px';
+    if (window.scrollY !== top) window.scrollTo(0, top);
+  }
+  useLayoutEffect(fit, [value]);
+  useEffect(() => {
+    // A primeira medida pode sair antes de a fonte da página chegar (o rascunho volta logo na abertura): com a fonte,
+    // as linhas mudam de largura, e o campo se mede de novo.
+    document.fonts.ready.then(() => field.current && fit());
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+}
 
 // Contador da faixa de progresso, em frase ("3 dias de constância"). No Estudar e no Desempenho cada contador é um
 // cartão de número, e o primeiro fica em destaque (styles.css, .stats).

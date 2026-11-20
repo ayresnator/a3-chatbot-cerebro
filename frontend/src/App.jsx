@@ -7,6 +7,7 @@ import {
 import { BrandMark, Icon } from './icons.jsx';
 import { Pen } from './marks.jsx';
 import { ChatComposer } from './components/ui/chat-composer.jsx';
+import { PromptComposer } from './components/ui/prompt-composer.jsx';
 import {
   ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT,
   byKeyboard, appear, reduced, enter, flipList, leave,
@@ -1128,114 +1129,78 @@ function App() {
               {page === 'Estudar' && (
                 <>
                   <m.div variants={rise}>
-                    <div className="editor">
-                      <textarea
-                        aria-label="Conteúdo ou pergunta para o Cérebro"
-                        aria-describedby="composer-keyboard-hint"
-                        maxLength={20000}
-                        value={input}
-                        onChange={e => {
-                          setInput(e.target.value);
-                          if (undo?.kind === 'texto') setUndo(null);
-                        }}
-                        onKeyDown={e => {
-                          if (
-                            !TOUCH && e.key === 'Enter' && !e.shiftKey &&
-                            !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229
-                          ) {
-                            e.preventDefault();
-                            if (!waiting && !e.repeat && input.trim()) {
-                              setPage('Dúvidas');
-                              ask(input);
-                            }
-                          }
-                        }}
-                        placeholder={'Cole seu texto, anotações ou digite uma matéria…\n\nPode ser aquele capítulo difícil, um conceito novo ou o conteúdo da próxima prova.'}
-                      />
-                      <div className="editor-tools">
-                        {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
-                        <button type="button" className="tool" onClick={dictation}>
-                          {/* Enquanto ouve, o orbe da IA toma o lugar do microfone, nos mesmos 20 px; o nome do botão já
-                              diz "Parar ditado". */}
-                          {listening
-                            ? <Orb state="listening" />
-                            : <Icon name="falar" />}
-                          <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
-                          <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
+                    {/* A caixa do editor (prompt-composer.jsx): o campo, a área em chips, o nível no menu e, na última
+                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Enter). */}
+                    <PromptComposer
+                      value={input}
+                      onChange={text => {
+                        setInput(text);
+                        if (undo?.kind === 'texto') setUndo(null);
+                      }}
+                      onSend={() => {
+                        setPage('Dúvidas');
+                        ask(input);
+                      }}
+                      area={area}
+                      onArea={setArea}
+                      level={level}
+                      onLevel={setLevel}
+                      waiting={waiting}
+                      touch={TOUCH}
+                    >
+                      {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
+                      <button type="button" className="tool" onClick={dictation}>
+                        {/* Enquanto ouve, o orbe da IA toma o lugar do microfone, nos mesmos 20 px; o nome do botão já
+                            diz "Parar ditado". */}
+                        {listening
+                          ? <Orb state="listening" />
+                          : <Icon name="falar" />}
+                        <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
+                        <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="usar-exemplo"
+                        className="tool"
+                        disabled={waiting}
+                        onClick={addExample}
+                      >
+                        <Icon name="exemplo" />
+                        <span className="full">Usar um exemplo</span>
+                        {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
+                        {API_BASE && health?.ai_configured !== false && <small className="full">1 chamada de IA</small>}
+                        <span className="short" aria-hidden="true">Exemplo</span>
+                      </button>
+                      {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
+                          voltar a escrever: o foco fica no botão e a chance de voltar não some com o aviso. */}
+                      {undo?.kind === 'texto' ? (
+                        <button type="button" className="tool" onClick={() => undoNow(undo)}>
+                          <Icon name="desfazer" />
+                          <span>Desfazer</span>
                         </button>
+                      ) : (
                         <button
                           type="button"
-                          id="usar-exemplo"
                           className="tool"
-                          disabled={waiting}
-                          onClick={addExample}
-                        >
-                          <Icon name="exemplo" />
-                          <span className="full">Usar um exemplo</span>
-                          {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
-                          {API_BASE && health?.ai_configured !== false && <small className="full">1 chamada de IA</small>}
-                          <span className="short" aria-hidden="true">Exemplo</span>
-                        </button>
-                        {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
-                            voltar a escrever: o foco fica no botão e a chance de voltar não some com o aviso. */}
-                        {undo?.kind === 'texto' ? (
-                          <button type="button" className="tool" onClick={() => undoNow(undo)}>
-                            <Icon name="desfazer" />
-                            <span>Desfazer</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="tool"
-                            disabled={!input}
-                            onClick={() => {
-                              const before = input;
-                              setInput('');
-                              offerUndo('texto', 'Texto apagado', () => setInput(before));
-                            }}
-                          >
-                            <Icon name="limpar" />
-                            <span>Limpar</span>
-                          </button>
-                        )}
-                        <span className="counter">{input.length.toLocaleString('pt-BR')} / 20.000</span>
-                        <button
-                          type="button"
-                          className="ask"
-                          disabled={waiting || !input.trim()}
+                          disabled={!input}
                           onClick={() => {
-                            setPage('Dúvidas');
-                            ask(input);
+                            const before = input;
+                            setInput('');
+                            offerUndo('texto', 'Texto apagado', () => setInput(before));
                           }}
                         >
-                          {/* Em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome inteiro continua no botão. */}
-                          <span className="full">Perguntar ao Cérebro</span>
-                          <span className="short" aria-hidden="true">Perguntar</span>
-                          <Icon name="seta" />
+                          <Icon name="limpar" />
+                          <span>Limpar</span>
                         </button>
-                      </div>
-                    </div>
+                      )}
+                    </PromptComposer>
                     <p id="composer-keyboard-hint" className="hint">
                       {TOUCH
                         ? 'Use o botão para perguntar ao Cérebro'
-                        : 'Enter para perguntar ao Cérebro · Shift+Enter para nova linha'}
+                        : <><kbd>Enter</kbd> para perguntar ao Cérebro · <kbd>Shift</kbd> + <kbd>Enter</kbd> para nova linha</>}
                     </p>
                   </m.div>
                   <m.div variants={rise}>
-                    <div className="selectors">
-                      <label>
-                        Área de conhecimento
-                        <select value={area} onChange={e => setArea(e.target.value)}>
-                          {AREAS.map(a => <option key={a}>{a}</option>)}
-                        </select>
-                      </label>
-                      <label>
-                        Nível de aprendizado
-                        <select value={level} onChange={e => setLevel(e.target.value)}>
-                          {LEVELS.map(a => <option key={a}>{a}</option>)}
-                        </select>
-                      </label>
-                    </div>
                     <p className="note">
                       <Icon name={API_BASE ? 'privacidade' : 'info'} />
                       {API_BASE

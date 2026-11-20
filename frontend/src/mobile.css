@@ -187,6 +187,12 @@
         width: var(--control-h)
     }
 
+    /* Estudar no toque: os chips da área e o botão do nível também com 44 px. */
+    .chip,
+    .level-button {
+        min-height: var(--control-h)
+    }
+
     .palette [role=option] {
         display: flex;
         align-items: center;
@@ -204,13 +210,16 @@
         visibility: hidden
     }
 
-    /* O que rola até a vista para acima da barra de baixo. */
+    /* O que rola até a vista para acima da barra de baixo (o menu do nível também, quando abre numa janela baixa, e cada
+       item dele que recebe o foco). */
     .why,
     .error,
     .feedback,
     .chat-end,
     .undo-row,
-    .quiz-question {
+    .quiz-question,
+    .level-menu,
+    .level-menu button {
         scroll-margin-bottom: calc(var(--tabbar-h) + var(--sp-4))
     }
 
@@ -303,10 +312,52 @@
         padding: var(--sp-4)
     }
 
+    /* O campo do editor vai de 3 a 8 linhas, e a frase de exemplo ocupa até três. */
     .editor textarea {
         --pad: var(--sp-3);
-        min-height: calc(var(--rule) * 5 + var(--pad) * 2);
-        padding: var(--pad) var(--sp-4)
+        max-height: calc(var(--rule) * 8 + var(--pad) + var(--sp-2));
+        padding-inline: var(--sp-4)
+    }
+
+    .typed {
+        top: var(--sp-3);
+        right: var(--sp-4);
+        left: var(--sp-4);
+        -webkit-line-clamp: 3;
+        line-clamp: 3
+    }
+
+    /* A área e o nível numa linha só. Os chips rolam de lado (a página não rola) e o marcado fica à vista
+       (prompt-composer.jsx, Chips); a ponta direita esmaece, para mostrar que há mais, e o respiro do mesmo tamanho
+       deixa o último chip sair de baixo dela. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria. O menu
+       do nível abre na largura da caixa. */
+    .editor-bar {
+        position: relative;
+        align-items: center;
+        padding: 0 var(--sp-2) var(--sp-1) var(--sp-4)
+    }
+
+    .chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin: calc(-1 * var(--sp-1)) 0 calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1));
+        padding: var(--sp-1) var(--sp-5) var(--sp-1) var(--sp-1);
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--sp-5)), transparent);
+        mask-image: linear-gradient(to right, #000 calc(100% - var(--sp-5)), transparent)
+    }
+
+    .chip {
+        flex: none
+    }
+
+    .level {
+        position: static
+    }
+
+    .level-menu {
+        right: var(--sp-2);
+        left: var(--sp-2)
     }
 
     .editor-tools {
@@ -393,14 +444,18 @@
         white-space: nowrap
     }
 
-    /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo. */
+    /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo, na largura da caixa e com o
+       botão primeiro. */
+    .editor-send {
+        flex: 1 1 100%
+    }
+
     .ask {
         flex: 1;
-        order: 1
+        order: -1
     }
 
     .counter {
-        order: 2;
         margin-left: var(--sp-2)
     }
 
@@ -408,13 +463,8 @@
         margin: var(--sp-2) 0
     }
 
-    .selectors {
-        gap: var(--sp-3);
-        margin: var(--sp-3) 0
-    }
-
     .note {
-        margin-bottom: var(--sp-3);
+        margin: var(--sp-3) 0;
         font-size: var(--fs-1)
     }
 
@@ -557,11 +607,6 @@
         font-size: var(--fs-0)
     }
 
-    /* Seis linhas: o texto de exemplo do campo ocupa seis aqui, e a última ficava cortada pela borda. */
-    .editor textarea {
-        min-height: calc(var(--rule) * 6 + var(--pad) * 2)
-    }
-
     /* As três ferramentas do editor cabem numa linha (com "Desfazer" também): em 320 px "Limpar" descia para a linha
        de "Perguntar" e empurrava o contador para uma terceira linha. */
     .tool {
@@ -582,6 +627,20 @@
 
     .ask .short {
         display: inline
+    }
+
+    /* O botão do nível mostra só o nível ("Nível:" continua no nome dele): sobra lugar para um chip e meio da área. */
+    .level-button {
+        padding-left: var(--sp-2)
+    }
+
+    .level-word {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
     }
 
     /* Dúvidas: aqui a faixa da caixa quebra em duas linhas, e o herói com os chips não cabia acima da barra de baixo.
@@ -616,13 +675,9 @@
     }
 }
 
-/* Em 320 px as duas listas lado a lado não cabem: uma por linha. Na barra de cima fica só o logo da marca, para o
-   estado da IA caber inteiro; o nome continua no link, fora da vista. */
+/* Em 320 px fica só o logo da marca na barra de cima, para o estado da IA caber inteiro; o nome continua no link, fora
+   da vista. */
 @media (max-width: 359px) {
-    .selectors {
-        grid-template-columns: minmax(0, 1fr)
-    }
-
     .brand-name {
         position: absolute;
         width: 1px;

@@ -42,6 +42,8 @@
     --shine: linear-gradient(155deg, rgb(255 255 255 / .04), transparent 19% 77%, rgb(255 255 255 / .02));
     --edge: inset 1px 1px 1px rgb(255 255 255 / .06), inset -1px -1px 1px rgb(0 0 0 / .3);
     --stage-shadow: 0 22px 72px rgb(0 0 0 / .55);
+    /* O brilho ciano que segue o ponteiro no cartão do editor do Estudar (.editor). */
+    --sheen: rgb(147 241 247 / .06);
 
     /* Linhas. --line-strong é a borda dos campos: 3:1 ou mais sobre o vidro, também no ponto mais claro do fundo. */
     --line: rgb(255 255 255 / .1);
@@ -103,7 +105,7 @@
     --rule: 1.75rem;
     /* Medida de leitura: 33em dão de 65 a 75 caracteres por linha (medido no resumo). Em ch passava de 90. */
     --measure: 33em;
-    /* Largura da frase de abertura (.lead, 33em a 16 px): o aviso logo abaixo dos seletores (.note), em letra menor,
+    /* Largura da frase de abertura (.lead, 33em a 16 px): o aviso abaixo da caixa do editor (.note), em letra menor,
        termina na mesma margem. Com a medida dele, 33em a 14 px, ele quebrava em uns 410 px numa coluna de 1024. */
     --lead-w: 33rem;
 
@@ -225,7 +227,8 @@
         --palette: #050505;
         --chat-veil: #050505;
         --blur: none;
-        --shine: none
+        --shine: none;
+        --sheen: transparent
     }
 }
 
@@ -1081,12 +1084,32 @@ main:focus {
 
 /* ---------- Estudar ---------- */
 
-/* O editor é um campo grande, de fundo interno translúcido: a borda e o anel de foco ficam no campo inteiro (texto e
-   ferramentas). --pad é o respiro de cima do texto. */
+/* O editor é o Prompt Composer do 21st.dev no tema do app (#61, prompt-composer.jsx): um cartão de vidro com o campo,
+   a área em chips, o nível num menu e, na última linha, as ferramentas e o "Perguntar ao Cérebro". A borda clara de
+   campo (3:1) e o anel de foco ficam no cartão inteiro. Ele não desfoca o fundo: fica dentro do palco, e nada passa por
+   trás dele. O brilho (--sheen) nasce no meio da borda de cima e segue o ponteiro: o JS escreve a posição em --mx e
+   --my, registradas sem herança para a troca redesenhar só o fundo do cartão, não os filhos. */
+@property --mx {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 50%
+}
+
+@property --my {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 0%
+}
+
 .editor {
+    position: relative;
     border: var(--hair) solid var(--line-strong);
-    border-radius: var(--r-2);
-    background: var(--field)
+    border-radius: var(--r-box);
+    background:
+        radial-gradient(26rem circle at var(--mx, 50%) var(--my, 0%), var(--sheen), transparent 60%),
+        var(--shine),
+        var(--panel);
+    box-shadow: var(--edge), var(--stage-shadow)
 }
 
 .editor:has(textarea:focus-visible) {
@@ -1094,21 +1117,210 @@ main:focus {
     outline-offset: var(--ring)
 }
 
+.editor-field {
+    position: relative
+}
+
+/* De 3 a 12 linhas (ui.jsx, useFit): o JS dá a altura do texto e estes limites seguram. --pad é o respiro de cima do
+   texto; embaixo ele é menor, porque os chips vêm logo a seguir. */
 .editor textarea {
     --pad: var(--sp-4);
     display: block;
     width: 100%;
-    min-height: calc(var(--rule) * 8 + var(--pad) * 2);
-    resize: vertical;
-    padding: var(--pad) var(--sp-5);
+    min-height: calc(var(--rule) * 3 + var(--pad) + var(--sp-2));
+    max-height: calc(var(--rule) * 12 + var(--pad) + var(--sp-2));
+    resize: none;
+    padding: var(--pad) var(--sp-5) var(--sp-2);
     border: 0;
-    border-radius: var(--r-2) var(--r-2) 0 0;
+    border-radius: var(--r-box) var(--r-box) 0 0;
     background: none;
     line-height: var(--rule)
 }
 
 .editor textarea:focus-visible {
     outline: none
+}
+
+/* Sem o foco, a frase fixa do campo dá lugar à frase de exemplo que se escreve (.typed); com o foco, ela volta. Some
+   pela opacidade, e não pela cor: no alto contraste do sistema a cor é forçada, e as duas frases ficariam uma por cima
+   da outra. */
+.editor textarea:not(:focus)::placeholder {
+    opacity: 0
+}
+
+/* A frase de exemplo por cima do campo vazio, no lugar e na medida do texto dele, em no máximo duas linhas (três no
+   celular) e na cor do exemplo dos campos. O cursor é o ciano do foco e pisca em passos enquanto a frase se escreve. */
+.typed {
+    position: absolute;
+    top: var(--sp-4);
+    right: var(--sp-5);
+    left: var(--sp-5);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    color: var(--ink-3);
+    font-size: var(--fs-3);
+    line-height: var(--rule);
+    pointer-events: none
+}
+
+.caret {
+    display: inline-block;
+    width: var(--ring);
+    height: 1.1em;
+    margin-left: var(--sp-0);
+    vertical-align: -.15em;
+    background: var(--focus);
+    animation: caret-blink 1s steps(1) infinite
+}
+
+@keyframes caret-blink {
+    50% {
+        opacity: 0
+    }
+}
+
+/* A área e o nível, logo abaixo do campo: os chips à esquerda, na margem do texto (quebram a linha se não couberem), e
+   o menu do nível à direita, na margem do "Perguntar ao Cérebro". */
+.editor-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    padding: var(--sp-1) var(--sp-3) var(--sp-2) var(--sp-5)
+}
+
+/* position: os chips medem a distância até esta linha (prompt-composer.jsx, Chips), que no celular rola de lado. */
+.chips {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: var(--sp-1);
+    min-width: 0
+}
+
+/* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. */
+.chip {
+    min-height: 2.25rem;
+    padding: 0 var(--sp-3);
+    background: none;
+    color: var(--ink-2);
+    font-weight: 600
+}
+
+.chip:hover:not(:disabled) {
+    background: var(--raised);
+    border-color: var(--line);
+    color: var(--ink)
+}
+
+.chip[aria-checked=true],
+.chip[aria-checked=true]:hover {
+    border-color: var(--accent);
+    background: var(--accent-off);
+    color: var(--ink-hi)
+}
+
+.level {
+    position: relative;
+    flex: none
+}
+
+/* O botão do nível: "Nível:" em cinza, o nível em branco e a seta, que vira quando o menu abre. */
+.level-button {
+    gap: var(--sp-1);
+    min-height: 2.25rem;
+    padding: 0 var(--sp-2) 0 var(--sp-3);
+    border-color: transparent;
+    background: none;
+    font-weight: 600;
+    white-space: nowrap
+}
+
+.level-button:hover:not(:disabled),
+.level-button[aria-expanded=true] {
+    border-color: var(--line);
+    background: var(--raised)
+}
+
+.level-word {
+    color: var(--ink-2);
+    font-weight: 500
+}
+
+.level-button .icon {
+    color: var(--ink-2);
+    transition: rotate var(--t-fast) var(--ease)
+}
+
+.level-button[aria-expanded=true] .icon {
+    rotate: 180deg
+}
+
+/* O menu do nível abre abaixo do botão, por cima da linha das ferramentas: o vidro escuro da lista de atalhos do
+   Dúvidas, com o desfoque dela (ele passa por cima do texto, que sem o desfoque aparecia por trás). Cada item tem o
+   nível e, embaixo, a nota dele; o marcado leva o fio ciano à esquerda e o texto em branco. */
+.level-menu {
+    position: absolute;
+    top: calc(100% + var(--sp-2));
+    right: 0;
+    z-index: 10;
+    display: grid;
+    padding: var(--sp-1);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-list);
+    background: var(--palette);
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    animation: menu-pop var(--t-fast) var(--ease)
+}
+
+@keyframes menu-pop {
+    from {
+        opacity: 0;
+        translate: 0 calc(-1 * var(--sp-1))
+    }
+}
+
+.level-menu button {
+    --press: .99;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    min-height: var(--control-h);
+    padding: var(--sp-1) var(--sp-3);
+    border: 0;
+    border-radius: var(--r-1);
+    background: none;
+    color: var(--ink-2);
+    font-weight: 600;
+    text-align: left
+}
+
+.level-menu small {
+    font-size: var(--fs-1);
+    font-weight: 500;
+    white-space: nowrap
+}
+
+.level-menu button:hover,
+.level-menu button:focus-visible {
+    background: var(--raised-2);
+    color: var(--ink)
+}
+
+/* O anel vai por dentro do item: por fora ele encostava na borda do menu. */
+.level-menu button:focus-visible {
+    outline-offset: calc(-1 * var(--ring))
+}
+
+.level-menu [aria-checked=true] {
+    box-shadow: inset var(--ring) 0 0 var(--focus);
+    color: var(--ink-hi)
 }
 
 .editor-tools {
@@ -1143,8 +1355,15 @@ main:focus {
     display: none
 }
 
+/* O contador e o "Perguntar ao Cérebro" ficam juntos na ponta direita, também quando a linha das ferramentas quebra. */
+.editor-send {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-left: auto
+}
+
 .counter {
-    margin-left: auto;
     color: var(--ink-2);
     font-size: var(--fs-1);
     font-variant-numeric: tabular-nums;
@@ -1155,24 +1374,43 @@ main:focus {
     min-height: 2.5rem
 }
 
-.selectors {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sp-4);
-    margin: var(--sp-4) 0
+/* Com texto para enviar (o botão ligado), o "Perguntar ao Cérebro" fica com a borda e a seta ciano, e um brilho pulsa
+   em volta dele duas vezes (menos de 5 s) e para. */
+.ask:enabled {
+    border-color: var(--accent);
+    animation: ask-ready 2.4s ease-in-out 2
 }
 
-.selectors label {
-    display: grid;
-    gap: var(--sp-2);
-    color: var(--ink-2);
-    font-size: var(--fs-2);
-    font-weight: 650
+.ask:enabled:hover {
+    border-color: var(--accent-hover)
 }
 
-.selectors select {
+.ask:enabled .icon {
+    color: var(--accent)
+}
+
+/* O botão que ligou pelo teclado (o texto digitado) não pulsa: pelo teclado nada se move (anim.js). O atributo é lido
+   quando o botão liga (prompt-composer.jsx): o clique que vem depois não faz o pulso aparecer. */
+.ask[data-quiet] {
+    animation: none
+}
+
+@keyframes ask-ready {
+    50% {
+        box-shadow: 0 0 0 var(--sp-1) var(--accent-soft), 0 0 var(--sp-5) var(--accent-off)
+    }
+}
+
+/* As teclas da dica do teclado, embaixo da caixa. */
+.hint kbd {
+    display: inline-block;
+    padding: 0 var(--sp-1);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-1);
+    background: var(--raised);
     color: var(--ink);
-    font-weight: 400
+    font: inherit;
+    font-size: var(--fs-1)
 }
 
 .note {
@@ -1180,7 +1418,7 @@ main:focus {
     align-items: flex-start;
     gap: var(--sp-2);
     max-width: var(--lead-w);
-    margin: 0 0 var(--sp-4);
+    margin: var(--sp-4) 0;
     color: var(--ink-2);
     font-size: var(--fs-2);
     text-wrap: balance
@@ -3050,11 +3288,13 @@ main[data-instant] > .view[data-motion-pop-id] {
 }
 
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
-   resposta", o fundo da janela, o estado da IA sob a faixa de espera e as barras do gráfico mudam na hora. */
+   resposta", a seta do menu do nível, o fundo da janela, o estado da IA sob a faixa de espera, as barras do gráfico e o
+   menu do nível mudam na hora. O pulso do "Perguntar ao Cérebro" tem a regra dele (.ask[data-quiet]). */
 :root[data-input=teclado] .rail::before,
 :root[data-input=teclado] .rail .nav-item,
 :root[data-input=teclado] .meter > span,
 :root[data-input=teclado] .mistakes summary .icon,
+:root[data-input=teclado] .level-button .icon,
 :root[data-input=teclado] dialog::backdrop,
 :root[data-input=teclado] .ai-status {
     transition: none
@@ -3064,12 +3304,20 @@ main[data-instant] > .view[data-motion-pop-id] {
     animation: none
 }
 
-/* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo, sem as barras crescendo e sem o fio
-   correndo (fica o trilho parado e os segundos contando); o esqueleto já é parado e as marcas da caneta já aparecem
-   prontas (marks.jsx). Opacidade ainda pode esmaecer. */
+/* Duração zero, e não "animation: none": com o nome da animação mantido, o clique que vem depois do teclado não faz o
+   menu entrar de novo. */
+:root[data-input=teclado] .level-menu {
+    animation-duration: 0s
+}
+
+/* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo (na barra de cima e no editor, que mostra
+   uma frase parada e não move o brilho da caixa: prompt-composer.jsx), sem o brilho pulsando no "Perguntar ao
+   Cérebro", sem as barras crescendo e sem o fio correndo (fica o trilho parado e os segundos contando); o esqueleto já é
+   parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda pode esmaecer. */
 @media (prefers-reduced-motion: reduce) {
     button,
     .mistakes summary .icon,
+    .level-button .icon,
     .rail::before,
     .rail .nav-item,
     .meter > span {
@@ -3083,8 +3331,18 @@ main[data-instant] > .view[data-motion-pop-id] {
     .ask-pill-text,
     .chart-bar,
     .moon,
-    .dots span {
+    .dots span,
+    .caret,
+    .level-menu,
+    .ask:enabled {
         animation: none
+    }
+
+    /* O brilho da caixa do editor fica no meio da borda de cima. O !important vence a posição que o JS escreve no
+       estilo da caixa (prompt-composer.jsx): vale também quando o aluno liga o movimento reduzido com a página aberta. */
+    .editor {
+        --mx: 50% !important;
+        --my: 0% !important
     }
 
     .wait-bar::after {
@@ -3136,11 +3394,25 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: CanvasText
     }
 
-    /* O item marcado da lista de atalhos: sem isto o fundo dele virava Canvas, igual aos outros. */
-    .palette [role=option][aria-selected=true] {
+    /* O item marcado da lista de atalhos, o chip da área escolhida e o nível escolhido no menu: sem isto o fundo deles
+       virava Canvas, igual aos outros. */
+    .palette [role=option][aria-selected=true],
+    .chip[aria-checked=true],
+    .level-menu [aria-checked=true] {
         forced-color-adjust: none;
         background: Highlight;
         color: HighlightText
+    }
+
+    /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
+    .chip[aria-checked=true]:focus-visible {
+        outline-color: CanvasText
+    }
+
+    /* A frase de exemplo do campo vazio no cinza do sistema, como a frase fixa de um campo: na cor do texto ela parecia
+       o campo já preenchido. */
+    .typed {
+        color: GrayText
     }
 
     .marks .pen.current {
