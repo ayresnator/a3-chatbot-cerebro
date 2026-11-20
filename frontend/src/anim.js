@@ -121,6 +121,21 @@ export const FINALE = {
   },
 };
 
+// Janela e folha (App.jsx, Modal), em segundos. O fundo escuro é do CSS (styles.css, dialog::backdrop): entra em
+// --t-fade e sai junto com elas, então as saídas daqui têm de bater com as de lá.
+export const MODAL = {
+  in: 0.24,
+  out: 0.14, // = --t-fade-out, a saída do fundo da janela
+  sheetIn: 0.3,
+  sheetOut: 0.2, // = --t-fade, a saída do fundo da folha (.sheet[data-closing])
+  sheetEase: [0.32, 0.72, 0, 1],
+  // Reaberta no meio da saída.
+  settle: 0.12,
+  // Movimento reduzido: só a opacidade.
+  calmIn: 0.15,
+  calmOut: 0.1,
+};
+
 // Primeiro estado de um bloco que entra: parado (initial false) quando a ação veio do teclado.
 export const appear = () => (keyboard ? false : 'hidden');
 
