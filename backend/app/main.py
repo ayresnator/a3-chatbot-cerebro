@@ -20,6 +20,10 @@ from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
 from .providers import ai, budget, calls_today, fail, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
+# O uvicorn só configura os loggers dele: sem isto, os avisos do Cérebro saíam sem data e hora, e os de INFO sumiam.
+# O INFO vale só para os loggers do Cérebro: na raiz, viria o de outras bibliotecas, como o httpx a cada pedido dos testes.
+logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("cerebro").setLevel(logging.INFO)
 # Esquema enviado ao provedor: o material já chega no formato que o backend valida.
 # O chat fica sem esquema de propósito: com ele as respostas vinham sem quebras de linha (6 de 7 nos testes).
 STUDY_SCHEMA = StudyOutput.model_json_schema()
@@ -106,8 +110,10 @@ def unreadable_body(*_):
     # milhares de dígitos). Nenhum erro deste backend usa 400: vale a resposta do corpo que não é JSON.
     return JSONResponse(status_code=422, content={"detail": {"code": "INVALID_INPUT", "message": "Pedido em formato inválido.", "provider_status": ""}})
 
+# async: roda no laço do servidor, sem esperar vaga na fila de threads das chamadas à IA. Rota def, com 45 pedidos à IA
+# no ar, levou 6,8 s, e a tela desiste em 5 s ("Backend desligado"). Por isso nada aqui pode esperar rede ou disco.
 @app.get("/api/health")
-def health():
+async def health():
     # Somente estado local: não confirma validade de chave ou cota no provedor.
     # Com AI_MODEL=auto o modelo é escolhido na primeira chamada à IA. Esta rota nunca chama o provedor: só usa a
     # escolha que resolve_gemini_model já guardou; antes disso, mostra o configurado ("auto").

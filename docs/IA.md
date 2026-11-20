@@ -119,9 +119,11 @@ O que sai do computador do aluno para o Google, pelo backend: o texto do editor,
 
 Dois pedidos não passam pelo backend. Ao abrir o aplicativo, o navegador busca as fontes da tela no Google Fonts. E o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador: alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever.
 
-Na faixa gratuita, os [termos da Gemini API](https://ai.google.dev/gemini-api/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
+Na faixa gratuita, os [termos da Gemini API](https://aistudio.google.com/docs/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
 
 O servidor não tem banco de dados e não guarda texto de aluno. O log registra o campo e o motivo de cada recusa, nunca o texto recebido nem o gerado. A chave fica no `.env`, só o backend a lê, e ela viaja no cabeçalho `x-goog-api-key`, nunca na URL. O backend não segue redirecionamento: se um filtro de rede responder com outro endereço, o pedido para ali e a chave não vai junto.
+
+O Cérebro é para uso local do grupo, com a chave gratuita. O que falta para abri-lo na internet, com os termos da Gemini API e a LGPD, está em [PUBLICAR.md](PUBLICAR.md).
 
 ## Como medimos
 

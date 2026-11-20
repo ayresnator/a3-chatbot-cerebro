@@ -1,6 +1,8 @@
 import http.client
+import inspect
 import io
 import json
+import logging
 import os
 import random
 import threading
@@ -1672,6 +1674,23 @@ class ApiTests(unittest.TestCase):
         # Sem chave a tela avisa que a IA não foi ativada.
         with patch("app.main.settings", replace(CONFIG, api_key="")):
             self.assertFalse(self.client.get("/api/health").json()["ai_configured"])
+
+    def test_health_does_not_wait_for_the_threads_of_the_ai_calls(self):
+        # Rota def entra na fila de threads das chamadas à IA: com 45 pedidos no ar, a saúde passava dos 5 s em que a
+        # tela desiste e mostra "Backend desligado". Rota async roda no laço do servidor.
+        route = next(route for route in app.routes if getattr(route, "path", "") == "/api/health")
+        self.assertTrue(inspect.iscoroutinefunction(route.endpoint))
+
+    def test_backend_logs_show_info_with_date_time_level_and_name(self):
+        # O uvicorn só configura os loggers dele. A linha do modelo escolhido com AI_MODEL=auto é INFO e sumia.
+        terminal = logging.getLogger().handlers[0]
+        stream = terminal.setStream(io.StringIO())
+        try:
+            logging.getLogger("cerebro.ai").info("Gemini auto: modelo selecionado=%s", "gemini-2.5-flash")
+            line = terminal.stream.getvalue()
+        finally:
+            terminal.setStream(stream)
+        self.assertRegex(line, r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} INFO cerebro\.ai: Gemini auto: modelo selecionado=gemini-2\.5-flash\n$")
 
     @patch("app.providers.urlopen")
     def test_health_reports_the_model_in_use_and_the_calls_of_the_day_without_calling_the_provider(self, mock_open):
