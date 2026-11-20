@@ -156,6 +156,18 @@ test('firstAttempts: a mesma lista devolve o resultado guardado; outra lista tem
   assert.deepEqual(firstAttempts(events), SIX_ANSWERS);
 });
 
+test('firstAttempts: a mesma lista pedida para o quiz e para os cartões guarda um resultado para cada tipo', () => {
+  // Cartão com a pergunta (q): o 1 errado volta no fim da fila e é acertado; vale a primeira avaliação do dia.
+  const cards = [[1, false], [2, true], [1, true]].map(([n, ok]) => cardAt(16, ok, { q: 'cartao ' + n }));
+  const events = [...cards, ...SIX_ANSWERS, ...redo(16)];
+  assert.deepEqual(firstAttempts(events, 'flashcard'), cards.slice(0, 2));
+  assert.deepEqual(firstAttempts(events), SIX_ANSWERS, 'depois dos cartões, o quiz da mesma lista');
+  assert.deepEqual(firstAttempts(events, 'flashcard'), cards.slice(0, 2), 'e os cartões de novo');
+  const other = [...events];
+  assert.deepEqual(firstAttempts(other), SIX_ANSWERS, 'na ordem contrária, outra lista');
+  assert.deepEqual(firstAttempts(other, 'flashcard'), cards.slice(0, 2));
+});
+
 test('localDay: a mesma data em texto dá o mesmo dia na primeira e na segunda vez, e Date continua valendo', () => {
   const late = at(16, 23); // 23h: no Brasil, em UTC já é dia 17
   assert.equal(localDay(late), '2026-11-16');
@@ -1453,4 +1465,19 @@ test('backupNote: quantos materiais entraram; só respostas ou erros; nada novo'
   assert.equal(backupNote(once, mergeBackup(once, moreAnswers)), 'Desempenho e caderno de erros atualizados');
   const newerMistake = { ...backup(), erros: [mistake(Q_SHORT, 'Inflação', 16)] };
   assert.equal(backupNote(once, mergeBackup(once, newerMistake)), 'Desempenho e caderno de erros atualizados');
+});
+
+test('backupNote: no histórico compactado, a resposta anterior do backup muda o acerto sem mudar o tamanho', () => {
+  // Como o Importar do App: as duas listas compactadas. Gravado, a questão 1 errada às 10h do dia 14; o backup traz um
+  // acerto às 8h do mesmo dia. Ele vira a primeira resposta, a das 10h sai, e o acerto vai de 0% a 100%.
+  const before = { ...EMPTY, events: compactEvents([quizAt(14, 1, false, { date: at(14, 10) })], today()) };
+  const after = mergeBackup(before, { ...EMPTY, events: [quizAt(14, 1, true, { date: at(14, 8) })] });
+  after.events = compactEvents(after.events, today());
+  assert.equal(after.events.length, before.events.length);
+  assert.deepEqual([quizRate(before.events).rate, quizRate(after.events).rate], [0, 100]);
+  assert.equal(backupNote(before, after), 'Desempenho e caderno de erros atualizados');
+  // O item estragado que mergeBackup leva para o começo da lista não é novidade: a tela não o mostra.
+  const broken = { ...EMPTY, events: [quizAt(16, 1, false), 'texto'] };
+  const again = mergeBackup(broken, { ...EMPTY, events: [quizAt(16, 1, false)] });
+  assert.equal(backupNote(broken, again), 'Nada novo neste arquivo');
 });

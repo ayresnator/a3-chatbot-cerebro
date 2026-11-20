@@ -210,24 +210,28 @@ function recentDays(n, now) {
 // Respostas do quiz que contam no desempenho: de cada questão (mesmo dia, mesmo material, mesmo enunciado), só a
 // primeira. Refazer a mesma questão fazia o percentual subir sem o aluno saber mais.
 // A lista está na ordem em que foi gravada. Evento anterior a esta regra não tem q e conta como está.
-// O resultado fica guardado por lista (FIRST): a mesma lista passa por quizRate, weakSpot e chartDays a cada resposta, e
-// pelo areaLine de cada área a cada desenho do Desempenho.
+// kind escolhe o tipo de resposta ('quiz', o padrão, ou 'flashcard').
+// O resultado fica guardado por lista e por tipo (FIRST): a mesma lista passa por quizRate, weakSpot e chartDays a cada
+// resposta, e pelo areaLine de cada área a cada desenho do Desempenho. Com o tipo na chave, a lista pedida para os
+// cartões não devolve as respostas do quiz guardadas antes, nem o contrário.
 // shortcut: vale enquanto ninguém muda a lista no lugar (o App e o lib.js sempre criam uma nova); se isso mudar, passar
 // o resultado pronto como parâmetro.
 const FIRST = new WeakMap();
-export function firstAttempts(events) {
-  if (!FIRST.has(events)) {
+export function firstAttempts(events, kind = 'quiz') {
+  if (!FIRST.has(events)) FIRST.set(events, {});
+  const byKind = FIRST.get(events);
+  if (!byKind[kind]) {
     const seen = new Set();
-    FIRST.set(events, events.filter(e => {
-      if (e.kind !== 'quiz') return false;
+    byKind[kind] = events.filter(e => {
+      if (e.kind !== kind) return false;
       if (!e.q) return true;
       const key = questionDay(e);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }));
+    });
   }
-  return FIRST.get(events);
+  return byKind[kind];
 }
 
 // A questão num dia: o dia, o material e o enunciado, em texto simples (JSON.stringify em cada resposta pesava). A
@@ -237,8 +241,8 @@ const questionDay = e => localDay(e.date) + '\n' + e.title + '\n' + e.q;
 // Histórico enxuto, na abertura do app e depois de importar um backup: nos dias passados, de cada questão do quiz
 // ficam a primeira resposta do dia e, se ela foi erro, o primeiro acerto do dia. As outras repetições ("Refazer o quiz
 // todo", "Refazer meus erros") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
-// Biblioteca. Ficam como estão o dia de hoje, os cartões (o evento não diz qual cartão foi), a resposta antiga sem
-// enunciado e o item estragado. Nada é resumido por dia, área ou material: a revisão espaçada e o acerto que ficou
+// Biblioteca. Ficam como estão o dia de hoje, todos os cartões (a regra aqui é a das questões do quiz), a resposta antiga
+// sem enunciado e o item estragado. Nada é resumido por dia, área ou material: a revisão espaçada e o acerto que ficou
 // (#77 e #78) precisam, por questão e por cartão, da resposta de cada dia. Devolve outra lista, na mesma ordem.
 export function compactEvents(events, now) {
   const today = localDay(now);
@@ -618,10 +622,14 @@ export function mergeBackup(atual, novo) {
 }
 
 // Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas ou erros.
+// As respostas que a tela usa valem pelo conteúdo, não pelo tamanho: no histórico compactado (compactEvents), a resposta
+// anterior que o backup traz toma o lugar da que ficou e muda o acerto sem mudar o tamanho da lista. O item estragado
+// fica de fora: mergeBackup o leva para o começo da lista, e a tela não o mostra.
 export function backupNote(atual, junto) {
   const materials = junto.saved.length - atual.saved.length;
   if (materials) return materials === 1 ? '1 material importado' : materials + ' materiais importados';
-  return junto.events.length > atual.events.length || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
+  const shown = list => JSON.stringify(list.filter(validEvent));
+  return shown(junto.events) !== shown(atual.events) || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
     ? 'Desempenho e caderno de erros atualizados'
     : 'Nada novo neste arquivo';
 }

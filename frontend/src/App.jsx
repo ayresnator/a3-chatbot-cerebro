@@ -827,7 +827,7 @@ function App() {
 
   // "Usar um exemplo": com a IA ligada, ela escreve um texto de estudo sobre um tema sorteado pelo servidor na área e
   // no nível escolhidos (1 chamada da cota), sem repetir o tema do exemplo anterior. Na demonstração, com a IA
-  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (lib.js). A área e o nível não mudam.
+  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (exemplos.js). A área e o nível não mudam.
   async function addExample() {
     // Um pedido à IA por vez: o segundo clique durante a espera não pede outro.
     if (waiting) return;
@@ -864,7 +864,14 @@ function App() {
       }
     }
     // Os exemplos prontos ficam à parte (exemplos.js), fora do JavaScript da abertura; a caixa do editor já os trouxe.
-    const example = written || (await import('./exemplos.js')).pickExample(area, { topic: exampleTopic.current, text: input });
+    // O arquivo pode não vir (a rede caiu depois da abertura, ou saiu uma versão nova com a aba aberta): o aviso diz o
+    // que fazer, em vez de o clique não dar em nada.
+    const examples = written ? null : await import('./exemplos.js').catch(() => null);
+    if (!written && !examples) {
+      toast('Não foi possível carregar os exemplos. Recarregue a página.');
+      return;
+    }
+    const example = written || examples.pickExample(area, { topic: exampleTopic.current, text: input });
     // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
     // quem escreveu.
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
