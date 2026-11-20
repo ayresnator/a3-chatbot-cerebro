@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton,
+  PerfilSkeleton, Waves,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
@@ -1028,6 +1028,7 @@ function App() {
     <MotionConfig reducedMotion="user">
     <LazyMotion features={domAnimation} strict>
     <div className="app" data-page={slug}>
+      <Waves />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o

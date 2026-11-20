@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { m } from 'motion/react';
 import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
@@ -257,4 +257,42 @@ export function PerfilSkeleton() {
       <Sk className="sk-control sk-submit" />
     </div>
   );
+}
+
+// Fundo em ondas (issue #92): só no layout de computador, onde o fundo aparece em volta do palco. No celular o texto fica
+// direto sobre o fundo e as ondas claras derrubariam o contraste; em cores forçadas o fundo é do sistema. O shader vem
+// num pedaço à parte do JS (waves.js), baixado só quando entra. Enquanto ele roda, data-waves no html deixa o vidro da
+// barra de cima, do dock e do palco opaco (styles.css): as ondas ficam só em volta deles.
+export function Waves() {
+  const canvas = useRef(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    const wide = window.matchMedia('(min-width: 851px)');
+    const forced = window.matchMedia('(forced-colors: active)');
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let stop = null;
+    let run = 0;
+    const sync = () => {
+      const mine = ++run;
+      stop?.();
+      stop = null;
+      root.removeAttribute('data-waves');
+      if (!wide.matches || forced.matches) return;
+      import('./waves.js').then(({ startWaves }) => {
+        if (mine !== run || !canvas.current) return;
+        stop = startWaves(canvas.current, { animate: !still.matches });
+        if (stop) root.setAttribute('data-waves', '');
+      }, () => {});
+    };
+    sync();
+    const queries = [wide, forced, still];
+    queries.forEach(q => q.addEventListener('change', sync));
+    return () => {
+      run++;
+      queries.forEach(q => q.removeEventListener('change', sync));
+      stop?.();
+      root.removeAttribute('data-waves');
+    };
+  }, []);
+  return <canvas ref={canvas} className="waves" aria-hidden="true" />;
 }
