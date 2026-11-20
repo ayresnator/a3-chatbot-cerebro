@@ -2607,6 +2607,27 @@ main:focus {
     margin-left: auto
 }
 
+/* "Sobre:" e o material aberto no lugar da área e do nível (chat-composer.jsx), numa linha só: o título longo termina
+   em reticências. A base de 12rem manda o botão da fonte para a linha de baixo antes de o título sumir. */
+.composer-about {
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+.composer-about strong {
+    color: var(--ink);
+    font-weight: 600
+}
+
+.composer-bar .link {
+    min-height: 2.5rem
+}
+
 .shortcuts {
     width: 2.5rem;
     min-height: 2.5rem;

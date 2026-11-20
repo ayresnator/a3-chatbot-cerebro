@@ -177,6 +177,7 @@
 
     .composer-bar select,
     .composer-bar .primary,
+    .composer-bar .link,
     .shortcuts,
     .suggestions button,
     .chat-wait .link {

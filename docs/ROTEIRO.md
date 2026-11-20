@@ -79,6 +79,6 @@ Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICI
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas e as respostas enviadas para revisão.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.

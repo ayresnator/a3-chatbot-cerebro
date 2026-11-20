@@ -25,7 +25,7 @@ O programa não aceita a resposta do modelo sem conferir. Ele valida cada item g
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho e montar o caderno de erros. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar.
+**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar.
 
 **Segurança da API:**
 
@@ -120,14 +120,15 @@ Permite conversar com o assistente para solicitar explicações, exemplos e escl
 Cada solicitação considera:
 
 - A pergunta realizada;
-- O texto atual;
-- A área selecionada;
-- O nível de conhecimento;
+- O material aberto (o título e o resumo dele) ou o texto do editor;
+- A área e o nível do material aberto, ou os escolhidos no editor;
 - As últimas 6 mensagens da conversa.
 
-O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero.
+Com um material aberto, a pergunta é sobre ele: a caixa do chat mostra "Sobre:" e o título do material no lugar das listas de área e nível, e a saudação diz qual material vai ser considerado. O botão "Usar o texto do editor" troca a fonte, e "Usar o material aberto" volta ao material. Perguntar pelo editor ("Perguntar ao Cérebro") também passa o chat para o texto do editor, e abrir outro material volta a valer o material. Se o material aberto foi gerado do texto que está no editor, vale o texto do editor, que é mais completo.
 
-O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
+O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero e pode ser desfeita até a próxima pergunta.
+
+O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
 
 ### 6. Caderno de erros
 

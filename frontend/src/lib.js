@@ -227,6 +227,8 @@ export function readDraft() {
       : { key: '', kinds: [] },
     chat,
     tips: isText(d.tips?.key) && texts(d.tips.list) ? { key: d.tips.key, list: d.tips.list } : { key: '', list: [] },
+    // O aluno escolheu o texto do editor como assunto do chat, com um material aberto (chatSubject).
+    editorChat: d.editorChat === true,
   };
 }
 
@@ -411,9 +413,10 @@ export function matches(material, query, filter) {
     ].join(' ')).includes(fold(query));
 }
 
-// Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (texto do editor ou área) até a primeira resposta;
-// depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
-// As da IA só valem enquanto o texto do editor e a área são os da resposta: se o aluno muda de assunto, voltam as fixas.
+// Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (o texto do assunto ou a área) até a primeira
+// resposta; depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
+// input é o texto do assunto (chatSubject): o do editor ou o do material aberto. As da IA só valem enquanto esse texto e
+// a área são os da resposta: se o aluno muda de assunto, voltam as fixas.
 export function hints({ chat, input, area, tips }) {
   if (!chat.some(m => m.role === 'assistant')) {
     return [
@@ -438,13 +441,35 @@ export function slashHints(list, text) {
 }
 
 // Saudação fixa: o Cérebro fala primeiro sem gastar chamada da IA. Não entra em chat, então não vai no histórico do pedido.
-export function hello({ user, area, level, input, api }) {
+// title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor.
+export function hello({ user, area, level, input, title, api }) {
   return 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' +
     (area === 'Escolar' ? 'das matérias escolares' : 'de ' + area) + ' no nível ' + level + '. ' +
     (api
       ? 'Pergunte o que quiser ou escolha uma das sugestões abaixo. ' +
-        (input.trim() ? 'Vou considerar o texto que está no editor.' : 'Se colar um texto no editor, respondo com base nele.')
+        (title ? 'Vou considerar o material "' + title + '".'
+          : input.trim() ? 'Vou considerar o texto que está no editor.' : 'Se colar um texto no editor, respondo com base nele.')
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
+}
+
+// Assunto do chat. Vale o texto do editor sem material aberto, quando o material saiu desse texto (é o mesmo assunto,
+// e o texto é mais completo) ou quando o aluno escolheu o texto (editor) e há texto lá. Senão, o material: o título e
+// o resumo vão como content, com a área e o nível dele (material antigo sem eles usa os do editor).
+// made é a chave da última geração, [texto, área, nível] (App.jsx, generate): só o texto conta, porque a área e o
+// nível podem ter mudado depois. swap é o botão que troca a fonte, quando há outra para escolher.
+export function chatSubject({ material, made, editor, input, area, level }) {
+  const fromEditor = made.startsWith('[' + JSON.stringify(input) + ',');
+  if (!material || fromEditor || (editor && input.trim())) {
+    return { title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '' };
+  }
+  const topics = material.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
+  return {
+    title: material.title,
+    content: cut([material.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT),
+    area: AREAS.includes(material.area) ? material.area : area,
+    level: LEVELS.includes(material.level) ? material.level : level,
+    swap: input.trim() ? 'Usar o texto do editor' : '',
+  };
 }
 
 // Estado da IA no cabeçalho, a partir da resposta de /api/health: null enquanto ela não chegou, false se a consulta
