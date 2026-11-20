@@ -545,8 +545,13 @@
     }
 
     .search,
-    .toolbar select {
+    .toolbar .inline-field {
         grid-column: 1 / -1
+    }
+
+    /* O rótulo "Área" à esquerda e a lista no resto da linha. */
+    .toolbar .inline-field select {
+        flex: 1
     }
 
     .library-item {
