@@ -72,6 +72,19 @@ export const OPENING = {
 };
 export const CALM = { view: { hidden: {}, show: {}, exit: gone }, title: FADE, rise: FADE };
 
+// Tela Dúvidas (#57, no estilo do Animated AI Chat): o título sobe 10 px, o fio embaixo dele se desenha da esquerda
+// para a direita, a saudação aparece, a caixa cresce de 0,98 e os chips entram em cascata. Vale na abertura da página e
+// quando o herói volta (Nova conversa). Movimento reduzido: só a opacidade, curta, tudo junto.
+export const HERO = {
+  title: { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: SPRING } },
+  rule: { hidden: { opacity: 0, scaleX: 0 }, show: { opacity: 1, scaleX: 1, transition: { duration: 0.6, delay: 0.2, ease: EASE_OUT } } },
+  lead: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.3, delay: 0.1 } } },
+  box: { hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { ...SPRING, delay: 0.05 } } },
+  chips: { hidden: {}, show: { transition: { delayChildren: stagger(0.06, { startDelay: 0.15 }) } } },
+  chip: { hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: SPRING_SMALL } },
+};
+export const HERO_CALM = { title: FADE, rule: FADE, lead: FADE, box: FADE, chips: {}, chip: FADE };
+
 // Bloco pequeno que aparece depois da página (erro, desfazer, retorno, aviso, mensagem, faixa de espera): sobe 6 px e
 // aparece, sem desfoque; a saída é só a opacidade, na mola curta que some logo (com ease-in o retorno da questão
 // anterior ficava legível embaixo da questão nova).
@@ -112,7 +125,7 @@ export const FINALE = {
 export const appear = () => (keyboard ? false : 'hidden');
 
 // Texto que mudou no lugar (o cartão virado ou o seguinte): só ele esmaece de 0,3 e chega de start (um giro leve ou um
-// passo para o lado) em 0,16 s; a folha do cartão fica parada. Um clique no meio do caminho segue de onde o texto
+// passo para o lado) em 0,16 s; o cartão fica parado. Um clique no meio do caminho segue de onde o texto
 // está, sem recomeçar: o animate do Motion com um valor só parte do valor atual. O estado final é o normal da página:
 // se a animação falhar, o texto continua visível.
 export function enter(el, start) {

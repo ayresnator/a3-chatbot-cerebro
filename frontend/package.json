@@ -12,7 +12,8 @@
   "dependencies": {
     "motion": "^14.14.0",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "thinking-orbs": "0.3.2"
   },
   "devDependencies": {
     "vite": "6.4.6"

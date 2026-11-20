@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { m } from 'motion/react';
+import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
 
 // Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, o
 // "Desfazer", a espera de um pedido à IA e os esqueletos.
 
-// Contador da faixa de progresso, em frase ("3 dias de constância"). As faixas do Estudar e do Desempenho são uma
-// folha só, com os contadores separados por fios (styles.css, .stats).
+// Contador da faixa de progresso, em frase ("3 dias de constância"). No Estudar e no Desempenho cada contador é um
+// cartão de número, e o primeiro fica em destaque (styles.css, .stats).
 export function Stat({ value, label }) {
   return <p className="stat"><strong>{value}</strong> {label}</p>;
 }
@@ -49,14 +50,24 @@ export function Elapsed({ since }) {
   );
 }
 
+// Orbe da IA (thinking-orbs): 20 px, no tema escuro e no ciano do --accent (styles.css), que a biblioteca recebe em JS.
+// Fica fora do leitor de tela: o texto ou o nome do botão ao lado já diz o que acontece.
+export function Orb(props) {
+  return <ThinkingOrb size={20} theme="dark" color="#93f1f7" aria-hidden="true" {...props} />;
+}
+
 // Espera de um pedido à IA: um fio indeterminado (nada aqui finge saber quanto falta), o que está acontecendo, os
 // segundos, o limite e o Cancelar. Fica no lugar onde a resposta vai entrar, ou na faixa de cima (.busy) quando esse
 // lugar não está na tela: nunca nos dois (App.jsx, waitInline), para o Cancelar não aparecer duas vezes.
-export function Wait({ label, since, onCancel }) {
+// orb é o estado do orbe antes do texto. Ele fica dentro do texto, e não ao lado: numa espera estreita o texto quebra
+// junto com ele em vez de descer sozinho para a linha de baixo.
+export function Wait({ label, since, onCancel, orb }) {
   return (
     <div className="wait">
       <span className="wait-bar" aria-hidden="true"></span>
       <span className="wait-text">
+        {/* A biblioteca põe display block no style; inline-block deixa o orbe na linha do texto (styles.css, .wait-orb). */}
+        {orb && <Orb state={orb} className="wait-orb" style={{ display: 'inline-block' }} />}
         {label} <Elapsed since={since} />
       </span>
       {onCancel && <button type="button" className="link" onClick={onCancel}>Cancelar</button>}

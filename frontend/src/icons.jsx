@@ -33,6 +33,8 @@ const PATHS = {
   privacidade: 'M12 3.5l7 2.8v5.2c0 4.3-2.9 7.8-7 9-4.1-1.2-7-4.7-7-9V6.3zM9.3 12.2l1.9 1.9 3.6-3.8',
   info: 'M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM12 11v5M12 7.8v.01',
   alerta: 'M12 4.5l8.5 15h-17zM12 10v4.5M12 17v.01',
+  // A tecla "/" da caixa do chat, que abre os atalhos.
+  atalhos: 'M6.5 4.5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2zM14 8.5l-4 7',
 };
 
 export function Icon({ name, className = '' }) {
@@ -43,11 +45,11 @@ export function Icon({ name, className = '' }) {
   );
 }
 
-// A marca do Cérebro no app: a faísca de oito raios em branco sobre o quadrado violeta, como no favicon.
+// A marca do Cérebro no app: a faísca de oito raios em preto sobre o círculo ciano, como no favicon.
 export function BrandMark() {
   return (
     <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <rect width="32" height="32" rx="8" />
+      <circle cx="16" cy="16" r="16" />
       <path d="M16 7.5v5.2M16 19.3v5.2M7.5 16h5.2M19.3 16h5.2M10 10l3.7 3.7M18.3 18.3L22 22M10 22l3.7-3.7M18.3 13.7L22 10" />
     </svg>
   );

@@ -6,7 +6,7 @@ import { byKeyboard } from './anim.js';
 // Com draw, a marca se desenha quando aparece: cada traço tem pathLength 1 e o animate do Motion leva o
 // stroke-dashoffset de 1 a 0, um traço depois do outro, em 0,52 s no total. Com movimento reduzido, ou quando a ação
 // veio do teclado, ela já aparece pronta.
-// A marca não é lida pelo leitor de tela: certo e errado vão em texto ao lado (a nota em Kalam ou o rótulo do grupo).
+// A marca não é lida pelo leitor de tela: certo e errado vão em texto ao lado (a nota da caneta ou o rótulo do grupo).
 const STROKES = {
   novo: ['M12.6 4.4c-4.6-.4-8.2 2.7-8.3 7.1-.1 4.5 3.3 8.1 7.8 8.2 4.4.1 7.7-3.1 7.8-7.4.1-4.1-2.8-7.4-7.1-7.9-1.5-.2-2.9.1-4 .7'],
   errei: ['M5.5 5.8c4.1 3.6 8.4 8 12.8 12.6', 'M18.2 5.2C14 9.3 9.9 13.6 5.4 18.6'],

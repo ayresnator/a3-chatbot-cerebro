@@ -1,139 +1,119 @@
-/* Telas estreitas e janelas baixas. Este arquivo é carregado depois do styles.css: o que está aqui vale por último.
-   Só muda a arrumação; cores, tipos e medidas continuam saindo das variáveis do styles.css. */
+/* Telas estreitas. Este arquivo é carregado depois do styles.css: o que está aqui vale por último. Só muda a arrumação;
+   cores, tipos e medidas continuam saindo das variáveis do styles.css. */
 
-/* Janela baixa (notebook de 768 px de altura): o menu rola quando precisa e o perfil fica preso embaixo. */
-.rail .profile {
-    position: sticky;
-    bottom: 0;
-    background: var(--paper)
-}
-
-@media (max-width: 1100px) {
-    :root {
-        --rail-w: 13.5rem;
-        --main-x: var(--sp-5)
-    }
-
-    .topbar {
-        padding: 0 var(--sp-5)
-    }
-}
-
-/* Até 850 px o menu da esquerda vira a barra de baixo: as cinco primeiras seções e "Mais", que abre uma folha com as
-   outras e o perfil. Cabe tudo sem rolar de lado e sem cortar nome. */
+/* Até 850 px o dock vira a barra de baixo, uma pílula de vidro solta da borda: as cinco primeiras seções e "Mais",
+   que abre uma folha com as outras e o perfil. Cabe tudo sem rolar de lado e sem cortar nome. A barra de cima fica só
+   com a marca e o estado da IA. */
 @media (max-width: 850px) {
     :root {
-        --tabbar-h: calc(4rem + env(safe-area-inset-bottom, 0px));
+        /* Do pé da tela ao topo da barra de baixo, com 8 px de folga embaixo e em cima dela. */
+        --tabbar-h: calc(3rem + var(--dock-pad) * 2 + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px));
         /* Altura da faixa presa de "Próxima questão" (.next-row): o botão, o respiro e o fio de cima. */
         --next-h: calc(var(--control-h) + var(--sp-3) * 2 + var(--hair));
+        --gutter: var(--sp-2);
+        --top-y: var(--sp-2);
+        --top-h: 3.25rem;
         --main-top: var(--sp-5);
         --main-x: var(--sp-4)
     }
 
     .app {
-        grid-template-columns: minmax(0, 1fr)
+        grid-template-columns: minmax(0, 1fr);
+        padding-bottom: var(--tabbar-h)
     }
 
     .rail {
         display: none
     }
 
+    .topbar,
+    main {
+        grid-column: 1
+    }
+
+    /* Cada item tem pelo menos a largura do próprio nome; o que sobra é dividido por igual. Com o espaçamento de texto
+       do aluno (WCAG 1.4.12) os nomes alargam e a barra rola de lado, em vez de deixar "Mais" fora da tela. O
+       scroll-padding faz o Tab rolar a barra até o item inteiro: sem ele, o item pela metade ficava como estava. */
     .tabbar {
         position: fixed;
-        right: 0;
-        bottom: 0;
-        left: 0;
+        right: var(--sp-2);
+        bottom: calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
+        left: var(--sp-2);
         z-index: 30;
-        /* Cada item tem pelo menos a largura do próprio nome; o que sobra é dividido por igual. */
         display: grid;
         grid-auto-columns: minmax(max-content, 1fr);
         grid-auto-flow: column;
-        height: var(--tabbar-h);
-        padding: 0 var(--sp-1) env(safe-area-inset-bottom, 0px);
-        border-top: var(--hair) solid var(--line);
-        background: var(--grain), var(--paper-under)
+        gap: var(--dock-gap);
+        overflow-x: auto;
+        scrollbar-width: none;
+        scroll-padding-inline: var(--sp-6);
+        padding: var(--dock-pad);
+        border: var(--hair) solid var(--line);
+        border-radius: var(--r-round);
+        background: var(--shine), var(--glass-float);
+        box-shadow: var(--edge), var(--shadow);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur)
     }
 
+    /* Raio de 14 px, não de pílula: com o nome embaixo do ícone, a curva da pílula entrava na linha do nome, e as pontas
+       da primeira e da última letra (pretas no item aberto) saíam do ciano e sumiam no vidro escuro. */
     .tab-item {
         --press: .98;
-        position: relative;
         flex-direction: column;
         gap: var(--sp-0);
-        height: 4rem;
+        height: 3rem;
         min-width: 3rem;
         min-height: 0;
         padding: 0 var(--sp-1);
         border: 0;
-        border-radius: 0;
+        border-radius: var(--r-2);
         background: none;
         color: var(--ink-2);
         font-size: var(--fs-1);
-        font-weight: 600;
+        font-weight: 650;
+        line-height: 1.1;
         white-space: nowrap
     }
 
     .tab-item:hover:not(:disabled) {
-        background: none;
+        background: var(--raised);
         color: var(--ink)
     }
 
-    .tab-item .icon {
-        color: var(--ink-3)
-    }
-
-    /* A aba colorida da seção, agora na borda de cima do item. */
-    .tab-item::before {
-        content: '';
-        position: absolute;
-        top: calc(-1 * var(--hair));
-        left: 50%;
-        width: 1.75rem;
-        height: var(--tab-mark);
-        translate: -50% 0;
-        border-radius: 0 0 var(--r-0) var(--r-0);
-        background: transparent
-    }
-
+    /* A seção aberta (ou "Mais", com ela dentro da folha) fica em ciano, com o ícone e o nome em preto. */
     .tab-item[aria-current=page],
-    .tab-item[data-current] {
-        color: var(--ink)
+    .tab-item[data-current],
+    .tab-item[aria-current=page]:hover:not(:disabled),
+    .tab-item[data-current]:hover:not(:disabled) {
+        background: var(--accent);
+        color: var(--on-accent)
     }
 
-    .tab-item[aria-current=page] .icon,
-    .tab-item[data-current] .icon {
-        color: var(--tab)
-    }
-
-    .tab-item[aria-current=page]::before,
-    .tab-item[data-current]::before {
-        background: var(--tab)
-    }
-
+    /* O anel vai por dentro do item (a barra é justa e rola de lado); no item ciano ele é preto. */
     .tab-item:focus-visible {
-        outline-offset: calc(-1 * var(--ring) - var(--hair))
+        outline-offset: calc(-2 * var(--ring))
     }
 
+    .tab-item[aria-current=page]:focus-visible,
+    .tab-item[data-current]:focus-visible {
+        outline-color: var(--on-accent)
+    }
+
+    /* A marca com a largura dela e o estado da IA no resto, encolhendo com reticências: o texto longo do backend ("IA
+       ativa · modelo · N chamadas hoje") não passa por cima da marca. */
     .topbar {
-        padding: 0 var(--sp-4)
+        grid-template-columns: auto minmax(0, 1fr);
+        padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-2)
     }
 
-    /* Sem o menu da esquerda, a barra de cima leva a marca e o nome do app; a página já está no título. */
-    .crumbs .brand-mark {
-        display: block
-    }
-
-    .crumb-brand {
-        display: inline
-    }
-
-    .crumb-root,
-    .crumb-sep,
-    .crumb-page {
+    .ask-pill,
+    .topbar .profile {
         display: none
     }
 
     main {
-        padding-bottom: calc(var(--tabbar-h) + var(--sp-6))
+        padding: var(--main-top) var(--main-x) var(--sp-6)
     }
 
     /* A folha "Mais" sobe da borda de baixo, na largura da tela. */
@@ -155,10 +135,73 @@
         font-size: var(--fs-3)
     }
 
-    .sheet .nav-item::after {
-        right: auto;
-        left: 0;
-        border-radius: 0 var(--r-0) var(--r-0) 0
+    /* A espera da IA toma a barra de cima inteira, por cima da marca e do estado: com o Cancelar ela não cabia ao lado
+       da marca. A marca sai do Tab enquanto isso; se o foco estava nela, vai para o item da página aberta na barra de
+       baixo (App.jsx). */
+    .busy {
+        left: var(--sp-2);
+        right: var(--sp-2);
+        width: auto;
+        max-width: none;
+        translate: none
+    }
+
+    .app:has(> .busy) .brand {
+        visibility: hidden
+    }
+
+    .busy .wait {
+        flex: 1;
+        gap: var(--sp-2)
+    }
+
+    .busy .wait-text,
+    .chat-wait .wait-text {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis
+    }
+
+    .busy .link {
+        margin-left: auto
+    }
+
+    /* Dúvidas no toque: o título do herói de 28 a 32 px, e os controles da caixa, os chips, o Cancelar da pílula de
+       espera e os itens da lista de atalhos com 44 px para o dedo. A faixa atrás da caixa presa passa menos da coluna (o
+       palco aqui tem 16 px de respiro, e passar dele criaria rolagem de lado) e esmaece embaixo, onde a conversa aparece
+       entre a caixa e a barra de baixo. */
+    .chat-title {
+        font-size: clamp(1.75rem, 8vw, 2rem)
+    }
+
+    .composer-bar select,
+    .composer-bar .primary,
+    .shortcuts,
+    .suggestions button,
+    .chat-wait .link {
+        min-height: var(--control-h)
+    }
+
+    .shortcuts {
+        width: var(--control-h)
+    }
+
+    .palette [role=option] {
+        display: flex;
+        align-items: center;
+        min-height: var(--control-h)
+    }
+
+    .chat-stage[data-state=conversa] .chat-dock::before {
+        --veil-out: var(--sp-3);
+        --veil-foot: var(--sp-4)
+    }
+
+    /* No herói a lista de atalhos sobe por cima do título e cortava as letras ao meio: enquanto ela está aberta, o
+       título e a saudação saem da vista. */
+    .chat-stage[data-state=heroi]:has(.palette) .chat-head {
+        visibility: hidden
     }
 
     /* O que rola até a vista para acima da barra de baixo. */
@@ -187,7 +230,9 @@
         padding: var(--sp-3) var(--sp-4);
         border-top: var(--hair) solid var(--line);
         border-radius: 0 0 calc(var(--r-3) - var(--hair)) calc(var(--r-3) - var(--hair));
-        background: var(--raised)
+        background: var(--glass-float);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur)
     }
 
     .next-row .primary {
@@ -222,8 +267,27 @@
 @media (max-width: 550px) {
     :root {
         --fs-6: 2rem;
-        --main-top: var(--sp-4);
-        --title-gap: var(--sp-2)
+        --top-h: 3rem;
+        --main-top: var(--sp-3);
+        /* A lua do Dúvidas, menor: no máximo a largura do palco (styles.css, .moon). Sem o vidro do palco atrás, o corpo
+           escuro sumia no preto: aqui ele é um pouco mais claro (a borda iluminada continua o ponto mais claro). */
+        --moon: 24rem;
+        --moon-body: #060b0b;
+        --moon-shade: #0f1d1e
+    }
+
+    .topbar {
+        margin-bottom: var(--sp-3)
+    }
+
+    /* No celular o palco não tem moldura: o conteúdo fica com a largura de antes (16 px das bordas) e os painéis de
+       vidro ficam direto sobre o fundo. */
+    main {
+        margin: 0 calc(-1 * var(--gutter));
+        border: 0;
+        border-radius: 0;
+        background: none;
+        box-shadow: none
     }
 
     .page-head {
@@ -254,9 +318,9 @@
     }
 
     /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
-       Dúvidas, "Enviar" fica só no nome do botão e a seta sobra para a pergunta caber. */
+       Dúvidas, "Enviar" fica só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. */
     .tool .full,
-    .ask-form .primary span {
+    .composer-bar .primary span {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -269,9 +333,64 @@
         display: inline
     }
 
-    .ask-form .primary {
+    /* Dúvidas no celular: a caixa vai de uma borda à outra do palco (16 px da tela). O título e os alvos de 44 px
+       ficam no bloco de 850 px. */
+    .chat-head {
+        margin-bottom: var(--sp-5)
+    }
+
+    /* A lua da largura do palco, com o centro mais alto: a caixa cobre a metade de baixo e a borda iluminada aparece
+       atrás da saudação (menor que a caixa, ela sumia inteira atrás dela). */
+    .moon {
+        top: calc(50% - 1rem)
+    }
+
+    .chat-stage[data-state=conversa] .chat-title {
+        font-size: var(--fs-4)
+    }
+
+    .composer-box textarea {
+        padding: var(--sp-4)
+    }
+
+    .composer-bar {
+        padding: var(--sp-2)
+    }
+
+    .composer-bar .primary {
         width: var(--control-h);
         padding: 0
+    }
+
+    .composer-foot {
+        padding-inline: var(--sp-2)
+    }
+
+    .palette {
+        right: 0;
+        left: 0
+    }
+
+    /* Com mensagens os chips ficam numa linha que rola de lado (a página não rola): a conversa fica com o lugar de duas
+       linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria; o scroll-padding faz o Tab rolar a linha
+       até o chip inteiro, como na barra de baixo. A dica do teclado sai da vista (continua no aria-describedby do campo):
+       a caixa presa ocupava um terço da tela. */
+    .chat-stage[data-state=conversa] .suggestions {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        scroll-padding-inline: var(--sp-6);
+        margin: var(--sp-2) calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1));
+        padding: var(--sp-1)
+    }
+
+    .chat-stage[data-state=conversa] #chat-dica {
+        display: none
+    }
+
+    .chat-stage[data-state=conversa] .suggestions button {
+        flex: none;
+        white-space: nowrap
     }
 
     /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo. */
@@ -316,6 +435,10 @@
     }
 
     /* As três abas dividem a largura: com o respiro de 16 px, "Quiz" ficava cortado em 320 px. */
+    .tabs {
+        width: auto
+    }
+
     .tabs [role=tab] {
         flex: 1 1 auto;
         padding: 0 var(--sp-2)
@@ -360,11 +483,6 @@
         max-width: 92%
     }
 
-    .dock {
-        margin: 0 calc(-1 * var(--sp-4));
-        padding: var(--sp-2) var(--sp-4) var(--sp-3)
-    }
-
     .erros-head .primary {
         width: 100%;
         margin-left: 0
@@ -406,56 +524,40 @@
         padding: var(--sp-5)
     }
 
-    /* Os contadores em colunas iguais, duas quando cabem (de uns 386 px para cima) e uma só abaixo disso: os fios
-       formam uma grade só (antes cada linha se dividia num ponto diferente). Em 11rem a frase mais curta cabe inteira;
-       em duas colunas de 320 px todas quebravam. Os dias de estudo ficam numa linha inteira embaixo. */
-    .stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr))
+    /* Os cartões de número mais baixos, em duas colunas; os dias de estudo numa linha inteira embaixo. */
+    .stat {
+        min-height: 5.5rem
     }
 
     .stat.days {
         grid-column: 1 / -1
     }
 
-    /* A espera da IA toma a faixa inteira da barra de cima, por cima da marca e do estado: com o Cancelar ela não
-       cabia ao lado do nome do app. Em 320 px o texto da espera encurta com reticências. */
-    .busy {
-        left: var(--sp-2);
-        right: var(--sp-2);
-        max-width: none
-    }
-
-    .busy .wait {
-        flex: 1;
-        gap: var(--sp-2)
-    }
-
-    .busy .wait-text {
-        min-width: 0;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis
-    }
-
-    /* Na faixa do celular só os segundos: o limite fica na espera que está no lugar da resposta. */
-    .busy .wait-limit {
+    /* Na faixa do celular só os segundos: o limite fica na espera que está no lugar da resposta. Em 320 px o texto da
+       espera encurta com reticências. */
+    .busy .wait-limit,
+    .chat-wait .wait-limit {
         display: none
-    }
-
-    .busy .link {
-        margin-left: auto
     }
 }
 
-/* Telefone de 380 px ou menos: os seis nomes da barra cabem inteiros, até 320 px, com o nome a 12 px. */
+/* Telefone de 380 px ou menos: os seis nomes da barra cabem inteiros, até 320 px, com o nome a 12 px, a barra mais
+   perto da borda e os itens curtos com no mínimo 40 px de largura (e 48 de altura; em 320 px eles medem 44). */
 @media (max-width: 380px) {
+    .tabbar {
+        right: var(--sp-1);
+        left: var(--sp-1);
+        gap: 0;
+        padding: var(--seg-pad)
+    }
+
     .tab-item {
+        min-width: 2.5rem;
         padding: 0 var(--sp-0);
         font-size: var(--fs-0)
     }
 
-    /* Seis linhas de pauta: o texto de exemplo do campo ocupa seis aqui, e a última ficava cortada pela borda. */
+    /* Seis linhas: o texto de exemplo do campo ocupa seis aqui, e a última ficava cortada pela borda. */
     .editor textarea {
         min-height: calc(var(--rule) * 6 + var(--pad) * 2)
     }
@@ -481,11 +583,52 @@
     .ask .short {
         display: inline
     }
+
+    /* Dúvidas: aqui a faixa da caixa quebra em duas linhas, e o herói com os chips não cabia acima da barra de baixo.
+       Os chips vão para a linha que rola de lado também no herói, e a saudação e os respiros encolhem. Embaixo a linha
+       não volta os 4 px do respiro: o palco corta o que passa dele, e o anel de foco do chip perdia a borda de baixo. */
+    .chat-head {
+        margin-bottom: var(--sp-4)
+    }
+
+    .chat-lead {
+        line-height: var(--lh-ui)
+    }
+
+    .suggestions {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+        scroll-padding-inline: var(--sp-6);
+        margin: var(--sp-2) calc(-1 * var(--sp-1)) 0;
+        padding: var(--sp-1)
+    }
+
+    .suggestions button {
+        flex: none;
+        white-space: nowrap
+    }
+
+    /* A pílula de espera quebra a linha em vez de cortar em "Cérebro está escr…" e esconder os segundos. */
+    .chat-wait .wait-text {
+        white-space: normal
+    }
 }
 
-/* Em 320 px as duas listas lado a lado não cabem: uma por linha. */
+/* Em 320 px as duas listas lado a lado não cabem: uma por linha. Na barra de cima fica só o logo da marca, para o
+   estado da IA caber inteiro; o nome continua no link, fora da vista. */
 @media (max-width: 359px) {
     .selectors {
         grid-template-columns: minmax(0, 1fr)
+    }
+
+    .brand-name {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
     }
 }

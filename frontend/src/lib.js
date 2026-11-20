@@ -294,6 +294,15 @@ export function hints({ chat, input, area, tips }) {
     : ['Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar'];
 }
 
+// Atalhos da caixa do chat (components/ui/chat-composer.jsx): "/" no começo do texto, ainda sem espaço, abre a lista com
+// as sugestões, filtradas pelo que vem depois da barra sem ligar para maiúsculas e acentos ("/sao" acha "O que são
+// hardware e software?"). Texto que não começa assim devolve null: ele não abre a lista (o botão de atalhos abre, com todas).
+export function slashHints(list, text) {
+  if (!text.startsWith('/') || /\s/.test(text)) return null;
+  const query = fold(text.slice(1));
+  return list.filter(h => fold(h).includes(query));
+}
+
 // Saudação fixa: o Cérebro fala primeiro sem gastar chamada da IA. Não entra em chat, então não vai no histórico do pedido.
 export function hello({ user, area, level, input, api }) {
   return 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' +
