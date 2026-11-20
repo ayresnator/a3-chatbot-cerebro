@@ -46,7 +46,7 @@ Abra um terminal na raiz a3-chatbot-cerebro:
 ```powershell
 cd backend
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -c constraints.txt
 .\.venv\Scripts\python.exe -m app.check
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -120,7 +120,7 @@ Com o frontend rodando, abra http://localhost:5173/?demo. A demonstração organ
 Na pasta backend:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -c constraints.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
@@ -132,6 +132,8 @@ npm run build
 ```
 
 Os testes simulam o provedor e não consomem cota. O GitHub Actions roda os mesmos testes e o build a cada envio ao repositório. O resultado da última execução está em docs/VALIDACAO.md.
+
+O `-c constraints.txt` faz o pip instalar as versões de backend/constraints.txt, as que passaram nos testes. O GitHub Actions instala as mesmas. Para subir uma versão: mude o número no requirements.txt ou no requirements-dev.txt, apague a pasta .venv e crie de novo, instale sem o `-c constraints.txt` e rode os testes. Se passarem, troque as linhas de versão do constraints.txt pela saída de `.\.venv\Scripts\python.exe -m pip freeze`, mantendo os comentários. A linha do uvloop, que só o Linux instala, vem do log do passo de instalação do GitHub Actions: se ele recusar a versão, apague a linha, envie de novo e copie a versão que o log mostrar.
 
 ## Avaliação da IA com chamadas reais
 
@@ -172,7 +174,7 @@ Os passos são os mesmos; mudam os comandos.
 cp .env.example .env
 cd backend
 python3 -m venv .venv
-./.venv/bin/python -m pip install -r requirements.txt
+./.venv/bin/python -m pip install -r requirements.txt -c constraints.txt
 ./.venv/bin/python -m app.check
 ./.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -185,4 +187,4 @@ npm ci
 npm run dev
 ```
 
-Testes: na pasta backend, `./.venv/bin/python -m pip install -r requirements-dev.txt` e depois `./.venv/bin/python -m unittest discover -s tests -v`; na pasta frontend, `npm test`. O grupo não rodou os comandos desta seção em macOS ou Linux. Em Linux, o GitHub Actions instala as dependências, roda os testes e faz o build a cada envio; ele não inicia o backend nem o frontend.
+Testes: na pasta backend, `./.venv/bin/python -m pip install -r requirements-dev.txt -c constraints.txt` e depois `./.venv/bin/python -m unittest discover -s tests -v`; na pasta frontend, `npm test`. O grupo não rodou os comandos desta seção em macOS ou Linux. Em Linux, o GitHub Actions instala as dependências, roda os testes e faz o build a cada envio; ele não inicia o backend nem o frontend.
