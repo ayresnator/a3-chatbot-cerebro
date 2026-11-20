@@ -16,7 +16,7 @@ Siga INICIAR-NO-VSCODE.md.
 2. Instale as dependências e execute `.\.venv\Scripts\python.exe -m app.check` na pasta backend.
 3. Execute os testes unitários documentados.
 4. Inicie Python e Vite em terminais separados.
-5. Confira chat, envio por Enter, Shift+Enter, resumo, quiz, flashcards, caderno de erros, desempenho e biblioteca, com Exportar e Importar.
+5. Confira o chat (Enter envia, Shift + Enter quebra a linha), o editor do Estudar (Enter quebra a linha, Ctrl + Enter pergunta), resumo, quiz, flashcards, caderno de erros, desempenho e biblioteca, com Exportar e Importar.
 6. Confirme que erros de credencial, cota, modelo e rede exibem uma frase simples, com o código do erro em "Detalhes técnicos", embaixo dela.
 
 ## Validação executada em 10/11/2026

@@ -31,8 +31,11 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 // sem servir a raiz do repositório, onde fica o .env.
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
-// Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
+// Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
+// botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// No Mac o atalho do editor é ⌘ + Enter, e a dica embaixo dele diz isso.
+const MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
 // Foco da questão nova do quiz: no computador, direto na caixa da resposta curta; no toque, o enunciado, para o
 // teclado da tela não abrir sozinho. E o de quem chega ao Dúvidas para perguntar: a caixa (no toque, o título).
 const QUESTION_FOCUS = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
@@ -103,13 +106,6 @@ const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
 const SHORT = { Quizzes: 'Quiz' };
 const TITLES = { Erros: 'Caderno de erros' };
-// As ações de gerar, na ordem do grupo: Resumir é a principal; Tirar dúvidas só abre a página.
-const ACTIONS = [
-  ['resumo', 'resumos', 'Resumir'],
-  ['flashcards', 'flashcards', 'Criar flashcards'],
-  ['quiz', 'quizzes', 'Fazer quiz'],
-  ['chat', 'duvidas', 'Tirar dúvidas'],
-];
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 
 // Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
@@ -155,8 +151,8 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o botão que pediu (resumo, flashcards,
-  // quiz, why, review), para a espera aparecer nele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, example),
+  // para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
   // Wait); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
@@ -205,7 +201,8 @@ function App() {
   const [why, setWhy] = useState(null);
   // Ditado em andamento: o botão vira "Parar ditado".
   const [listening, setListening] = useState(false);
-  // Última geração: texto, área e nível usados, e quais botões já mostraram esse material.
+  // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
+  // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
@@ -536,25 +533,24 @@ function App() {
     focusAfter.current = focus;
   }
 
-  async function generate(kind = 'resumo') {
+  async function generate() {
     if (waiting) return;
     setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
       setError({ message: 'Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
       return;
     }
-    // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
-    // O mesmo botão de novo gera material novo.
+    // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
+    // mesmo texto, a mesma área e o mesmo nível (made), o Estudar oferece abrir as partes sem chamar a IA.
     const key = JSON.stringify([input, area, level]);
-    const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
     // Os exemplos que acompanham o texto deste clique: o Desfazer do aviso pode trocar tudo durante a espera.
     const example = aiExample.current;
     const ready = readyExample.current;
-    const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
-    // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
-    // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
-    const wait = !reuse && !!API_BASE;
-    setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
+    const target = 'Resumos';
+    // Espera de verdade só com a IA: o Resumo abre na hora, com o esqueleto dele no lugar onde o material vai entrar. A
+    // demonstração é instantânea e não mostra espera nenhuma.
+    const wait = !!API_BASE;
+    setBusy({ kind: 'gerar', label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
       restart();
@@ -565,9 +561,7 @@ function App() {
     }
     try {
       let data;
-      if (reuse) {
-        data = result;
-      } else if (API_BASE) {
+      if (API_BASE) {
         data = await callAI('/api/generate', { content: input, area, level });
       } else {
         data = demo(input);
@@ -579,18 +573,17 @@ function App() {
       // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
       // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
       // biblioteca, o rascunho e o backup. Na demonstração o trecho é a própria frase: a do exemplo pronto ganha marca.
-      if (!reuse) data = { ...data, summary: markExample(data.summary, example, ready) };
+      data = { ...data, summary: markExample(data.summary, example, ready) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
-      // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
-      // material do mesmo texto.
+      // Se o novo é igual a ele, não há o que guardar: é a demonstração, que repete o material do mesmo texto.
       const previous = latest.current.result;
       const kept = !!previous && !sameMaterial(previous, data) && keep(previous);
       setResult({ ...data, area, level });
-      made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
+      made.current = { key };
       restart();
       const at = latest.current.page;
       if (at === 'Estudar' || MATERIAL.includes(at)) {
-        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
+        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para o Resumo.
         if (at === 'Estudar') setPage(target);
         // O leitor de tela ouve que ele chegou, e o foco que estava na espera, no botão de gerar ou no body vai para o
         // título dele.
@@ -616,7 +609,7 @@ function App() {
       // O foco que estava no que sai da tela vai para o erro (o alerta já é lido) ou, no Cancelar, para o botão que pediu
       // o material; longe do Estudar, para o título da página.
       if (adrift(back ? 'main, .busy' : '.busy')) {
-        focusAfter.current = e.cancelled ? ['.actions [data-tab=' + SLUG[target] + ']', 'main h1'] : ['#erro'];
+        focusAfter.current = e.cancelled ? ['#gerar', 'main h1'] : ['#erro'];
       }
       if (e.cancelled) toast('Pedido cancelado');
       else setError({ ...e, message: 'Não deu para gerar o material. ' + e.message });
@@ -987,7 +980,7 @@ function App() {
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
   function openSaved(material) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
-    made.current = { key: '', kinds: [] };
+    made.current = { key: '' };
     setResult(material);
     openPage('Resumos', ['#material-titulo']);
     restart();
@@ -1043,15 +1036,20 @@ function App() {
   // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
   // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
   const waiting = !!busy || !!asking || !!pausedUntil;
-  // IA sem chave neste computador: os botões de gerar ficam desligados, e o aviso embaixo do editor diz por quê.
+  // IA sem chave neste computador: o botão de gerar fica desligado, e o aviso embaixo do editor diz por quê.
   const aiOff = !!API_BASE && health?.ai_configured === false;
+  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração e o
+  // backend sem a IA configurada não gastam chamada.
+  const cost = !!API_BASE && !aiOff;
+  // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
+  const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
   // do clique (o aluno pode abrir outro da biblioteca enquanto espera).
-  const making = !!busy && ['resumo', 'flashcards', 'quiz'].includes(busy.kind) && result === busy.prior;
+  const making = busy?.kind === 'gerar' && result === busy.prior;
   // A espera de busy fica no lugar da resposta quando esse lugar está na tela (o esqueleto do material, a explicação
   // do tópico ou da questão aberta, a revisão no retorno); senão, na faixa de cima. Decidido aqui, não no CSS: a faixa
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
@@ -1292,7 +1290,8 @@ function App() {
                 <>
                   <m.div variants={rise}>
                     {/* A caixa do editor (prompt-composer.jsx): o campo, a área em chips, o nível no menu e, na última
-                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Enter). */}
+                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Ctrl +
+                        Enter). */}
                     <PromptComposer
                       value={input}
                       onChange={text => {
@@ -1308,7 +1307,7 @@ function App() {
                       level={level}
                       onLevel={setLevel}
                       waiting={waiting}
-                      touch={TOUCH}
+                      cost={cost}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1369,17 +1368,17 @@ function App() {
                     <p id="composer-keyboard-hint" className="hint">
                       {TOUCH
                         ? 'Use o botão para perguntar ao Cérebro'
-                        : <><kbd>Enter</kbd> para perguntar ao Cérebro · <kbd>Shift</kbd> + <kbd>Enter</kbd> para nova linha</>}
+                        : <><kbd>{MAC ? '⌘' : 'Ctrl'}</kbd> + <kbd>Enter</kbd> para perguntar ao Cérebro</>}
                     </p>
                   </m.div>
                   <m.div variants={rise}>
-                    {/* Sem a chave da IA, o aviso diz por que os botões de gerar estão desligados e leva à demonstração,
-                        que funciona sem IA. */}
+                    {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
+                        funciona sem IA. */}
                     <p className="note" id="aviso-ia">
                       <Icon name={API_BASE && !aiOff ? 'privacidade' : 'info'} />
                       {aiOff ? (
                         <span>
-                          A IA não está ligada neste computador: os botões de gerar ficam desligados.{' '}
+                          A IA não está ligada neste computador: o botão de gerar fica desligado.{' '}
                           <a href="?demo">Ver a demonstração</a>
                         </span>
                       ) : API_BASE
@@ -1387,23 +1386,48 @@ function App() {
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
                     </p>
                     <div className="actions" role="group" aria-label="Gerar material">
-                      {ACTIONS.map(([k, s, title]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          className={'action' + (k === 'resumo' ? ' primary' : '')}
-                          data-tab={s}
-                          disabled={k === 'chat' ? !!busy || asking : waiting || aiOff}
-                          aria-describedby={aiOff && k !== 'chat' ? 'aviso-ia' : undefined}
-                          aria-busy={busy?.kind === k || undefined}
-                          onClick={() => (k === 'chat' ? openPage('Dúvidas', ASK_FOCUS) : generate(k))}
-                        >
-                          {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
-                              cima: aqui o botão só diz que está gerando. */}
-                          <Icon name={s} />
-                          {busy?.kind === k ? 'Gerando…' : title}
-                        </button>
-                      ))}
+                      {/* Uma chamada traz resumo, flashcards e quiz. Com o material deste texto aberto, as três partes
+                          só abrem, sem chamar a IA, e o botão de gerar vira o "Gerar de novo". A parte aberta tira o
+                          botão da tela com o Estudar: o foco vai para o título do material (na espera, o da página).
+                          Elas só trocam de página: continuam ligadas sem a chave da IA e na espera do limite por
+                          minuto, quando o botão de gerar fica desligado. */}
+                      {fresh && (
+                        <div className="open-parts" role="group" aria-labelledby="abrir-partes">
+                          <span id="abrir-partes">Abrir:</span>
+                          {TABS.map(([p, l]) => (
+                            <button
+                              key={p}
+                              type="button"
+                              className="action"
+                              data-tab={SLUG[p]}
+                              onClick={() => {
+                                go(p);
+                                focusAfter.current = ['#material-titulo', 'main h1'];
+                              }}
+                            >
+                              <Icon name={SLUG[p]} />
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        id="gerar"
+                        className={fresh ? 'action' : 'action primary'}
+                        disabled={waiting || aiOff}
+                        aria-describedby={aiOff ? 'aviso-ia' : undefined}
+                        aria-busy={busy?.kind === 'gerar' || undefined}
+                        onClick={() => generate()}
+                      >
+                        {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
+                            cima: aqui o botão só diz que está gerando. */}
+                        <Icon name={fresh ? 'refazer' : 'resumos'} />
+                        {busy?.kind === 'gerar'
+                          ? 'Gerando…'
+                          : fresh ? 'Gerar de novo' : 'Gerar resumo, flashcards e quiz'}
+                        {cost && busy?.kind !== 'gerar' && <small>1 chamada de IA</small>}
+                      </button>
                     </div>
                   </m.div>
                   {errorBanner}
@@ -1963,6 +1987,7 @@ function App() {
                       onLevel={setLevel}
                       waiting={waiting}
                       touch={TOUCH}
+                      cost={cost}
                       variants={hero.box}
                       pop={pop}
                       note={aiNote}

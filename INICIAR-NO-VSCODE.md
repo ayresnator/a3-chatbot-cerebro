@@ -75,7 +75,7 @@ Use sempre esse endereço. Em http://127.0.0.1:5173 a conexão pode ser recusada
 O cabeçalho mostra o estado da IA: "IA ativa", com o modelo e as chamadas deste computador; "Cota de hoje esgotada", em âmbar, depois que o Google recusou um pedido por cota; "IA não configurada", quando falta a chave no .env; ou "Cérebro desligado", quando o terminal do Python não está rodando. A conta é só deste computador: a cota do Google é do projeto inteiro, soma todos os computadores que usam uma chave dele e zera à meia-noite do horário do Pacífico (4h ou 5h em Brasília). O saldo real fica no painel de uso do Google AI Studio.
 O servidor só responde neste computador. Para abrir no celular na mesma rede, use `npm run dev -- --host` e desligue depois: enquanto estiver assim, qualquer pessoa na rede pode usar o chat e gastar a cota da sua chave.
 Se a porta 5173 estiver ocupada, encerre a instância antiga antes de iniciar.
-Enter envia a pergunta; Shift+Enter insere uma nova linha no editor. Em tela de toque o Enter só pula linha e o envio fica no botão.
+No editor do Estudar, Enter pula linha e Ctrl + Enter (⌘ + Enter no Mac) pergunta ao Cérebro. Na caixa do Dúvidas, Enter envia a pergunta e Shift + Enter pula linha. Em tela de toque o Enter só pula linha e o envio fica no botão.
 
 ## Depois da primeira vez: um comando só
 

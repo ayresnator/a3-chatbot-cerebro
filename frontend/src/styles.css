@@ -1542,16 +1542,36 @@ main:focus {
     margin-top: .05rem
 }
 
-/* As ações de gerar: um grupo de botões comuns, Resumir em destaque. O ícone das outras leva a cor da seção onde o
-   material abre (--tab, hoje o ciano em todas). */
+/* O grupo de gerar: o botão principal ou, com o material do texto aberto, as três partes, que só abrem, e o "Gerar de
+   novo", à direita. O ícone de cada parte leva a cor da seção dela (--tab, hoje o ciano em todas). */
 .actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--sp-2)
 }
 
-.action:not(.primary):not(:disabled) .icon {
+/* Sem lugar na linha, o custo desce para uma linha dele, embaixo do nome. */
+.action {
+    flex-wrap: wrap;
+    row-gap: var(--sp-0)
+}
+
+.action[data-tab]:not(:disabled) .icon {
     color: var(--tab)
+}
+
+.open-parts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-right: auto
+}
+
+.open-parts > span {
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
 }
 
 /* Faixa "Seu progresso": números honestos, os mesmos do Desempenho. */
@@ -1787,8 +1807,16 @@ main:focus {
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
 .ai-ask small,
-.tool small {
+.tool small,
+.ask small,
+.action small {
     color: var(--ink-2);
+    font-weight: 400
+}
+
+/* No botão ciano o custo fica no preto do texto: o cinza não chegava a 4,5:1 sobre o ciano. */
+.primary small {
+    color: inherit;
     font-weight: 400
 }
 
