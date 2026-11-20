@@ -71,6 +71,19 @@ export function Elapsed({ since }) {
   );
 }
 
+// Segundos que faltam para os botões da IA voltarem depois do limite por minuto (until: a hora da volta, App.jsx). Os
+// números ficam fora do leitor de tela, como no Elapsed; "Pode tentar de novo." entra no fim, dentro do alerta do erro,
+// e é lido uma vez.
+export function Countdown({ until }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.ceil((until - now) / 1000);
+  return seconds > 0 ? <span className="elapsed" aria-hidden="true">{'Faltam ' + seconds + ' s.'}</span> : 'Pode tentar de novo.';
+}
+
 // Orbe da IA (thinking-orbs): 20 px, no tema escuro e no ciano do --accent (styles.css), que a biblioteca recebe em JS.
 // Fica fora do leitor de tela: o texto ou o nome do botão ao lado já diz o que acontece.
 export function Orb(props) {

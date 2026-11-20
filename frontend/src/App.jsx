@@ -14,13 +14,13 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton,
+  PerfilSkeleton, Countdown,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, healthLabel, errorText, dictate, dictationError,
+  matches, libraryCount, hints, hello, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -46,7 +46,8 @@ function adrift(sel) {
   return !at || at === document.body || !!at.closest(sel);
 }
 
-// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa.
+// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa. O erro sai com a frase para o aluno
+// (message), os detalhes técnicos (tech) e a espera do limite por minuto (wait): lib.js, errorText e FAILS.
 // stop é o sinal do botão "Cancelar" da espera: o pedido para na hora e o erro sai marcado com cancelled, para a tela
 // não mostrar uma falha que o aluno pediu.
 async function requestAPI(path, payload, stop) {
@@ -66,22 +67,21 @@ async function requestAPI(path, payload, stop) {
     try {
       data = JSON.parse(raw);
     } catch {
-      throw Error(
-        'O backend não retornou JSON (HTTP ' + response.status +
-        '). Confira se o Python está rodando em http://127.0.0.1:8000 e reinicie o Vite.'
-      );
+      throw Object.assign(Error(FAILS.noJson), {
+        tech: 'HTTP ' + response.status + ', resposta sem JSON. Confira o Python em http://127.0.0.1:8000 e o proxy do Vite.',
+      });
     }
     if (!response.ok) {
-      throw Error(errorText(data?.detail, response.status));
+      throw Object.assign(Error(), errorText(data?.detail, response.status));
     }
     return data;
   } catch (error) {
     if (error.name === 'AbortError') {
       if (stop?.aborted) throw Object.assign(Error('Pedido cancelado.'), { cancelled: true });
-      throw Error('Tempo de espera esgotado. Verifique o terminal do backend e tente novamente.');
+      throw Object.assign(Error(FAILS.timeout), { tech: 'O navegador desistiu depois de 105 s sem resposta do backend.' });
     }
     if (error instanceof TypeError) {
-      throw Error('Não foi possível conectar ao backend. Confira se o Python está iniciado e se a URL e o proxy estão corretos.');
+      throw Object.assign(Error(FAILS.off), { tech: 'Sem conexão com o backend (' + error.message + ').' });
     }
     throw error;
   } finally {
@@ -160,7 +160,10 @@ function App() {
   // Wait); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
-  const [error, setError] = useState('');
+  // Aviso de erro do Estudar e do Dúvidas: { message, tech, until } (Problem, abaixo), ou null.
+  const [error, setError] = useState(null);
+  // Limite por minuto: a hora em que os botões da IA voltam (o backend manda quantos segundos esperar), ou 0.
+  const [pausedUntil, setPausedUntil] = useState(0);
   const [size, setSize] = useState('Médio');
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
@@ -321,8 +324,16 @@ function App() {
   useEffect(() => setUndo(null), [page]);
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
-  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
-  useEffect(() => setError(''), [input]);
+  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
+  // espera acabar: é ele que conta os segundos até os botões da IA voltarem.
+  useEffect(() => setError(e => (e?.until > Date.now() ? e : null)), [input]);
+
+  // Os botões da IA voltam sozinhos quando a espera do limite por minuto acaba.
+  useEffect(() => {
+    if (!pausedUntil) return;
+    const timer = setTimeout(() => setPausedUntil(0), pausedUntil - Date.now());
+    return () => clearTimeout(timer);
+  }, [pausedUntil]);
 
   // A frase da região fixa (#anuncio) sai dela 8 s depois de lida: a velha ("Gerando o material", depois de um erro ou
   // do Cancelar) não fica na página para quem a percorre com o leitor de tela.
@@ -454,11 +465,19 @@ function App() {
   }
 
   // Todo pedido à IA termina com uma consulta nova: o contador de chamadas anda e um backend que caiu aparece na hora.
+  // No limite por minuto os botões da IA ficam desligados pelo tempo que o backend mandou; o erro leva a hora da volta
+  // (until) para a contagem dele.
   async function callAI(path, payload) {
     const stop = new AbortController();
     pending.current = stop;
     try {
       return await requestAPI(path, payload, stop.signal);
+    } catch (e) {
+      if (e.wait) {
+        e.until = Date.now() + e.wait * 1000;
+        setPausedUntil(e.until);
+      }
+      throw e;
     } finally {
       if (pending.current === stop) pending.current = null;
       checkHealth();
@@ -505,7 +524,7 @@ function App() {
     if (result?.virtual) setResult(parked);
     setPage(next);
     // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
-    setError('');
+    setError(null);
     restart();
     setMore(false);
   }
@@ -518,10 +537,10 @@ function App() {
   }
 
   async function generate(kind = 'resumo') {
-    if (busy || asking) return;
-    setError('');
+    if (waiting) return;
+    setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
+      setError({ message: 'Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
       return;
     }
     // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
@@ -555,7 +574,7 @@ function App() {
       }
       // A mesma conferência do rascunho e da biblioteca: o que abre aqui também volta depois de um F5.
       if (!validMaterial(data)) {
-        throw Error('Material incompleto recebido do backend');
+        throw Error('A IA mandou um material incompleto. Tente de novo.');
       }
       // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
       // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
@@ -600,7 +619,7 @@ function App() {
         focusAfter.current = e.cancelled ? ['.actions [data-tab=' + SLUG[target] + ']', 'main h1'] : ['#erro'];
       }
       if (e.cancelled) toast('Pedido cancelado');
-      else setError('Não foi possível gerar: ' + e.message);
+      else setError({ ...e, message: 'Não deu para gerar o material. ' + e.message });
     } finally {
       setBusy(null);
     }
@@ -779,7 +798,7 @@ function App() {
       });
       setWhy({ item, text: data.answer });
     } catch (e) {
-      setWhy(e.cancelled ? null : { item, error: e.message });
+      setWhy(e.cancelled ? null : { item, error: e });
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.why, .busy')) focusAfter.current = ['#' + button, 'main h1'];
@@ -804,7 +823,7 @@ function App() {
     try {
       const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
       if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
-        throw Error('Revisão incompleta recebida do backend');
+        throw Error('A IA mandou uma revisão incompleta. Tente de novo.');
       }
       const accepted = data.verdict === 'correta';
       setAnswer(a => (a === mine ? { ...a, ok: accepted, review: data } : a));
@@ -816,7 +835,7 @@ function App() {
         notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
       }
     } catch (e) {
-      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e.message } } : a));
+      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.review-wait, .busy')) focusAfter.current = ['#pedir-revisao', 'main h1'];
@@ -830,10 +849,10 @@ function App() {
   // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
   // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
   async function ask(message = question) {
-    if (busy || asking || !message.trim()) return;
+    if (waiting || !message.trim()) return;
     const msg = message.trim();
     const mine = { role: 'user', text: msg };
-    setError('');
+    setError(null);
     if (message === question) setQuestion('');
     setChat(c => [...c, mine]);
     if (!API_BASE) {
@@ -860,7 +879,7 @@ function App() {
       setChat(c => [...c, { role: 'assistant', text: data.answer }]);
       setTips({ key: JSON.stringify([input, area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
     } catch (e) {
-      if (!e.cancelled) setError(e.message);
+      if (!e.cancelled) setError(e);
       setChat(c => c.filter(m => m !== mine));
       if (message === question) setQuestion(q => q || msg);
     } finally {
@@ -909,8 +928,10 @@ function App() {
         }
         written = { topic: data.topic, text: data.text.trim() };
       } catch (e) {
-        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto.
+        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto. No limite por
+        // minuto os botões da IA ficam desligados alguns segundos (callAI): o aviso de erro conta a espera.
         if (e.cancelled) return;
+        if (e.wait) setError(e);
       } finally {
         // O botão desabilitado na espera, ou o Cancelar da faixa que sai com ela, deixa o foco no vazio: ele volta ao
         // botão. Quem foi escrever ou foi para outra página continua onde está.
@@ -1019,9 +1040,11 @@ function App() {
   const busiest = Math.max(1, ...days.map(d => d.total));
   const chatHints = hints({ chat, input, area, tips });
   const greeting = hello({ user, area, level, input, api: !!API_BASE });
-  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Sempre true ou false: asking
-  // guarda a hora do pedido, e aria-disabled só vale com "true".
-  const waiting = !!busy || !!asking;
+  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
+  // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
+  const waiting = !!busy || !!asking || !!pausedUntil;
+  // IA sem chave neste computador: os botões de gerar ficam desligados, e o aviso embaixo do editor diz por quê.
+  const aiOff = !!API_BASE && health?.ai_configured === false;
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
@@ -1065,9 +1088,16 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
+  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
+  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
+  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
+    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
+    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  const problem = pause || error;
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
-      {error && (
+      {problem && (
         <m.div
           key="erro"
           ref={errorBox}
@@ -1081,7 +1111,7 @@ function App() {
           exit="exit"
         >
           <Icon name="alerta" />
-          <p>{error}</p>
+          <Problem error={problem} />
         </m.div>
       )}
     </AnimatePresence>
@@ -1191,11 +1221,15 @@ function App() {
           <div className="top-actions">
             {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
             {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
-            <p className="ai-status" data-tone={status.tone}>
+            {/* A dica (title) explica que a conta é deste computador e a cota, do projeto inteiro. Com a IA ativa, o modelo
+                vai à parte: com a barra estreita ele sai da vista e continua no leitor de tela (styles.css, @container). */}
+            <p className="ai-status" data-tone={status.tone} title={status.note}>
               <span className="status-dot" aria-hidden="true"></span>
               <AnimatePresence mode="popLayout" initial={false}>
                 <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
-                  {status.text}
+                  {status.model
+                    ? <>IA ativa<span className="status-model">{' · ' + status.model}</span>{status.count && ' · ' + status.count}</>
+                    : status.text}
                 </m.span>
               </AnimatePresence>
             </p>
@@ -1339,9 +1373,16 @@ function App() {
                     </p>
                   </m.div>
                   <m.div variants={rise}>
-                    <p className="note">
-                      <Icon name={API_BASE ? 'privacidade' : 'info'} />
-                      {API_BASE
+                    {/* Sem a chave da IA, o aviso diz por que os botões de gerar estão desligados e leva à demonstração,
+                        que funciona sem IA. */}
+                    <p className="note" id="aviso-ia">
+                      <Icon name={API_BASE && !aiOff ? 'privacidade' : 'info'} />
+                      {aiOff ? (
+                        <span>
+                          A IA não está ligada neste computador: os botões de gerar ficam desligados.{' '}
+                          <a href="?demo">Ver a demonstração</a>
+                        </span>
+                      ) : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
                     </p>
@@ -1352,7 +1393,8 @@ function App() {
                           type="button"
                           className={'action' + (k === 'resumo' ? ' primary' : '')}
                           data-tab={s}
-                          disabled={waiting}
+                          disabled={k === 'chat' ? !!busy || asking : waiting || aiOff}
+                          aria-describedby={aiOff && k !== 'chat' ? 'aviso-ia' : undefined}
                           aria-busy={busy?.kind === k || undefined}
                           onClick={() => (k === 'chat' ? openPage('Dúvidas', ASK_FOCUS) : generate(k))}
                         >
@@ -1788,7 +1830,7 @@ function App() {
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
-                                  {answer.review?.error && <p role="alert" className="error">{answer.review.error}</p>}
+                                  {answer.review?.error && <div role="alert" className="error"><Problem error={answer.review.error} /></div>}
                                   {API_BASE && (
                                     <div className="ai-ask">
                                       <button
@@ -2361,7 +2403,11 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
     box.current?.scrollIntoView({ block: 'nearest' });
   }, [text, error]);
   if (error) {
-    return <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">{error}</m.div>;
+    return (
+      <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">
+        <Problem error={error} />
+      </m.div>
+    );
   }
   return (
     <m.div ref={box} className="why" role="status" variants={pop} initial={appear()} animate="show">
@@ -2382,6 +2428,26 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
         </>
       )}
     </m.div>
+  );
+}
+
+// Erro de um pedido (lib.js, errorText): a frase para o aluno e, embaixo, "Detalhes técnicos", fechado, com o código e a
+// frase do backend para quem instalou o Cérebro. No limite por minuto a frase conta os segundos até os botões da IA
+// voltarem (until, callAI).
+function Problem({ error }) {
+  return (
+    <div>
+      <p>
+        {error.message}
+        {error.until > 0 && <> <Countdown until={error.until} /></>}
+      </p>
+      {error.tech && (
+        <details>
+          <summary>Detalhes técnicos</summary>
+          <p>{error.tech}</p>
+        </details>
+      )}
+    </div>
   );
 }
 

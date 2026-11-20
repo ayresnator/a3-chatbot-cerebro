@@ -9,7 +9,7 @@ import threading
 import time
 import unicodedata
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import get_args
 from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import replace
@@ -297,14 +297,22 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(providers.list_gemini_models(), [])
         self.assertEqual(providers.calls_today() - before, 1)
 
-    @patch("app.providers.date")
-    def test_call_count_restarts_when_the_local_day_changes(self, mock_date):
-        # O contador é do dia e fica só na memória: zera quando a data local muda e quando o backend reinicia.
-        mock_date.today.return_value = date(2030, 1, 1)
+    @patch("app.providers.quota_day")
+    def test_call_count_restarts_when_the_quota_day_changes(self, mock_day):
+        # O contador é do dia da cota e fica só na memória: zera quando o dia da cota vira e quando o backend reinicia.
+        mock_day.return_value = date(2030, 1, 1)
         self.assertEqual(providers.calls_today(), 0)
         self.assertEqual([providers.calls_today(1), providers.calls_today(1), providers.calls_today()], [1, 2, 2])
-        mock_date.today.return_value = date(2030, 1, 2)
+        mock_day.return_value = date(2030, 1, 2)
         self.assertEqual([providers.calls_today(), providers.calls_today(1)], [0, 1])
+
+    def test_quota_day_turns_at_midnight_in_the_pacific(self):
+        # A cota do Google vira à meia-noite do Pacífico (aqui UTC-8 fixo): às 8h UTC, 5h em Brasília, e não à
+        # meia-noite local. Às 23h de Brasília (2h UTC do dia seguinte) o dia da cota ainda é o mesmo.
+        utc = timezone.utc
+        self.assertEqual(providers.quota_day(datetime(2026, 11, 20, 7, 59, tzinfo=utc)), date(2026, 11, 19))
+        self.assertEqual(providers.quota_day(datetime(2026, 11, 20, 8, 0, tzinfo=utc)), date(2026, 11, 20))
+        self.assertEqual(providers.quota_day(datetime(2026, 11, 21, 2, 0, tzinfo=utc)), date(2026, 11, 20))
 
     def test_call_count_is_exact_with_requests_in_parallel(self):
         # As rotas rodam em várias threads. Este dicionário dá a vez a outra thread entre ler e gravar a conta:
@@ -1677,7 +1685,7 @@ class ApiTests(unittest.TestCase):
 
     def test_health_does_not_wait_for_the_threads_of_the_ai_calls(self):
         # Rota def entra na fila de threads das chamadas à IA: com 45 pedidos no ar, a saúde passava dos 5 s em que a
-        # tela desiste e mostra "Backend desligado". Rota async roda no laço do servidor.
+        # tela desiste e mostra "Cérebro desligado". Rota async roda no laço do servidor.
         route = next(route for route in app.routes if getattr(route, "path", "") == "/api/health")
         self.assertTrue(inspect.iscoroutinefunction(route.endpoint))
 
@@ -1702,7 +1710,8 @@ class ApiTests(unittest.TestCase):
         with patch("app.main.settings", auto), patch.object(providers, "settings", auto):
             before = self.client.get("/api/health").json()
             self.assertEqual(before, {"status": "ok", "ai_configured": True, "provider": "gemini", "model": "auto",
-                                      "model_in_use": "auto", "calls_today": providers.calls_today()})
+                                      "model_in_use": "auto", "calls_today": providers.calls_today(),
+                                      "quota_exhausted": providers.quota_exhausted()})
             # Depois da primeira chamada à IA o modelo já foi escolhido, e a rota mostra qual é.
             with patch("app.providers.list_gemini_models", return_value=["gemini-2.5-flash", "gemini-3.1-flash-lite"]):
                 providers.resolve_gemini_model()
@@ -1714,6 +1723,38 @@ class ApiTests(unittest.TestCase):
         with patch("app.main.settings", CONFIG):
             self.assertEqual(self.client.get("/api/health").json()["model_in_use"], "gemini-2.5-flash")
         mock_open.assert_not_called()
+
+    @patch("app.providers.urlopen")
+    def test_health_reports_the_exhausted_quota_until_a_call_passes_or_the_quota_day_turns(self, mock_open):
+        # Depois de um 429 de cota o selo da tela fica "Cota de hoje esgotada": o /api/health diz isso até um pedido
+        # passar ou até o dia da cota virar. O limite por minuto não marca nada: ele passa em alguns segundos.
+        def limited(delay=None):
+            details = [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": delay}] if delay else []
+            body = {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": details}}
+            return HTTPError("https://example.invalid", 429, "error", {}, io.BytesIO(json.dumps(body).encode()))
+        def ask(reply):
+            # O código do erro, ou None quando o pedido passa.
+            mock_open.side_effect = [reply]
+            with patch.object(providers, "settings", CONFIG):
+                try:
+                    providers.ai({}, "JSON")
+                except HTTPException as exc:
+                    return exc.detail["code"]
+        def exhausted():
+            with patch("app.main.settings", CONFIG):
+                return self.client.get("/api/health").json()["quota_exhausted"]
+        with patch.dict(providers.calls, exhausted=None):
+            self.assertFalse(exhausted())
+            self.assertEqual(ask(limited("21s")), "AI_RATE_LIMITED")
+            self.assertFalse(exhausted())
+            self.assertEqual(ask(limited()), "AI_QUOTA_EXCEEDED")
+            self.assertTrue(exhausted())
+            self.assertIsNone(ask(gemini_response()))
+            self.assertFalse(exhausted())
+            self.assertEqual(ask(limited()), "AI_QUOTA_EXCEEDED")
+            tomorrow = providers.quota_day() + timedelta(days=1)
+            with patch("app.providers.quota_day", return_value=tomorrow):
+                self.assertFalse(exhausted())
 
 if __name__ == "__main__":
     unittest.main()

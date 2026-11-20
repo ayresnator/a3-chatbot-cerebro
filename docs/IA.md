@@ -111,7 +111,7 @@ As situações se somam no mesmo pedido, até o teto. Cada ida ao provedor faz n
 
 No 429 o backend lê o corpo do erro. Espera de até 90 segundos, sem marca de cota diária, vira `AI_RATE_LIMITED` com os segundos a aguardar. O resto vira `AI_QUOTA_EXCEEDED`.
 
-O cabeçalho da tela mostra o modelo em uso e quantas chamadas o backend fez no dia. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota no Google.
+O cabeçalho da tela mostra o modelo em uso e quantas chamadas este computador fez no dia da cota, que vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), junto com a cota do Google. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota, que é do projeto inteiro e fica no painel de uso do Google AI Studio. Depois de um `AI_QUOTA_EXCEEDED`, o cabeçalho diz "Cota de hoje esgotada", em âmbar, até um pedido passar ou a cota virar.
 
 Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável mais novo. Ele nunca escolhe Pro, prévia ou experimental.
 
