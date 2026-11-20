@@ -149,6 +149,14 @@ export function rove(key, at, count) {
   return step ? (at + step + count) % count : -1;
 }
 
+// Um bloco de height px cabe na janela de viewport px acima da reserva da raiz (o scroll-padding-bottom calculado: no
+// celular, a barra de baixo e o "Próxima questão" preso; no computador, "auto", que não reserva nada)? strip é a faixa
+// presa que fica dentro do próprio bloco: ela sai da reserva, senão contaria duas vezes. No computador a faixa não é
+// presa, e a reserva continua 0.
+export function fitsAbove(height, viewport, reserve, strip = 0) {
+  return height <= viewport - Math.max(0, (parseFloat(reserve) || 0) - strip);
+}
+
 export function read(k, d) {
   try {
     return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d;
