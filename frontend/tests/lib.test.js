@@ -7,7 +7,7 @@ import {
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -398,6 +398,79 @@ test('demo: o título para na quebra de linha, antes de "em que" e em 12 palavra
   assert.equal(demo('O ano em que tudo mudou foi 1789.').title, 'O ano');
   assert.equal(demo('um dois três quatro cinco seis sete oito nove dez onze doze treze').title,
     'um dois três quatro cinco seis sete oito nove dez onze doze…');
+});
+
+test('EXAMPLES: cada área tem pelo menos 3 exemplos prontos, com tema e texto de 350 a 900 caracteres', () => {
+  assert.deepEqual(Object.keys(EXAMPLES), AREAS);
+  for (const area of AREAS) {
+    assert.ok(EXAMPLES[area].length >= 3, area);
+    for (const { topic, text } of EXAMPLES[area]) {
+      assert.ok(topic.trim() !== '' && topic === topic.trim(), area + ': tema vazio ou com espaço nas pontas');
+      assert.ok(text.length >= 350 && text.length <= 900, topic + ': ' + text.length + ' caracteres');
+      // Na demonstração o exemplo vira material na hora: de 5 a 8 frases, sem ponto no meio de nenhuma.
+      const sentences = text.match(/[^.!?]+[.!?]/g);
+      assert.equal(sentences.join(''), text, topic + ': termina sem pontuação');
+      assert.ok(sentences.length >= 5 && sentences.length <= 8, topic + ': ' + sentences.length + ' frases');
+      assert.equal(validMaterial(demo(text)), true, topic);
+    }
+  }
+});
+
+test('EXAMPLES: nenhum tema ou texto se repete, e o EXAMPLE da fotossíntese é um dos de Escolar', () => {
+  const all = Object.values(EXAMPLES).flat();
+  assert.equal(new Set(all.map(e => fold(e.topic))).size, all.length, 'tema repetido');
+  assert.equal(new Set(all.map(e => e.text)).size, all.length, 'texto repetido');
+  assert.ok(EXAMPLE.startsWith('A fotossíntese é o processo'));
+  assert.deepEqual(EXAMPLES.Escolar.filter(e => e.text === EXAMPLE), [{ topic: 'Fotossíntese', text: EXAMPLE }]);
+});
+
+test('pickExample: nunca devolve o exemplo que está no editor, pelo texto ou pelo tema', () => {
+  for (const area of AREAS) {
+    for (const current of EXAMPLES[area]) {
+      // O exemplo pronto na tela; o mesmo tema escrito pela IA (outro texto, outra grafia); o mesmo texto já editado
+      // nas pontas e com o tema perdido (depois de um F5).
+      const shapes = [
+        current,
+        { topic: '  ' + fold(current.topic).toUpperCase() + ' ', text: 'Texto que a IA escreveu.' },
+        { topic: '', text: '\n' + current.text + '  ' },
+      ];
+      for (const shape of shapes) {
+        for (const r of [0, 0.3, 0.5, 0.7, 0.999]) {
+          const picked = pickExample(area, shape, () => r);
+          assert.ok(EXAMPLES[area].includes(picked), area + ': ' + JSON.stringify(picked));
+          assert.notEqual(picked.topic, current.topic, area + ' com ' + JSON.stringify(shape.topic));
+        }
+      }
+    }
+  }
+});
+
+test('pickExample: dois cliques seguidos, com o sorteio de verdade, não repetem', () => {
+  for (const area of AREAS) {
+    let current = null;
+    for (let i = 0; i < 40; i++) {
+      const next = pickExample(area, current);
+      assert.ok(EXAMPLES[area].includes(next), area);
+      assert.notEqual(next.text, current?.text, area);
+      current = next;
+    }
+  }
+});
+
+test('pickExample: com o sorteio injetado, o resultado é previsível', () => {
+  const [first, second, third] = EXAMPLES.Economia;
+  assert.equal(pickExample('Economia', null, () => 0), first, 'sem exemplo no editor, todos entram');
+  assert.equal(pickExample('Economia', { topic: '', text: 'Meu texto.' }, () => 0.999), EXAMPLES.Economia.at(-1));
+  assert.equal(pickExample('Economia', first, () => 0), second, 'o exemplo do editor sai do sorteio');
+  assert.equal(pickExample('Economia', first, () => 0.5), third);
+  assert.equal(pickExample('Economia', second, () => 0.5), third);
+});
+
+test('pickExample: área fora da lista cai nos exemplos de Escolar', () => {
+  for (const area of ['Medicina', '', undefined, null, 'constructor', '__proto__']) {
+    assert.equal(pickExample(area, null, () => 0), EXAMPLES.Escolar[0], String(area));
+  }
+  assert.equal(pickExample('Medicina', EXAMPLES.Escolar[0], () => 0), EXAMPLES.Escolar[1]);
 });
 
 const MATERIAL = {

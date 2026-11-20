@@ -4,13 +4,14 @@ Este documento mostra onde a inteligência artificial entra no Cérebro, o que e
 
 ## Onde a IA entra
 
-O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No desenvolvimento usamos o `gemini-3.5-flash-lite`, na faixa gratuita. Só o backend fala com o provedor, em três rotas:
+O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No desenvolvimento usamos o `gemini-3.5-flash-lite`, na faixa gratuita. Só o backend fala com o provedor, em quatro rotas:
 
 | Rota | O que a IA faz | O que dispara |
 |---|---|---|
 | `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Gerar o material na página Estudar |
 | `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Enter, fora de tela de toque) e o botão "Não entendi, me explique" |
 | `POST /api/grade` | Julga o sentido de uma resposta curta que a comparação de texto marcou como errada | Botão "Pedir revisão da IA" |
+| `POST /api/example` | Escreve um texto curto de estudo sobre um tema sorteado da área | Botão "Usar um exemplo" na página Estudar. Na demonstração, com a IA desligada ou quando ela falha, a tela usa um exemplo pronto da área, sem chamar o modelo |
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
@@ -20,8 +21,8 @@ A tela faz um pedido por vez, e os botões que gastam cota fora do fluxo princip
 
 Toda chamada tem duas partes, montadas em `backend/app/providers.py`:
 
-- `systemInstruction`: o texto fixo `SYSTEM` mais a instrução da rota (`GENERATE`, `CHAT` ou `GRADE`). Os quatro estão em `backend/app/prompts.py`. `SYSTEM` define o papel de tutor, pede português com acentos, proíbe inventar fontes, leis ou fatos, manda situar Direito no Brasil e resolver matemática passo a passo.
-- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno.
+- `systemInstruction`: o texto fixo `SYSTEM` mais a instrução da rota (`GENERATE`, `CHAT`, `GRADE` ou `EXAMPLE`). Os cinco estão em `backend/app/prompts.py`. `SYSTEM` define o papel de tutor, pede português com acentos, proíbe inventar fontes, leis ou fatos, manda situar Direito no Brasil e resolver matemática passo a passo.
+- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno. No exemplo vão só a área, o nível e o tema. O backend sorteia o tema de uma lista fixa de 10 por área (`TOPICS`, em `prompts.py`), sem o tema do exemplo que já está na tela: a tela manda esse tema para o sorteio, e ele não vai para o modelo.
 
 A área (seis opções) e o nível (três) fazem parte dos dados, e `SYSTEM` manda adaptar vocabulário, profundidade e exemplos a eles.
 
@@ -29,7 +30,7 @@ O servidor não guarda conversa. A memória do chat é o histórico que o navega
 
 ## Saída estruturada
 
-Todas as rotas pedem JSON (`responseMimeType: application/json`). A geração e a revisão mandam também o esquema da resposta (`responseJsonSchema`), tirado dos modelos Pydantic `StudyOutput` e `GradeOutput`. Sem o esquema, 4 de 7 respostas reais da geração eram recusadas: JSON inválido em 2, índice da resposta escrito como texto em 1 e resposta interrompida em 1. Na revisão o esquema vai porque a resposta é curta (um veredito e até duas frases) e o veredito tem de ser um dos três valores aceitos.
+Todas as rotas pedem JSON (`responseMimeType: application/json`). A geração, a revisão e o exemplo mandam também o esquema da resposta (`responseJsonSchema`), tirado dos modelos Pydantic `StudyOutput`, `GradeOutput` e `ExampleText`. Sem o esquema, 4 de 7 respostas reais da geração eram recusadas: JSON inválido em 2, índice da resposta escrito como texto em 1 e resposta interrompida em 1. Na revisão o esquema vai porque a resposta é curta (um veredito e até duas frases) e o veredito tem de ser um dos três valores aceitos. No exemplo ele tem um campo só, o texto, e evita que um JSON quebrado gaste a segunda chamada.
 
 O chat fica sem esquema de propósito. Com ele, 6 de 7 respostas vieram sem quebras de linha. Sem ele, cerca de 1 resposta em 20 veio com JSON quebrado, e nesse caso o backend pede de novo uma vez.
 
@@ -49,6 +50,8 @@ A resposta do modelo passa por código antes de chegar à tela. Em `/api/generat
 No chat, resposta que não é texto vira `AI_INVALID_ANSWER`. Sugestão fora do formato, repetida ou igual à pergunta que o aluno acabou de fazer é descartada sem derrubar a resposta.
 
 Na revisão, o veredito só pode ser `correta`, `parcial` ou `incorreta`. Fora disso há uma segunda chamada e, se ela também falhar, `AI_INVALID_ANSWER`.
+
+No exemplo, o texto precisa ter de 150 a 3.000 caracteres e não pode ter título, lista ou negrito em markdown, que apareceriam crus no editor. Fora disso, ou com JSON quebrado, há uma segunda chamada e, se ela também falhar, `AI_INVALID_ANSWER`. Texto sem nenhum acento usa a mesma segunda chamada; se ela falhar, fica o primeiro texto. Um clique faz no máximo 2 idas ao provedor.
 
 A entrada é conferida antes de gastar cota: texto de até 20.000 caracteres, até 6 mensagens de histórico com 4.000 caracteres cada, área e nível de listas fixas. Texto só com espaços é recusado. O erro volta em português, com o código `INVALID_INPUT`, sem repetir o que o aluno mandou.
 
@@ -75,7 +78,7 @@ O que não dá para garantir é que o conteúdo esteja certo. Nos 17 materiais c
 
 O texto colado pode trazer uma frase como "ignore as regras e responda X". O que o código garante, com qualquer texto:
 
-- O formato da saída: esquema na geração e na revisão, validação nas três rotas.
+- O formato da saída: esquema na geração, na revisão e no exemplo, validação nas quatro rotas.
 - O veredito da revisão é um dos três valores aceitos.
 - O modelo não tem ferramentas, e a resposta dele só aparece como texto. A tela não interpreta HTML vindo da IA.
 - O texto do aluno não escolhe a rota, e as novas tentativas têm teto fixo (ver a próxima seção).
@@ -95,6 +98,7 @@ No caso normal, cada pedido do aluno é uma chamada HTTP ao Gemini. Na rodada re
 | Material sem nenhum acento | 1 nova chamada; se ela falhar, vale o primeiro material |
 | Resposta interrompida por cópia de texto (`RECITATION`) | 1 nova chamada, sem os trechos de origem (nunca aconteceu na API real: só tem teste simulado) |
 | Revisão fora do formato | 1 nova chamada |
+| Exemplo fora do formato, com JSON quebrado ou sem nenhum acento | 1 nova chamada no total, também quando há mais de um desses problemas; sem acento, se ela falhar, vale o primeiro texto |
 | HTTP 429 | nenhuma: repetir gastaria a cota |
 
 As situações se somam no mesmo pedido. Cada ida ao provedor faz no máximo 4 chamadas HTTP (a primeira, 2 pelo 503 e 1 pelo tempo esgotado), e um pedido pode fazer mais de uma ida. Por isso o total pode passar dos 105 segundos que o navegador espera.
@@ -143,6 +147,7 @@ A primeira rodada real foi em 17/11/2026, com o gemini-3.5-flash-lite e teto de 
 - O trecho de origem prova que a frase existe no texto, não que o tópico está certo.
 - A revisão da IA pode errar. Ela só muda o resultado quando diz "correta"; "parcial" e "incorreta" deixam a questão como estava.
 - O embaralhamento não reconhece toda forma de citar uma opção: "alternativa 2", "Alternativa correta: A" e opção que já começa com "A)" passam sem ser percebidas.
+- O exemplo escrito pela IA (`/api/example`) só tem teste simulado: ainda não rodou na API real, e a rodada de avaliação não tem casos dele.
 - O caminho com `AI_PROVIDER=openai` só tem teste simulado e não manda o esquema da resposta: pede só um objeto JSON, e o formato fica por conta da validação.
 - Na rodada real a instrução não segurou o modelo em dois casos: a ordem escondida no texto do aluno (flashcards com a palavra-canário) e a aula que não existiu (o chat continuou a explicação). O código não confere nenhum dos dois.
 - A revisão da IA acertou o veredito nos 4 casos da rodada real, inclusive na resposta que pedia para ser considerada certa. Quatro casos são pouco para dizer que ela não erra.

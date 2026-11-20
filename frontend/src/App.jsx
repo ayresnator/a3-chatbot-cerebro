@@ -21,7 +21,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -191,14 +191,17 @@ function App() {
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
-  // clique.
+  // clique. O texto do editor, a área e o nível vão junto: na volta da IA, addExample() confere se o aluno mexeu neles
+  // durante a espera.
   const latest = useRef({});
-  latest.current = { page, result: opened };
+  latest.current = { page, result: opened, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
   // Pedido à IA em andamento (AbortController): o botão "Cancelar" da espera o interrompe.
   const pending = useRef(null);
   const recognition = useRef(null);
+  // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
+  const exampleTopic = useRef('');
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
   const viewed = useRef(false);
@@ -800,6 +803,56 @@ function App() {
     toast('Ouvindo…');
   }
 
+  // "Usar um exemplo": com a IA ligada, ela escreve um texto de estudo sobre um tema sorteado pelo servidor na área e
+  // no nível escolhidos (1 chamada da cota), sem repetir o tema do exemplo anterior. Na demonstração, com a IA
+  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (lib.js). A área e o nível não mudam.
+  async function addExample() {
+    // Um pedido à IA por vez: o segundo clique durante a espera não pede outro.
+    if (waiting) return;
+    const ai = !!API_BASE && health?.ai_configured !== false;
+    let written = null;
+    if (ai) {
+      setBusy({ kind: 'example', label: 'Escrevendo um exemplo…', since: Date.now() });
+      try {
+        const data = await callAI('/api/example', { area, level, avoid: exampleTopic.current.slice(0, 120) });
+        if (typeof data?.topic !== 'string' || typeof data.text !== 'string' || !data.text.trim()) {
+          throw Error('Exemplo incompleto recebido do backend');
+        }
+        written = { topic: data.topic, text: data.text.trim() };
+      } catch (e) {
+        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto.
+        if (e.cancelled) return;
+      } finally {
+        // O botão desabilitado na espera, ou o Cancelar da faixa que sai com ela, deixa o foco no vazio: ele volta ao
+        // botão. Quem foi escrever ou foi para outra página continua onde está.
+        const at = document.activeElement;
+        if (!at || at === document.body || at.closest('.busy')) focusAfter.current = ['#usar-exemplo'];
+        setBusy(null);
+      }
+      // O aluno mexeu durante a espera no que o exemplo usa: o que ele fez vale mais. O exemplo apagaria o texto no
+      // meio da digitação (o Desfazer do editor some na primeira tecla) ou longe da vista (some também na troca de
+      // página), e o exemplo da área ou do nível do clique ficaria com outra área ou outro nível na tela.
+      const now = latest.current;
+      const changed = now.input !== input ? 'o texto do editor mudou'
+        : now.area !== area || now.level !== level ? 'a área ou o nível mudou'
+        : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
+      if (changed) {
+        toast('O exemplo não entrou: ' + changed + ' durante a espera');
+        return;
+      }
+    }
+    const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
+    // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
+    // quem escreveu.
+    const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
+      : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
+    exampleTopic.current = example.topic;
+    setInput(example.text);
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás.
+    if (input.trim()) offerUndo('texto', note, () => setInput(input));
+    else toast(note);
+  }
+
   // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
   function tabKeys(e) {
     const at = TABS.findIndex(([p]) => p === page);
@@ -1112,24 +1165,15 @@ function App() {
                         </button>
                         <button
                           type="button"
+                          id="usar-exemplo"
                           className="tool"
-                          onClick={() => {
-                            // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás.
-                            const before = input.trim() ? { input, area } : null;
-                            setInput(EXAMPLE);
-                            setArea('Escolar');
-                            if (!before) {
-                              toast('Exemplo de fotossíntese adicionado');
-                              return;
-                            }
-                            offerUndo('texto', 'Exemplo de fotossíntese adicionado', () => {
-                              setInput(before.input);
-                              setArea(before.area);
-                            });
-                          }}
+                          disabled={waiting}
+                          onClick={addExample}
                         >
                           <Icon name="exemplo" />
                           <span className="full">Usar um exemplo</span>
+                          {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
+                          {API_BASE && health?.ai_configured !== false && <small className="full">1 chamada de IA</small>}
                           <span className="short" aria-hidden="true">Exemplo</span>
                         </button>
                         {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno

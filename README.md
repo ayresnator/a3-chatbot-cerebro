@@ -12,13 +12,14 @@ Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo
 
 ## 🤖 Inteligência artificial utilizada
 
-O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em três situações:
+O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em quatro situações:
 
 | Uso | O que a IA faz | Rota do backend |
 |---|---|---|
 | Gerar material | Monta resumo, flashcards e quiz a partir do texto ou do tema | `POST /api/generate` |
 | Tirar dúvidas | Responde no chat e explica de outro jeito um tópico ou uma questão | `POST /api/chat` |
 | Revisar resposta curta | Julga o sentido de uma resposta que a comparação de texto marcou como errada | `POST /api/grade` |
+| Escrever um exemplo | Escreve, para o botão "Usar um exemplo", um texto curto sobre um tema sorteado da área escolhida | `POST /api/example` |
 
 O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
 

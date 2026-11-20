@@ -2,10 +2,13 @@ import http.client
 import io
 import json
 import os
+import random
 import threading
 import time
+import unicodedata
 import unittest
 from datetime import date
+from typing import get_args
 from unittest.mock import MagicMock, patch
 from dataclasses import replace
 from urllib.error import HTTPError, URLError
@@ -17,7 +20,7 @@ from fastapi.testclient import TestClient
 from app import config
 from app.config import Settings
 from app.main import app, grounded, shuffle_options
-from app.models import Card, GradeOutput, QuizItem, StudyOutput, SummaryItem
+from app.models import Area, Card, ExampleText, GradeOutput, QuizItem, StudyOutput, SummaryItem
 from app import prompts
 from app import providers
 
@@ -661,6 +664,13 @@ class StudyOutputTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 GradeOutput.model_validate(bad)
 
+    def test_example_schema_uses_only_keywords_the_material_schema_already_uses(self):
+        # O esquema do exemplo também vai ao provedor: um campo de texto, sem palavra-chave que a API real não tenha visto.
+        # Tamanho e markdown ficam no validador, fora do esquema.
+        schema = ExampleText.model_json_schema()
+        self.assertLessEqual(keywords(schema), keywords(StudyOutput.model_json_schema()))
+        self.assertEqual((list(schema["properties"]), schema["required"]), (["text"], ["text"]))
+
     def test_blank_texts_are_refused(self):
         # Material com textos em branco voltava HTTP 200 e chegava à tela como tópico ou cartão vazio.
         for model, good in ((SummaryItem, {"concept": "Luz", "text": "A planta usa luz."}),
@@ -717,6 +727,14 @@ class ApiTests(unittest.TestCase):
     # Resposta que a comparação de texto da tela marca como errada: a sigla no lugar do nome inteiro.
     GRADE = {"question": "Qual indicador soma os bens e serviços finais produzidos em um país?",
              "expected": "Produto Interno Bruto", "answer": "PIB", "area": "Economia", "level": "Intermediário"}
+    EXAMPLE = {"area": "Economia", "level": "Intermediário"}
+    # Texto que /api/example aceita: frases corridas, com acento, entre 150 e 3.000 caracteres.
+    WRITTEN = ("A inflação é o aumento geral e contínuo dos preços de uma economia. Quando ela sobe, o mesmo dinheiro "
+               "compra menos produtos, e o poder de compra das famílias diminui. O banco central acompanha a inflação e "
+               "pode subir a taxa de juros para segurar os preços. Por exemplo, se o pão fica mais caro todo mês, o "
+               "salário rende menos no fim do mês.")
+    # O mesmo texto sem nenhum acento, como o modelo às vezes devolve.
+    PLAIN = "".join(char for char in unicodedata.normalize("NFD", WRITTEN) if not unicodedata.combining(char))
 
     def setUp(self):
         self.client = TestClient(app)
@@ -1262,11 +1280,153 @@ class ApiTests(unittest.TestCase):
         for rule in ('"parcial" é quando falta uma parte essencial', '"incorreta" é quando o sentido é outro', "em até 2 frases"):
             self.assertIn(rule, prompts.GRADE)
 
+    def test_example_topics_cover_every_area(self):
+        # Uma lista por área da tela, de 8 a 12 temas. Sem repetição (nem por maiúsculas, que o avoid ignora), para dois
+        # cliques seguidos não trazerem o mesmo tema. O tema volta da tela no avoid, que aceita até 120 caracteres.
+        self.assertEqual(list(prompts.TOPICS), list(get_args(Area)))
+        for area, topics in prompts.TOPICS.items():
+            self.assertTrue(8 <= len(topics) <= 12, area)
+            self.assertEqual(len({topic.casefold() for topic in topics}), len(topics), area)
+            for topic in topics:
+                self.assertTrue(0 < len(topic) <= 120 and topic == topic.strip(), topic)
+
+    def test_example_draws_the_topic_from_the_area_list(self):
+        # "Usar um exemplo" punha sempre o texto da fotossíntese, em qualquer área. Agora o tema sai da lista da área
+        # escolhida, e a IA recebe só a área, o nível e o tema, com a instrução e o esquema do exemplo, numa chamada.
+        for area, topics in prompts.TOPICS.items():
+            with patch("app.main.ai", return_value={"text": f"  {self.WRITTEN}\n"}) as mock_ai:
+                response = self.client.post("/api/example", json={"area": area, "level": "Básico"})
+            self.assertEqual(response.status_code, 200)
+            topic = response.json()["topic"]
+            self.assertIn(topic, topics)
+            self.assertEqual(response.json(), {"topic": topic, "text": self.WRITTEN})
+            mock_ai.assert_called_once()
+            self.assertEqual(mock_ai.call_args.args, ({"area": area, "level": "Básico", "topic": topic},
+                                                      prompts.EXAMPLE, ExampleText.model_json_schema()))
+            # Sem a nova chamada própria do ai(): o JSON quebrado usa a segunda chamada da rota (ver o teste do teto).
+            self.assertEqual(mock_ai.call_args.kwargs, {"retry": False})
+        self.assertEqual(app.openapi()["paths"]["/api/example"]["post"]["responses"]["200"]["content"]["application/json"]["schema"],
+                         {"$ref": "#/components/schemas/ExampleOutput"})
+
+    def test_example_never_repeats_the_topic_on_screen(self):
+        # O tema do exemplo que está na tela (avoid) sai do sorteio, sem contar maiúsculas e espaços nas pontas. Tema que
+        # não está na lista (o de um exemplo pronto da tela, por exemplo) não tira nada do sorteio.
+        topics = prompts.TOPICS["Economia"]
+        others = [topic for topic in topics if topic != "Inflação"]
+        for avoid, left in (("Inflação", others), ("  inflação ", others), ("INFLAÇÃO", others),
+                            ("Tema que não está na lista", topics), ("", topics)):
+            with patch("app.main.ai", return_value={"text": self.WRITTEN}), \
+                    patch("app.main.random.choice", wraps=random.choice) as draw:
+                response = self.client.post("/api/example", json={**self.EXAMPLE, "avoid": avoid})
+            draw.assert_called_once()
+            self.assertEqual(draw.call_args.args[0], left, avoid)
+            self.assertIn(response.json()["topic"], left)
+
+    @patch("app.providers.urlopen")
+    def test_example_reaches_the_provider_with_its_instruction_and_schema_but_without_avoid(self, mock_open):
+        mock_open.return_value.__enter__.return_value = gemini_reply(json.dumps({"text": self.WRITTEN}))
+        with patch.object(providers, "settings", CONFIG):
+            response = self.client.post("/api/example", json={**self.EXAMPLE, "avoid": "Tema da tela CANARIO"})
+        self.assertEqual(response.status_code, 200)
+        mock_open.assert_called_once()
+        request = mock_open.call_args.args[0]
+        sent = json.loads(request.data)
+        self.assertEqual(sent["systemInstruction"]["parts"][0]["text"], prompts.SYSTEM + "\n" + prompts.EXAMPLE)
+        self.assertEqual(sent["generationConfig"]["responseJsonSchema"], ExampleText.model_json_schema())
+        self.assertEqual(json.loads(sent["contents"][0]["parts"][0]["text"]), {**self.EXAMPLE, "topic": response.json()["topic"]})
+        # O avoid só serve ao sorteio: nem o campo nem o texto dele chegam ao provedor.
+        self.assertNotIn("CANARIO", request.data.decode())
+        # As regras do texto fazem parte do pedido.
+        for rule in ("de 5 a 8 frases, em 1 ou 2 parágrafos", "sem título", "sem markdown",
+                     "não cite números, datas, leis, autores nem frases de que não tenha certeza"):
+            self.assertIn(rule, prompts.EXAMPLE)
+
+    @patch("app.main.ai", return_value={"text": WRITTEN})
+    def test_example_refuses_invalid_input_before_the_ai_call(self, mock_ai):
+        for change, message in (({"area": "Culinária"}, "Valor inválido em área."), ({"level": "Mestre"}, "Valor inválido em nível."),
+                                ({"avoid": "x" * 121}, "O texto passou do limite de 120 caracteres."),
+                                ({"avoid": 7}, "Pedido em formato inválido.")):
+            response = self.client.post("/api/example", json={**self.EXAMPLE, **change})
+            self.assertEqual(response.status_code, 422, change)
+            self.assertEqual(response.json(), {"detail": {"code": "INVALID_INPUT", "message": message, "provider_status": ""}})
+        for field, name in (("area", "área"), ("level", "nível")):
+            body = {key: value for key, value in self.EXAMPLE.items() if key != field}
+            self.assertEqual(self.client.post("/api/example", json=body).json()["detail"]["message"], f"Faltou o campo {name}.")
+        mock_ai.assert_not_called()
+        # Sem avoid, ou com ele no limite (os espaços das pontas não contam), o pedido passa.
+        for extra in ({}, {"avoid": " " + "x" * 120 + " "}):
+            self.assertEqual(self.client.post("/api/example", json={**self.EXAMPLE, **extra}).status_code, 200)
+
+    def test_example_outside_the_format_gets_a_second_call(self):
+        # Resposta vazia, fora do formato, curta ou longa demais, ou com markdown (que apareceria cru no editor): vale
+        # uma segunda chamada e, se ela também falhar, erro com código. O log diz só o campo e o motivo, nunca o texto.
+        good = {"text": self.WRITTEN}
+        broken = HTTPException(502, {"code": "AI_INVALID_JSON", "message": "JSON inválido.", "provider_status": ""})
+        for bad in ({}, {"text": ""}, {"text": "   "}, {"text": None}, {"text": ["Nome do aluno"]}, {"texto": self.WRITTEN},
+                    {"text": "Nome do aluno."}, {"text": "é" * 149}, {"text": "é" * 3001}, {"text": self.WRITTEN * 10},
+                    {"text": "# Nome do aluno\n" + self.WRITTEN},
+                    {"text": "Nome do aluno:\n- " + self.WRITTEN}, {"text": "Nome do aluno:\n2) " + self.WRITTEN},
+                    {"text": "A **inflação** do Nome do aluno. " + self.WRITTEN}, broken):
+            for replies, status in (([bad, good], 200), ([bad, bad], 502)):
+                with patch("app.main.ai", side_effect=replies) as mock_ai:
+                    with self.assertLogs("cerebro.api", level="WARNING") as logs:
+                        response = self.client.post("/api/example", json=self.EXAMPLE)
+                self.assertEqual(response.status_code, status, bad)
+                self.assertEqual(mock_ai.call_count, 2)
+                self.assertNotIn("Nome do aluno", "\n".join(logs.output))
+            self.assertEqual(response.json()["detail"], {
+                "code": "AI_INVALID_ANSWER", "provider_status": "",
+                "message": "A IA devolveu um exemplo fora do formato. Tente novamente."})
+        # No limite (150 e 3.000 caracteres) o texto passa, e também com dois parágrafos, hífen e número no meio da frase.
+        for text in ("é" * 150, "é" * 3000, self.WRITTEN + "\n\nEm 2 meses de alta, o custo-benefício muda."):
+            with patch("app.main.ai", return_value={"text": text}) as mock_ai:
+                self.assertEqual(self.client.post("/api/example", json=self.EXAMPLE).status_code, 200, text[:20])
+            mock_ai.assert_called_once()
+
+    def test_example_without_accents_uses_the_same_second_call(self):
+        # Texto sem nenhum acento é o modelo "comendo" a acentuação: vale a segunda chamada, como em /api/generate, e se
+        # ela falhar fica o primeiro texto (sem acento é melhor que erro). A segunda chamada é uma só por clique.
+        good, plain, bad = {"text": self.WRITTEN}, {"text": self.PLAIN}, {"text": ""}
+        down = HTTPException(503, {"code": "AI_PROVIDER_UNAVAILABLE"})
+        self.assertNotRegex(self.PLAIN, "[áàâãéêíóôõúç]")
+        for replies, text in (([plain, good], self.WRITTEN), ([plain, bad], self.PLAIN), ([plain, down], self.PLAIN),
+                              ([plain, plain], self.PLAIN), ([bad, plain], self.PLAIN)):
+            with patch("app.main.ai", side_effect=[*replies, good]) as mock_ai:
+                response = self.client.post("/api/example", json=self.EXAMPLE)
+            self.assertEqual((response.status_code, response.json()["text"]), (200, text), replies)
+            self.assertEqual(mock_ai.call_count, 2)
+
+    @patch("app.providers.urlopen")
+    def test_example_never_makes_more_than_two_calls(self, mock_open):
+        # Um clique gasta 1 chamada, e no máximo 2. O JSON quebrado não ganha a nova chamada própria do ai(): ele divide
+        # a única segunda chamada com a resposta fora do formato e com o texto sem acento.
+        broken, good, plain = '{"text": "sem fechar', json.dumps({"text": self.WRITTEN}), json.dumps({"text": self.PLAIN})
+        for replies, status, calls in (([good], 200, 1), ([broken, good], 200, 2), ([broken, broken, good], 502, 2),
+                                       ([broken, plain, good], 200, 2), ([plain, broken, good], 200, 2),
+                                       ([plain, plain, good], 200, 2)):
+            mock_open.reset_mock()
+            mock_open.side_effect = [gemini_response(reply) for reply in replies]
+            with patch.object(providers, "settings", CONFIG):
+                response = self.client.post("/api/example", json=self.EXAMPLE)
+            self.assertEqual((response.status_code, mock_open.call_count), (status, calls), replies)
+        self.assertEqual(response.json()["text"], self.PLAIN)
+        # Erro do provedor (cota, chave, rede) sobe na hora, com o código, sem a segunda chamada desta rota: a tela troca
+        # por um exemplo pronto. Quem repete o que vale repetir (503, tempo esgotado) é o transporte.
+        for first in ([], [gemini_response(broken)]):
+            mock_open.reset_mock()
+            mock_open.side_effect = [*first, HTTPError("https://example.invalid", 429, "error", {}, io.BytesIO(b"{}")),
+                                     gemini_response(good)]
+            with patch.object(providers, "settings", CONFIG):
+                response = self.client.post("/api/example", json=self.EXAMPLE)
+            self.assertEqual((response.status_code, response.json()["detail"]["code"]), (429, "AI_QUOTA_EXCEEDED"))
+            self.assertEqual(mock_open.call_count, len(first) + 1)
+
     @patch("app.providers.urlopen")
     def test_missing_key_reaches_the_client_with_its_code(self, mock_open):
         # Chave vazia: o pedido para antes da rede e a tela recebe o código, não um erro genérico.
         with patch.object(providers, "settings", replace(CONFIG, api_key="")):
-            for path, body in (("/api/chat", self.CHAT), ("/api/generate", self.REQUEST), ("/api/grade", self.GRADE)):
+            for path, body in (("/api/chat", self.CHAT), ("/api/generate", self.REQUEST), ("/api/grade", self.GRADE),
+                               ("/api/example", self.EXAMPLE)):
                 response = self.client.post(path, json=body)
                 self.assertEqual(response.status_code, 503)
                 self.assertEqual(response.json()["detail"]["code"], "AI_NOT_CONFIGURED")

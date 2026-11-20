@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -51,6 +52,36 @@ class GradeInput(Trimmed):
 class GradeOutput(Trimmed):
     verdict: Literal["correta", "parcial", "incorreta"]
     feedback: Text
+
+class ExampleInput(Trimmed):
+    # "Usar um exemplo", na página Estudar: a área e o nível que o aluno escolheu.
+    area: Area
+    level: Level
+    # Tema do exemplo que já está na tela, para o sorteio não repetir. Só o servidor usa: não vai para o modelo.
+    avoid: str = Field(default="", max_length=120)
+
+# Markdown que apareceria cru no editor: título (#) ou item de lista (-, *, •, 1.) no começo da linha, e negrito (**).
+MARKDOWN = re.compile(r"^\s*(?:#|[-*•]\s|\d+[.)]\s)|\*\*", re.MULTILINE)
+
+class ExampleText(Trimmed):
+    # O texto que a IA escreve para o exemplo. O esquema enviado ao provedor sai daqui: as regras do texto ficam no
+    # validador, fora do esquema, como nos outros modelos.
+    text: Text
+
+    @field_validator("text")
+    @classmethod
+    def plain_study_text(cls, text):
+        # O texto vai para o editor, e dele o aluno gera o material. A instrução pede de 5 a 8 frases: com menos de
+        # 150 caracteres não há o que estudar, e com mais de 3.000 o modelo fugiu do pedido.
+        if not 150 <= len(text) <= 3000:
+            raise ValueError("Example text must have 150 to 3000 characters")
+        if MARKDOWN.search(text):
+            raise ValueError("Example text must not use markdown")
+        return text
+
+class ExampleOutput(BaseModel):
+    topic: str
+    text: str
 
 class SummaryItem(Trimmed):
     concept: Text
