@@ -9,7 +9,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote,
+  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -361,7 +361,7 @@ test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão'
   const text = 'Mitocôndrias produzem a energia da célula.';
   assert.deepEqual(demo(text), {
     title: 'Mitocôndrias produzem a energia da célula',
-    summary: [{ concept: 'Mitocôndrias produzem a energia da célula', text }],
+    summary: [{ concept: 'Mitocôndrias produzem a energia da célula', text, source: text }],
     flashcards: [{ question: 'Complete o trecho 1: Mitocôndrias produzem a energia…', answer: text }],
     quiz: [{
       type: 'short',
@@ -403,9 +403,10 @@ test('demo: o título para na quebra de linha, antes de "em que" e em 12 palavra
     'um dois três quatro cinco seis sete oito nove dez onze doze…');
 });
 
-test('demo: o material leva a marca semIA e continua valendo como material', () => {
+test('demo: o material leva a marca semIA, o trecho de cada tópico é a própria frase, e ele continua valendo', () => {
   const material = demo(EXAMPLE);
   assert.equal(material.semIA, true);
+  assert.ok(material.summary.every(s => s.source === s.text && inText(s.source, EXAMPLE)));
   assert.equal(validMaterial(material), true);
   assert.equal(sameMaterial(material, demo(EXAMPLE)), true);
 });
@@ -824,6 +825,34 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   assert.equal(originNote([]), nothing);
   assert.equal(originNote([own, { ...own, ia: true }, none]),
     'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.');
+  // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
+  assert.equal(originNote([own, { ...own, pronto: true }, none]),
+    'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pronto, e o resto fica como veio', () => {
+  const ai = 'A inflação corrói o poder de compra das famílias. O Banco Central sobe os juros para conter os preços.';
+  const ready = EXAMPLES.Economia[0].text;
+  const own = { concept: 'Juros', text: 'Rendem sobre o saldo.', source: 'juros compostos rendem sobre o saldo' };
+  const fromAi = { concept: 'Poder de compra', text: 'Cai.', source: 'A INFLACAO corrói o poder de compra' };
+  const fromReady = { concept: 'IPCA', text: 'Índice oficial.', source: 'o índice oficial de inflação é o IPCA' };
+  const none = { concept: 'Selic', text: 'Taxa básica.', source: '' };
+  const summary = [own, fromAi, fromReady, none];
+  assert.deepEqual(markExample(summary, ai, ''), [own, { ...fromAi, ia: true }, fromReady, none], 'exemplo da IA');
+  assert.deepEqual(markExample(summary, '', ready), [own, fromAi, { ...fromReady, pronto: true }, none], 'pronto');
+  assert.deepEqual(markExample(summary, '', ''), summary, 'depois do Limpar, nenhum exemplo');
+  // Demonstração: as frases do exemplo pronto ganham a marca; a que o aluno escreveu depois dele, não.
+  const mine = 'Juros altos seguram o consumo.';
+  const marked = markExample(demo(ready + ' ' + mine).summary, '', ready);
+  const expected = [...demo(ready).summary.map(s => [s.source, true]), [mine, false]];
+  assert.deepEqual(marked.map(s => [s.source, !!s.pronto]), expected);
+});
+
+test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
+  const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
+  assert.equal(sourceLabel(s), 'No seu texto: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
 });
 
 const EVENT = { kind: 'quiz', ok: true, area: 'Economia', title: 'Inflação', date: at(16) };
@@ -895,11 +924,13 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 });
 
 const NO_DRAFT = {
-  input: '', exemplo: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [], tips: NO_TIPS,
+  input: '', exemplo: '', exemploPronto: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [],
+  tips: NO_TIPS,
 };
 const DRAFT = {
   input: 'Inflação e juros',
   exemplo: 'Inflação é o aumento contínuo e generalizado dos preços.',
+  exemploPronto: '',
   area: 'Economia',
   level: 'Avançado',
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
@@ -934,15 +965,19 @@ test('readDraft: texto do editor acima de 20.000 caracteres, ou que não é text
   assert.equal(draft({ input: ['a'] }).input, '');
 });
 
-test('readDraft: o exemplo escrito pela IA volta em texto de até 20.000 caracteres; o resto vale vazio', () => {
-  assert.equal(draft({ exemplo: 'a'.repeat(20000) }).exemplo, 'a'.repeat(20000));
-  for (const exemplo of ['a'.repeat(20001), 5, null, { text: 'a' }, ['a']]) {
-    assert.equal(draft({ exemplo }).exemplo, '', JSON.stringify(exemplo).slice(0, 30));
+test('readDraft: o exemplo da IA e o pronto voltam em texto de até 20.000 caracteres; o resto vale vazio', () => {
+  for (const field of ['exemplo', 'exemploPronto']) {
+    assert.equal(draft({ [field]: 'a'.repeat(20000) })[field], 'a'.repeat(20000), field);
+    for (const value of ['a'.repeat(20001), 5, null, { text: 'a' }, ['a']]) {
+      assert.equal(draft({ [field]: value })[field], '', field + ' ' + JSON.stringify(value).slice(0, 30));
+    }
+    assert.equal(draft({ [field]: undefined })[field], '', field + ': rascunho gravado antes do campo');
   }
-  assert.equal(draft({ exemplo: undefined }).exemplo, '', 'rascunho gravado antes do campo');
-  // O tópico marcado como trecho do exemplo da IA volta com a marca depois de um F5.
-  const marked = broken(m => Object.assign(m.summary[0], { source: 'A clorofila absorve a luz', ia: true }));
-  assert.deepEqual(draft({ result: marked }).result, marked);
+  // O tópico marcado como trecho de um exemplo, da IA ou pronto, volta com a marca depois de um F5.
+  for (const mark of ['ia', 'pronto']) {
+    const marked = broken(m => Object.assign(m.summary[0], { source: 'A clorofila absorve a luz', [mark]: true }));
+    assert.deepEqual(draft({ result: marked }).result, marked, mark);
+  }
 });
 
 test('readDraft: área e nível só valem se forem da lista', () => {
@@ -1325,10 +1360,15 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
   assert.deepEqual(got, { saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros });
 });
 
-test('readBackup: material da demonstração mantém a marca semIA, e o do exemplo da IA, a marca ia dos tópicos', () => {
-  const fromDemo = { ...demo(EXAMPLE), id: 2, date: at(11), area: 'Escolar', level: 'Básico' };
+test('readBackup: material da demonstração mantém a marca semIA, e o de um exemplo, as marcas ia e pronto', () => {
+  const made = demo(EXAMPLE);
+  const fromDemo = { ...made, summary: markExample(made.summary, '', EXAMPLE), id: 2, date: at(11), area: 'Escolar' };
+  assert.ok(fromDemo.summary.every(s => s.pronto), 'demonstração feita do exemplo pronto');
   const fromExample = { ...BACKUP.saved[0], id: 3, date: at(12) };
-  fromExample.summary = [{ concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz', ia: true }];
+  fromExample.summary = [
+    { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz', ia: true },
+    { concept: 'Calvin', text: 'Fixa o carbono.', source: 'o gás carbônico é fixado', pronto: true },
+  ];
   assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [fromDemo, fromExample] })).saved, [fromDemo, fromExample]);
 });
 

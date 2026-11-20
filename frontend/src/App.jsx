@@ -22,7 +22,8 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, inText, originNote,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
+  originNote,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -207,6 +208,8 @@ function App() {
   // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
   // trecho do material que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
   const aiExample = useRef(DRAFT.exemplo);
+  // O mesmo para o exemplo pronto, que também não é do aluno ('' quando o exemplo é da IA e depois do Limpar).
+  const readyExample = useRef(DRAFT.exemploPronto);
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
   const viewed = useRef(false);
@@ -241,7 +244,10 @@ function App() {
   // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
-    draft.current = { input, area, level, result: opened, made: made.current, chat, tips, exemplo: aiExample.current };
+    draft.current = {
+      input, area, level, result: opened, made: made.current, chat, tips,
+      exemplo: aiExample.current, exemploPronto: readyExample.current,
+    };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
   }, [input, area, level, opened, chat, tips]);
@@ -478,8 +484,9 @@ function App() {
     // O mesmo botão de novo gera material novo.
     const key = JSON.stringify([input, area, level]);
     const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
-    // O exemplo da IA que acompanha o texto deste clique: o Desfazer do aviso pode trocar os dois durante a espera.
+    // Os exemplos que acompanham o texto deste clique: o Desfazer do aviso pode trocar tudo durante a espera.
     const example = aiExample.current;
+    const ready = readyExample.current;
     const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
     // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
     // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
@@ -502,9 +509,10 @@ function App() {
       if (!validMaterial(data)) {
         throw Error('Material incompleto recebido do backend');
       }
-      // Trecho copiado do exemplo que a IA escreveu não confere nada: seria a IA citando a si mesma. A marca ia vai com
-      // o material para a biblioteca, o rascunho e o backup. A demonstração não tem trecho e não ganha marca.
-      if (!reuse) data = { ...data, summary: data.summary.map(s => (inText(s.source, example) ? { ...s, ia: true } : s)) };
+      // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
+      // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
+      // biblioteca, o rascunho e o backup. Na demonstração o trecho é a própria frase: a do exemplo pronto ganha marca.
+      if (!reuse) data = { ...data, summary: markExample(data.summary, example, ready) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
       // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
       // material do mesmo texto.
@@ -852,18 +860,19 @@ function App() {
       }
     }
     const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
-    // O aviso diz quem escreveu. O texto da IA fica guardado em aiExample: o material feito dele cita o trecho como
-    // "No exemplo escrito pela IA", e não como "No seu texto".
+    // O aviso diz quem escreveu. O texto fica guardado em aiExample, o da IA, ou em readyExample, o pronto: o material
+    // feito dele cita o trecho como "No exemplo escrito pela IA" ou "No texto de exemplo", e não como "No seu texto".
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
-    const before = aiExample.current;
+    const before = [aiExample.current, readyExample.current];
     exampleTopic.current = example.topic;
     aiExample.current = written ? example.text : '';
+    readyExample.current = written ? '' : example.text;
     setInput(example.text);
-    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás, e o exemplo da IA volta junto.
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para desfazer, e o exemplo anterior volta junto.
     if (input.trim()) {
       offerUndo('texto', note, () => {
-        aiExample.current = before;
+        [aiExample.current, readyExample.current] = before;
         setInput(input);
       });
     } else toast(note);
@@ -1198,13 +1207,13 @@ function App() {
                           disabled={!input}
                           onClick={() => {
                             const before = input;
-                            // O exemplo da IA sai junto com o texto: o que o aluno escrever depois é dele. O Desfazer
-                            // devolve os dois.
-                            const example = aiExample.current;
-                            aiExample.current = '';
+                            // O exemplo, da IA ou pronto, sai junto com o texto: o que o aluno escrever depois é
+                            // dele. O Desfazer devolve os dois.
+                            const examples = [aiExample.current, readyExample.current];
+                            aiExample.current = readyExample.current = '';
                             setInput('');
                             offerUndo('texto', 'Texto apagado', () => {
-                              aiExample.current = example;
+                              [aiExample.current, readyExample.current] = examples;
                               setInput(before);
                             });
                           }}
@@ -1381,13 +1390,9 @@ function App() {
                                     <div>
                                       <h3>{s.concept}</h3>
                                       <p>{s.text}</p>
-                                      {s.source?.trim() && (
-                                        <p className="source">
-                                          {(s.ia ? 'No exemplo escrito pela IA: "' : 'No seu texto: "') + s.source.trim() + '"'}
-                                        </p>
-                                      )}
-                                      {/* Sem trecho, ou com trecho do exemplo da própria IA, o tópico não foi conferido
-                                          com um texto do aluno. */}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                      {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
+                                          exemplo pronto não é da IA: o trecho dele confere, como o do aluno. */}
                                       {result.semIA !== true && (s.ia || !s.source?.trim()) && (
                                         <span className="ai-tag">Explicação da IA: confira</span>
                                       )}
