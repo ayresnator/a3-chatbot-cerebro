@@ -5,7 +5,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
+  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
   opener, openers, typeDelay, rove, LEVEL_NOTES,
@@ -931,59 +931,119 @@ test('readDraft: sugestões da IA precisam de chave em texto e lista de textos',
   for (const tips of bad) assert.deepEqual(draft({ tips }).tips, NO_TIPS, JSON.stringify(tips));
 });
 
-test('healthLabel: conferindo, backend desligado e IA não configurada', () => {
+const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+
+test('healthLabel: conferindo, Cérebro desligado e IA não configurada', () => {
   assert.deepEqual(healthLabel(null), { text: 'Conferindo a IA…', tone: '' });
-  assert.deepEqual(healthLabel(false), { text: 'Backend desligado', tone: 'off' });
+  assert.deepEqual(healthLabel(false), { text: 'Cérebro desligado', tone: 'off' });
   assert.deepEqual(
     healthLabel({ status: 'ok', ai_configured: false, provider: 'gemini', model: 'gemini-flash', calls_today: 0 }),
     { text: 'IA não configurada', tone: 'warn' }
   );
 });
 
-test('healthLabel: IA ativa mostra o modelo em uso e as chamadas de hoje', () => {
+test('healthLabel: IA ativa mostra o modelo em uso e as chamadas deste computador, com a dica da cota', () => {
   const health = {
     status: 'ok',
     ai_configured: true,
     provider: 'gemini',
     model: 'gemini-flash-latest',
     model_in_use: 'gemini-2.5-flash',
+    quota_exhausted: false,
   };
+  assert.deepEqual(healthLabel({ ...health, calls_today: 12 }), {
+    text: 'IA ativa · gemini-2.5-flash · 12 chamadas deste computador',
+    tone: 'ok',
+    model: 'gemini-2.5-flash',
+    count: '12 chamadas deste computador',
+    note: QUOTA_NOTE,
+  });
+  assert.equal(healthLabel({ ...health, calls_today: 1 }).text, 'IA ativa · gemini-2.5-flash · 1 chamada deste computador');
+  assert.equal(healthLabel({ ...health, calls_today: 0 }).count, '0 chamadas deste computador');
+});
+
+test('healthLabel: com a cota esgotada o selo fica âmbar até a cota virar', () => {
+  const health = { ai_configured: true, model_in_use: 'gemini-2.5-flash', calls_today: 40, quota_exhausted: true };
+  assert.deepEqual(healthLabel(health), { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE });
+  // Sem a chave a cota nem chega a ser usada: vale "IA não configurada".
+  assert.equal(healthLabel({ ...health, ai_configured: false }).text, 'IA não configurada');
+});
+
+test('healthLabel: sem model_in_use vale model; sem calls_today não há contador; o modelo vem à parte do resto', () => {
+  const plain = healthLabel({ ai_configured: true, model: 'gemini-flash-latest', calls_today: 3 });
+  assert.equal(plain.text, 'IA ativa · gemini-flash-latest · 3 chamadas deste computador');
+  assert.equal(plain.model, 'gemini-flash-latest');
+  const quiet = healthLabel({ ai_configured: true, model_in_use: 'gemini-2.5' });
+  assert.deepEqual([quiet.text, quiet.model, quiet.count], ['IA ativa · gemini-2.5', 'gemini-2.5', '']);
+  const bare = healthLabel({ ai_configured: true });
+  assert.deepEqual([bare.text, bare.model, bare.count], ['IA ativa', '', '']);
+  // Nos outros estados não há modelo: o selo mostra só o text.
+  for (const health of [null, false, { ai_configured: false, model: 'x' }]) assert.equal(healthLabel(health).model, undefined);
+});
+
+test('errorText: cada código do mapa vira uma frase simples, e o código fica nos detalhes técnicos', () => {
+  const said = 'Limite de chamadas por minuto atingido. Tente de novo em 20 segundos.';
   assert.deepEqual(
-    healthLabel({ ...health, calls_today: 12 }),
-    { text: 'IA ativa · gemini-2.5-flash · 12 chamadas hoje', tone: 'ok' }
+    errorText({ code: 'AI_RATE_LIMITED', message: said, provider_status: 'RESOURCE_EXHAUSTED', retry_after: 20 }, 429),
+    {
+      message: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
+      tech: 'AI_RATE_LIMITED · RESOURCE_EXHAUSTED · ' + said,
+      wait: 20,
+    }
   );
-  assert.equal(healthLabel({ ...health, calls_today: 1 }).text, 'IA ativa · gemini-2.5-flash · 1 chamada hoje');
-  assert.equal(healthLabel({ ...health, calls_today: 0 }).text, 'IA ativa · gemini-2.5-flash · 0 chamadas hoje');
+  const cases = {
+    AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+    AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
+      'Enquanto isso, use a demonstração.',
+    AI_MODEL_NOT_FOUND: 'A IA recusou o pedido por um problema de configuração. Mostre os detalhes técnicos a quem ' +
+      'instalou o Cérebro.',
+  };
+  for (const [code, message] of Object.entries(cases)) {
+    const error = errorText({ code, message: 'Frase do backend com .env.', provider_status: 'NOT_FOUND' }, 502);
+    assert.deepEqual(error, { message, tech: code + ' · NOT_FOUND · Frase do backend com .env.', wait: 0 }, code);
+  }
+  for (const code of Object.keys(ERRORS)) {
+    const { message } = errorText({ code, message: 'x', provider_status: '' }, 502);
+    assert.equal(message, ERRORS[code]);
+    assert.doesNotMatch(message, /\[|AI_/, code);
+  }
 });
 
-test('healthLabel: sem model_in_use vale model; sem calls_today não há contador', () => {
-  assert.equal(
-    healthLabel({ ai_configured: true, model: 'gemini-flash-latest', calls_today: 3 }).text,
-    'IA ativa · gemini-flash-latest · 3 chamadas hoje'
-  );
-  assert.equal(healthLabel({ ai_configured: true, model_in_use: 'gemini-2.5' }).text, 'IA ativa · gemini-2.5');
-  assert.deepEqual(healthLabel({ ai_configured: true }), { text: 'IA ativa', tone: 'ok' });
-});
-
-test('errorText: frase do backend com o código e o estado do provedor entre colchetes', () => {
-  const limited = { code: 'AI_RATE_LIMITED', message: 'Muitas chamadas.', provider_status: '429', retry_after: 20 };
-  assert.equal(errorText(limited, 429), 'Muitas chamadas. [AI_RATE_LIMITED · 429]');
-  assert.equal(
+test('errorText: código fora do mapa fica com a frase do backend, sem repeti-la nos detalhes', () => {
+  assert.deepEqual(
     errorText({ code: 'INVALID_INPUT', message: 'O texto está curto demais.', provider_status: '' }, 422),
-    'O texto está curto demais. [INVALID_INPUT]'
+    { message: 'O texto está curto demais.', tech: 'INVALID_INPUT', wait: 0 }
   );
-  assert.equal(errorText('Serviço fora do ar', 503), 'Serviço fora do ar');
+  assert.deepEqual(
+    errorText({ code: 'AI_INCOMPLETE_RESPONSE', message: 'A IA interrompeu a resposta.', provider_status: 'MAX_TOKENS' }, 502),
+    { message: 'A IA interrompeu a resposta.', tech: 'AI_INCOMPLETE_RESPONSE · MAX_TOKENS', wait: 0 }
+  );
+  assert.deepEqual(errorText('Serviço fora do ar', 503), { message: 'Serviço fora do ar', tech: 'HTTP 503', wait: 0 });
 });
 
-test('errorText: detail em lista (formato antigo) vira uma frase em português', () => {
+test('errorText: detail em lista (formato antigo) ou ausente continua em português, com o HTTP nos detalhes', () => {
   const old = [{ type: 'string_too_short', loc: ['body', 'content'], msg: 'String should have at least 3 characters' }];
-  assert.equal(errorText(old, 422), 'Pedido recusado: confira o texto e tente de novo.');
+  assert.deepEqual(errorText(old, 422), { message: 'Pedido recusado: confira o texto e tente de novo.', tech: 'HTTP 422', wait: 0 });
+  const general = 'O Cérebro não conseguiu atender o pedido. Tente de novo.';
+  assert.deepEqual(errorText(undefined, 500), { message: general, tech: 'HTTP 500', wait: 0 });
+  assert.deepEqual(errorText(null, 502), { message: general, tech: 'HTTP 502', wait: 0 });
+  assert.deepEqual(errorText({ code: 'AI_ERROR' }, 502), { message: general, tech: 'AI_ERROR', wait: 0 });
 });
 
-test('errorText: sem frase do backend, diz o código HTTP', () => {
-  assert.equal(errorText(undefined, 500), 'Falha no backend (HTTP 500).');
-  assert.equal(errorText(null, 502), 'Falha no backend (HTTP 502).');
-  assert.equal(errorText({ code: 'AI_ERROR' }, 502), 'Falha no backend (HTTP 502). [AI_ERROR]');
+test('errorText: a espera vem do retry_after, em segundos inteiros; sem ele é zero', () => {
+  const wait = retry_after => errorText({ code: 'AI_RATE_LIMITED', message: 'x', retry_after }, 429).wait;
+  assert.deepEqual([wait(20), wait(1), wait(2.4), wait(undefined), wait(0), wait(-3), wait('logo')], [20, 1, 3, 0, 0, 0, 0]);
+});
+
+test('ERRORS e FAILS: nenhuma frase para o aluno fala de backend, Python, proxy, Vite, .env ou código entre colchetes', () => {
+  for (const text of [...Object.values(ERRORS), ...Object.values(FAILS)]) {
+    for (const word of ['backend', 'Python', 'proxy', 'Vite', '.env', 'Não foi possível', '[']) {
+      assert.ok(!text.includes(word), word + ' em: ' + text);
+    }
+  }
+  // A frase do Cérebro desligado diz o que fazer.
+  assert.equal(FAILS.off, 'O Cérebro não está ligado neste computador. Abra o iniciar.ps1 de novo e tente outra vez.');
 });
 
 test('dictate: soma o trecho ditado ao texto do editor e corta em 20.000 caracteres', () => {

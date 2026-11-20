@@ -13,7 +13,7 @@ from .config import settings
 from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
                      QuizItem, StudyInput, StudyOutput, SummaryItem)
 from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
-from .providers import ai, calls_today, fail, resolve_gemini_model
+from .providers import ai, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
 # Esquema enviado ao provedor: o material já chega no formato que o backend valida.
@@ -81,7 +81,8 @@ def unreadable_body(*_):
 
 @app.get("/api/health")
 def health():
-    # Somente estado local: não confirma validade de chave ou cota no provedor.
+    # Somente estado local: não confirma validade de chave ou cota no provedor. quota_exhausted só repete o último
+    # AI_QUOTA_EXCEEDED que este backend recebeu no dia da cota.
     # Com AI_MODEL=auto o modelo é escolhido na primeira chamada à IA. Esta rota nunca chama o provedor: só usa a
     # escolha que resolve_gemini_model já guardou; antes disso, mostra o configurado ("auto").
     chosen = settings.model == "auto" and resolve_gemini_model.cache_info().currsize
@@ -92,6 +93,7 @@ def health():
         "model": settings.model,
         "model_in_use": resolve_gemini_model() if chosen else settings.model,
         "calls_today": calls_today(),
+        "quota_exhausted": quota_exhausted(),
     }
 
 def reasons(exc: ValidationError, *where) -> list:

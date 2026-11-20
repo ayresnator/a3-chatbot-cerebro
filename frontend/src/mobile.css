@@ -100,11 +100,18 @@
         outline-color: var(--on-accent)
     }
 
-    /* A marca com a largura dela e o estado da IA no resto, encolhendo com reticências: o texto longo do backend ("IA
-       ativa · modelo · N chamadas hoje") não passa por cima da marca. */
+    /* A marca com a largura dela e o estado da IA no resto: o texto longo ("IA ativa · modelo · N chamadas deste
+       computador") não passa por cima da marca. Sem lugar, ele quebra a linha, equilibrada, em vez de cortar a conta de
+       chamadas com reticências; em duas linhas ele ainda cabe na altura da barra. */
     .topbar {
         grid-template-columns: auto minmax(0, 1fr);
         padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-2)
+    }
+
+    .status-text {
+        white-space: normal;
+        text-wrap: balance;
+        line-height: 1.2
     }
 
     .ask-pill,
@@ -287,6 +294,17 @@
 
     .topbar {
         margin-bottom: var(--sp-3)
+    }
+
+    /* A barra de cima fica só com o logo da marca, para o estado da IA caber (sem o modelo: styles.css, @container); o
+       nome continua no link, fora da vista. */
+    .brand-name {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
     }
 
     /* No celular o palco não tem moldura: o conteúdo fica com a largura de antes (16 px das bordas) e os painéis de
@@ -672,18 +690,5 @@
     /* A pílula de espera quebra a linha em vez de cortar em "Cérebro está escr…" e esconder os segundos. */
     .chat-wait .wait-text {
         white-space: normal
-    }
-}
-
-/* Em 320 px fica só o logo da marca na barra de cima, para o estado da IA caber inteiro; o nome continua no link, fora
-   da vista. */
-@media (max-width: 359px) {
-    .brand-name {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap
     }
 }

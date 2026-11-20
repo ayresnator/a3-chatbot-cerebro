@@ -783,7 +783,7 @@ select {
 
 /* Barra de cima: pílula de vidro em três colunas, a marca, o atalho "Pergunte ao Cérebro" e as ações. As laterais
    dividem o que sobra por igual, com o atalho no meio (até 25 rem e 30vw), mas nunca ficam menores que o conteúdo: o
-   estado da IA vai inteiro, também o texto longo do backend ("IA ativa · modelo · N chamadas hoje"), e quem cede é o
+   estado da IA vai inteiro, também o texto longo ("IA ativa · modelo · N chamadas deste computador"), e quem cede é o
    atalho, que encolhe e sai um pouco do meio. Ela não fica presa ao rolar: a faixa de espera (.busy) é que fica. */
 .topbar {
     grid-column: 2;
@@ -918,6 +918,23 @@ select {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis
+}
+
+/* Com a barra estreita para o estado inteiro numa linha, o nome do modelo sai da vista e continua no leitor de tela: no
+   celular e, com a letra a 200%, no computador (a medida em rem cresce com a letra). Assim a conta de chamadas cabe. */
+.topbar {
+    container-type: inline-size
+}
+
+@container (max-width: 45rem) {
+    .status-model {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
 }
 
 /* No Dúvidas (#57) o chat chama mais atenção que o resto: a barra de cima e o dock das seções perdem o vidro forte, a
@@ -1080,6 +1097,18 @@ main:focus {
 .error .icon {
     margin-top: .05rem;
     color: var(--pen)
+}
+
+/* Os detalhes técnicos do erro (App.jsx, Problem): fechados, em tinta fraca, para quem instalou o Cérebro. */
+.error details {
+    margin-top: var(--sp-1);
+    color: var(--ink-2)
+}
+
+.error summary {
+    width: fit-content;
+    padding: var(--sp-1) 0;
+    cursor: pointer
 }
 
 /* ---------- Estudar ---------- */

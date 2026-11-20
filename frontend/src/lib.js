@@ -447,33 +447,69 @@ export function hello({ user, area, level, input, api }) {
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
 }
 
+// Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
+const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+
 // Estado da IA no cabeçalho, a partir da resposta de /api/health: null enquanto ela não chegou, false se a consulta
-// falhou ou não veio JSON. tone é a classe do ponto colorido.
+// falhou ou não veio JSON. tone é a classe do ponto colorido, e note, a dica do selo. Com a IA ativa, model e count são
+// partes do text: na barra estreita o modelo sai da vista (styles.css, @container), e o text, chave da troca animada,
+// fica inteiro.
 export function healthLabel(health) {
   if (health == null) return { text: 'Conferindo a IA…', tone: '' };
-  if (!health) return { text: 'Backend desligado', tone: 'off' };
+  if (!health) return { text: 'Cérebro desligado', tone: 'off' };
   if (!health.ai_configured) return { text: 'IA não configurada', tone: 'warn' };
+  if (health.quota_exhausted) return { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE };
   const calls = health.calls_today;
-  return {
-    text: [
-      'IA ativa',
-      health.model_in_use || health.model,
-      typeof calls === 'number' && calls + (calls === 1 ? ' chamada hoje' : ' chamadas hoje'),
-    ].filter(Boolean).join(' · '),
-    tone: 'ok',
-  };
+  const model = health.model_in_use || health.model || '';
+  const count = typeof calls === 'number' ? calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador' : '';
+  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone: 'ok', model, count, note: QUOTA_NOTE };
 }
 
-// Erro do backend em texto para o aluno: a frase em português e, entre colchetes, o código e o estado do provedor.
-// detail em lista é o formato antigo (erros de validação em inglês, um por campo): vira uma frase só.
+// Frase de cada erro para o aluno: o que houve e o que ele consegue fazer. As frases do backend falam de .env, proxy e
+// Python para quem instala (python -m app.check mostra as mesmas) e ficam nos detalhes técnicos. Código fora daqui já
+// vem do backend com uma frase simples.
+const SETUP = 'A IA recusou o pedido por um problema de configuração. Mostre os detalhes técnicos a quem instalou o Cérebro.';
+const SHAPE = 'A IA respondeu fora do formato esperado. Tente de novo.';
+export const ERRORS = {
+  AI_RATE_LIMITED: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
+  AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+  AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
+    'Enquanto isso, use a demonstração.',
+  AI_NETWORK_ERROR: 'O Cérebro não conseguiu falar com a IA. Confira a internet deste computador e tente de novo.',
+  AI_PROVIDER_ERROR: 'A IA não atendeu o pedido. Tente de novo; se repetir, mostre os detalhes técnicos a quem ' +
+    'instalou o Cérebro.',
+  AI_AUTH_ERROR: SETUP,
+  AI_MODEL_NOT_FOUND: SETUP,
+  AI_REQUEST_REJECTED: SETUP,
+  AI_NO_COMPATIBLE_MODEL: SETUP,
+  AI_INVALID_RESPONSE: SHAPE,
+  AI_INVALID_JSON: SHAPE,
+};
+
+// Falhas que a própria tela percebe, sem resposta do backend (App.jsx, requestAPI). A resposta sem JSON costuma ser o
+// proxy do Vite respondendo no lugar do Python desligado.
+export const FAILS = {
+  off: 'O Cérebro não está ligado neste computador. Abra o iniciar.ps1 de novo e tente outra vez.',
+  noJson: 'O Cérebro não respondeu como esperado. Abra o iniciar.ps1 de novo e tente outra vez.',
+  timeout: 'A IA demorou demais para responder. Tente de novo.',
+};
+
+// Erro do backend para a tela: message é a frase para o aluno; tech, os detalhes técnicos (o código, o estado do
+// provedor e a frase original do backend, ou o HTTP sem código); wait, os segundos que o backend mandou esperar no
+// limite por minuto (retry_after), ou 0. detail em lista é o formato antigo (erros de validação em inglês, um por
+// campo): vira uma frase só.
 export function errorText(detail, status) {
-  const message = typeof detail === 'string' ? detail
+  const said = typeof detail === 'string' ? detail
     : Array.isArray(detail) ? 'Pedido recusado: confira o texto e tente de novo.'
     : detail?.message;
   const code = detail?.code;
-  const provider = detail?.provider_status;
-  return (message || 'Falha no backend (HTTP ' + status + ').') +
-    (code ? ' [' + code + (provider ? ' · ' + provider : '') + ']' : '');
+  const message = ERRORS[code] || said || 'O Cérebro não conseguiu atender o pedido. Tente de novo.';
+  return {
+    message,
+    tech: [code || 'HTTP ' + status, detail?.provider_status, said !== message && said].filter(Boolean).join(' · '),
+    wait: detail?.retry_after > 0 ? Math.ceil(detail.retry_after) : 0,
+  };
 }
 
 // Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
