@@ -30,7 +30,11 @@ def fake_ai(payload, instruction, schema=None):
             "summary": [{"concept": "Começo", "text": "O texto começa assim.", "source": payload["content"][:60]},
                         {"concept": "Clorofila", "text": "O pigmento verde absorve a luz.", "source": "Trecho que não existe no texto."},
                         {"concept": "Cloroplasto", "text": "Onde a planta faz glicose."}],
-            "flashcards": [{"question": "O que absorve a luz?", "answer": "Clorofila"}] * 3,
+            # Perguntas e respostas diferentes: a pergunta repetida sai, e a mesma resposta em metade ou mais dos cartões
+            # pede outra chamada.
+            "flashcards": [{"question": "O que absorve a luz?", "answer": "Clorofila"},
+                           {"question": "Onde ocorre a fotossíntese?", "answer": "No cloroplasto"},
+                           {"question": "O que a planta produz?", "answer": "Glicose"}],
             "quiz": [{"type": "multiple", "question": "Onde ocorre?", "options": ["Cloroplasto", "Raiz", "Flor"],
                       "answer": 0, "explanation": "No cloroplasto.", "steps": []},
                      {"type": "boolean", "question": "A planta usa luz?", "options": ["Verdadeiro", "Falso"],
