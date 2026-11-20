@@ -26,9 +26,13 @@ export default function Biblioteca({
             onChange={e => setQuery(e.target.value)}
           />
         </label>
-        <select aria-label="Filtrar área" value={filter} onChange={e => setFilter(e.target.value)}>
-          {['Todas', ...AREAS].map(a => <option key={a}>{a}</option>)}
-        </select>
+        {/* O nome do filtro na tela, como "Área do gráfico" no Desempenho: só "Todas" não dizia o que ele filtra. */}
+        <label className="inline-field">
+          Área
+          <select value={filter} onChange={e => setFilter(e.target.value)}>
+            {['Todas', ...AREAS].map(a => <option key={a}>{a}</option>)}
+          </select>
+        </label>
         <button type="button" onClick={onExport}>
           <Icon name="exportar" />
           Exportar
@@ -56,7 +60,8 @@ export default function Biblioteca({
                 <h2>{s.title}</h2>
                 <p>Resumo · {s.flashcards.length} flashcards · {s.quiz.length} questões</p>
               </div>
-              <button type="button" className="open" onClick={() => onOpen(s)}>
+              {/* O nome começa pelo texto da tela (o controle por voz acha "Abrir") e diz qual material abre. */}
+              <button type="button" className="open" aria-label={'Abrir ' + s.title} onClick={() => onOpen(s)}>
                 Abrir
                 <Icon name="abrir" />
               </button>
