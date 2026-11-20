@@ -83,20 +83,23 @@ export default function Desempenho({
               {'Revise "' + weakest.name + '": você errou ' + weakest.wrong + ' de ' + weakest.total +
                 ' questões nos últimos 7 dias.'}
             </p>
-            <div className="row">
-              {own > 0 ? (
-                <button type="button" className="primary" onClick={() => redoMistakes(weakest.name)}>
-                  <Icon name="refazer" />
-                  {'Refazer os erros de "' + weakest.name + '" (' + own + ')'}
-                </button>
-              ) : redoAll}
-              {openWeak && (
-                <button type="button" onClick={openWeak}>
-                  {'Abrir "' + weakest.name + '"'}
-                  <Icon name="abrir" />
-                </button>
-              )}
-            </div>
+            {/* Sem botão nenhum, a linha vazia somava a margem dela ao vão até a lista de áreas. */}
+            {(own > 0 || redoAll || openWeak) && (
+              <div className="row next-step">
+                {own > 0 ? (
+                  <button type="button" className="primary" onClick={() => redoMistakes(weakest.name)}>
+                    <Icon name="refazer" />
+                    {'Refazer os erros de "' + weakest.name + '" (' + own + ')'}
+                  </button>
+                ) : redoAll}
+                {openWeak && (
+                  <button type="button" onClick={openWeak}>
+                    {'Abrir "' + weakest.name + '"'}
+                    <Icon name="abrir" />
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
         <ul className="subjects" role="list">
