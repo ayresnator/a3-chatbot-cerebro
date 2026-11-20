@@ -53,7 +53,7 @@ Três revisores independentes leram os 8 commits anteriores e não acharam defei
 - Testes unitários: 38 de 38. São 14 novos: 3 cobrem o que mudou no backend (as duas correções e o limite de 4 chamadas por ida) e 11 cobrem regras que já existiam e nenhum teste conferia, entre elas o log sem o texto gerado, o pedido sem Content-Type recusado, a resposta interrompida, o chat sem esquema, os limites do histórico e a regra de que só 503 e tempo esgotado ganham nova chamada. O teste do 503 que já existia passou a conferir as duas novas chamadas e as pausas de 3 e 6 segundos. Para conferir os testes, 42 defeitos foram plantados, um por vez, em uma cópia do código: todos fizeram algum teste falhar.
 - As correções passaram por mais duas rodadas de revisão independente. Elas acharam só pontos pequenos: um caso de canto no chat, frases imprecisas e testes que faltavam. Os ajustes estão nesta versão.
 - Nada disso rodou contra a API real.
-- Continua valendo: um pedido que precisa de várias chamadas seguidas ao Gemini pode passar dos 105 segundos que o navegador espera. O guia explica a mensagem "Tempo de espera esgotado".
+- Valeu até 20/11/2026: um pedido que precisava de várias chamadas seguidas ao Gemini podia passar dos 105 segundos que o navegador espera. Desde então cada pedido tem teto de 6 chamadas e 100 segundos, e depois do Cancelar da tela nenhuma chamada nova sai (ver [IA.md](IA.md)).
 
 ## Saudação e sugestões no chat (11/11/2026)
 - O chat abre com uma saudação fixa do Cérebro, sem chamada à IA e fora do histórico enviado ao modelo.
@@ -112,7 +112,7 @@ As respostas foram lidas uma a uma no arquivo `docs/avaliacao-2026-11-17.json`:
 - Nível: o tamanho dos textos não acompanha o nível (137, 96 e 151 caracteres por tópico, do Básico ao Avançado). A rodada não mede se o vocabulário muda.
 - Chamadas: 9 das 12 gerações e 1 das 8 perguntas precisaram de 2 ou 3 chamadas. São as novas tentativas automáticas. O arquivo guarda só o número de chamadas de cada caso, não a causa: pode ser 503 do provedor, tempo esgotado, JSON quebrado ou limite por minuto (a rodada espera e repete o caso uma vez) e, na geração, também material recusado ou sem acento.
 
-A ordem escondida nos flashcards e a aula que não existiu mostram que a instrução sozinha não segura o modelo nesses dois casos, e o código não confere nenhum dos dois. Mudar a instrução pede outra rodada real para saber se adiantou, o que fica para quando o grupo combinar a cota.
+A ordem escondida nos flashcards e a aula que não existiu mostram que a instrução sozinha não segura o modelo nesses dois casos. Desde 20/11/2026 o código confere o primeiro: metade ou mais dos cartões com a mesma resposta ganha uma nova chamada, uma só, e se a repetição voltar fica o segundo material. A aula que não existiu continua sem conferência. Mudar a instrução pede outra rodada real para saber se adiantou, o que fica para quando o grupo combinar a cota.
 
 Entre os pontos que ainda só têm teste simulado estão o tratamento das respostas estranhas do provedor (meio emoji, redirecionamento, motivo de interrupção e JSON com milhares de níveis), a nova chamada sem os trechos de origem quando o provedor interrompe a resposta por RECITATION, o que nunca aconteceu na API real, e o caminho com AI_PROVIDER=openai, que nunca rodou com chave real.
 
