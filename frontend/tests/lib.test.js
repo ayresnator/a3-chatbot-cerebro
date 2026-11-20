@@ -9,7 +9,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
+  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, libraryCount,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -588,6 +588,12 @@ test('matches: não casa nome de campo', () => {
 test('matches: respeita o filtro de área', () => {
   assert.equal(matches(MATERIAL, 'fotossintese', 'Escolar'), true);
   assert.equal(matches(MATERIAL, 'fotossintese', 'Direito'), false);
+});
+
+test('libraryCount: o resultado da busca da Biblioteca, com nenhum, um e vários materiais', () => {
+  assert.equal(libraryCount(0), 'Nenhum material encontrado');
+  assert.equal(libraryCount(1), '1 material encontrado');
+  assert.equal(libraryCount(2), '2 materiais encontrados');
 });
 
 const NO_TIPS = { key: '', list: [] };

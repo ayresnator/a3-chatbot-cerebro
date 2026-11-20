@@ -191,7 +191,8 @@ export function sameMaterial(a, b) {
 export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu material.';
 
 // O trecho do tópico está no texto? Sem maiúsculas, sem acentos e com os espaços em sequência reduzidos a um, como o
-// backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend pode recebê-los limpos.
+// backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend os tira do texto antes de
+// conferir (models.py, visible), e o exemplo guardado na tela pode tê-los.
 export function inText(source, text) {
   const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
   return !!plain(source) && plain(text).includes(plain(source));
@@ -449,6 +450,11 @@ export function matches(material, query, filter) {
       ...material.flashcards.flatMap(c => [c.question, c.answer]),
       ...material.quiz.map(q => q.question),
     ].join(' ')).includes(fold(query));
+}
+
+// Quantos materiais a busca e o filtro da Biblioteca deixaram, na frase que o leitor de tela ouve (App.jsx).
+export function libraryCount(n) {
+  return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
 }
 
 // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (texto do editor ou área) até a primeira resposta;
