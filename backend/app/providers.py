@@ -6,6 +6,7 @@ import math
 import re
 import threading
 import time
+from contextvars import ContextVar
 from datetime import date
 from functools import lru_cache
 from urllib.parse import urlencode
@@ -43,6 +44,24 @@ def fail(status: int, code: str, message: str, provider_status: str = "", retry_
     if retry_after is not None:
         detail["retry_after"] = retry_after
     raise HTTPException(status_code=status, detail=detail)
+
+# Teto do pedido em andamento: prazo, chamadas que restam e se a tela ainda espera. Só o middleware de main.py abre
+# um; o app.check e o app.avalia chamam a IA fora das rotas, sem ele (o app.avalia tem o teto da rodada).
+budget: ContextVar[dict | None] = ContextVar("budget", default=None)
+
+def next_call_timeout() -> float:
+    # Roda antes de cada chamada HTTP: a que passaria do teto não sai, e a que sai espera no máximo o tempo que sobra.
+    left = budget.get()
+    if left is None:
+        return settings.timeout_seconds
+    if left["gone"]():
+        # Ninguém recebe esta resposta: a tela já desistiu (Cancelar ou tempo esgotado).
+        fail(499, "AI_CANCELLED", "O pedido foi cancelado na tela.")
+    remaining = left["deadline"] - time.monotonic()
+    if left["calls"] <= 0 or remaining < 1:
+        fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
+    left["calls"] -= 1
+    return min(settings.timeout_seconds, remaining)
 
 def provider_error(exc: HTTPError):
     status = ""
@@ -104,10 +123,12 @@ def request_json(request: Request) -> dict:
     # um erro futuro aqui dentro: sem eles, um ramo que deixasse de lançar chamaria o provedor sem parar.
     overloaded, timed_out = 0, False
     for _ in range(4):
+        # O teto do pedido vem antes da conta do dia: a chamada recusada não sai e não conta.
+        timeout = next_call_timeout()
         # Toda chamada entra na conta do dia, também as repetidas e as que terminam em erro.
         calls_today(1)
         try:
-            with urlopen(request, timeout=settings.timeout_seconds) as response:
+            with urlopen(request, timeout=timeout) as response:
                 result = json.load(response)
             if not isinstance(result, dict):
                 raise ValueError("Expected JSON object")

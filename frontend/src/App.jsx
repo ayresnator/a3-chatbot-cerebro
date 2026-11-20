@@ -9,7 +9,7 @@ import { Pen } from './marks.jsx';
 import { ChatComposer } from './components/ui/chat-composer.jsx';
 import { PromptComposer } from './components/ui/prompt-composer.jsx';
 import {
-  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT,
+  ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT, MODAL,
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
@@ -21,7 +21,7 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
-  matches, hints, hello, healthLabel, errorText, dictate, dictationError,
+  matches, libraryCount, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
 } from './lib.js';
@@ -35,8 +35,18 @@ demoStorage(DEMO);
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
 // Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// Foco da questão nova do quiz: no computador, direto na caixa da resposta curta; no toque, o enunciado, para o
+// teclado da tela não abrir sozinho. E o de quem chega ao Dúvidas para perguntar: a caixa (no toque, o título).
+const QUESTION_FOCUS = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
+const ASK_FOCUS = [TOUCH ? '#chat-titulo' : '#pergunta'];
 // O que estava aberto antes de um F5 (editor, material, conversa), lido uma vez na abertura.
 const DRAFT = readDraft();
+
+// O foco caiu no body ou está dentro do que vai sair da tela (sel): quem pergunta leva o foco para outro lugar.
+function adrift(sel) {
+  const at = document.activeElement;
+  return !at || at === document.body || !!at.closest(sel);
+}
 
 // Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa.
 // stop é o sinal do botão "Cancelar" da espera: o pedido para na hora e o erro sai marcado com cancelled, para a tela
@@ -90,6 +100,7 @@ const SECTIONS = [
 const SLUG = Object.fromEntries(SECTIONS);
 // No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e Erros) e "Mais", uma
 // folha com as outras três seções e o perfil. Na barra, "Quizzes" vai como "Quiz": os seis nomes cabem em 320 px.
+// De 600 a 850 px as outras três também ficam na barra, e "Mais" sai (mobile.css).
 const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n, SLUG[n]]);
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
 const SHORT = { Quizzes: 'Quiz' };
@@ -169,6 +180,8 @@ function App() {
   const [chat, setChat] = useState(DRAFT.chat);
   // Aviso na tela: { text, action }. action = { label, run } põe um botão no aviso (desfazer, abrir).
   const [notice, setNotice] = useState(null);
+  // O que a região fixa do leitor de tela diz (#anuncio, fora do main): o que muda na tela sem um aviso visível.
+  const [spoken, setSpoken] = useState('');
   // Desfazer sem prazo: { kind, text, run, focus }. O aviso some sozinho; este botão fica onde a ação aconteceu
   // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno) até o aluno trocar de página ou desfazer.
   const [undo, setUndo] = useState(null);
@@ -325,6 +338,14 @@ function App() {
   // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
   useEffect(() => setError(''), [input]);
 
+  // A frase da região fixa (#anuncio) sai dela 8 s depois de lida: a velha ("Gerando o material", depois de um erro ou
+  // do Cancelar) não fica na página para quem a percorre com o leitor de tela.
+  useEffect(() => {
+    if (!spoken) return;
+    const timer = setTimeout(() => setSpoken(''), 8000);
+    return () => clearTimeout(timer);
+  }, [spoken]);
+
   // O texto do cartão virado ou do seguinte muda com movimento, em 0,16 s, e o cartão fica parado: o aluno faz isso
   // muitas vezes (anim.js, enter).
   useLayoutEffect(() => {
@@ -336,7 +357,9 @@ function App() {
     if (!focusAfter.current) return;
     const [selector, fallback, show] = focusAfter.current;
     focusAfter.current = null;
-    (document.querySelector(selector) || (fallback && document.querySelector(fallback)))?.focus();
+    // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova.
+    const last = s => s && [...document.querySelectorAll(s)].pop();
+    (last(selector) || last(fallback))?.focus();
     // show: o último elemento que casa rola até a vista. No celular a margem dele (mobile.css) desconta a barra de baixo
     // e o "Próxima questão" preso: as marcas ✓ e ✗ com a nota ficam acima deles, não por baixo.
     if (show) [...document.querySelectorAll(show)].pop()?.scrollIntoView({ block: 'nearest' });
@@ -403,6 +426,12 @@ function App() {
     clearTimeout(noticeTimer.current);
     setNotice({ text, action });
     noticeTimer.current = setTimeout(() => setNotice(null), action ? 10000 : 3200);
+  }
+
+  // O leitor de tela lê o texto novo da região fixa. O mesmo texto outra vez (gerar de novo o mesmo material, a mesma
+  // contagem da busca) ganha um espaço no fim: sem mudança na região, ele não seria lido.
+  function say(text) {
+    setSpoken(s => (s === text ? text + '\u00a0' : text));
   }
 
   function holdNotice() {
@@ -503,6 +532,13 @@ function App() {
     setMore(false);
   }
 
+  // Botão do conteúdo que leva a outra página: ele sai da tela com a página velha, e o foco iria para o body. O foco vai
+  // para o título da página nova, ou para um lugar mais útil dela (focus).
+  function openPage(next, focus = ['main h1']) {
+    setPage(next);
+    focusAfter.current = focus;
+  }
+
   async function generate(kind = 'resumo') {
     if (busy || asking) return;
     setError('');
@@ -520,7 +556,13 @@ function App() {
     // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
     const wait = !reuse && !!API_BASE;
     setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
-    if (wait) setPage(target);
+    if (wait) {
+      setPage(target);
+      // O botão apertado sai da tela com o Estudar: o foco espera no título da página do material, e o leitor de tela
+      // ouve que a IA está trabalhando (os segundos ficam de fora).
+      say('Gerando o material. A IA pode levar até 1 minuto.');
+      focusAfter.current = ['main h1'];
+    }
     try {
       let data;
       if (reuse) {
@@ -556,13 +598,18 @@ function App() {
       if (at === 'Estudar' || MATERIAL.includes(at)) {
         // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
         if (at === 'Estudar') setPage(target);
+        // O leitor de tela ouve que ele chegou, e o foco que estava na espera, no botão de gerar ou no body vai para o
+        // título dele.
+        say('Material pronto: ' + data.title + '.');
+        if (adrift('main, .busy')) focusAfter.current = ['#material-titulo'];
         if (kept) toast('O material anterior foi guardado na biblioteca');
       } else {
         // O aluno saiu para outra página enquanto esperava: fica onde está e abre o material quando quiser.
+        if (adrift('.busy')) focusAfter.current = ['main h1'];
         toast('Material pronto' + (kept ? '. O anterior foi guardado na biblioteca' : ''), {
           label: 'Abrir',
           run: () => {
-            setPage(target);
+            openPage(target, ['#material-titulo']);
             restart();
           },
         });
@@ -570,7 +617,13 @@ function App() {
     } catch (e) {
       // Cancelado ou com erro, o aluno volta do esqueleto para o editor: o aviso de erro fica junto dos botões de gerar.
       // Se nesse meio-tempo ele abriu outro material, fica nele.
-      if (wait && MATERIAL.includes(latest.current.page) && latest.current.result === result) setPage('Estudar');
+      const back = wait && MATERIAL.includes(latest.current.page) && latest.current.result === result;
+      if (back) setPage('Estudar');
+      // O foco que estava no que sai da tela vai para o erro (o alerta já é lido) ou, no Cancelar, para o botão que pediu
+      // o material; longe do Estudar, para o título da página.
+      if (adrift(back ? 'main, .busy' : '.busy')) {
+        focusAfter.current = e.cancelled ? ['.actions [data-tab=' + SLUG[target] + ']', 'main h1'] : ['#erro'];
+      }
       if (e.cancelled) toast('Pedido cancelado');
       else setError('Não foi possível gerar: ' + e.message);
     } finally {
@@ -688,7 +741,7 @@ function App() {
     setFlip(false);
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
-    focusAfter.current = ['.flashcard', '.deck-done .primary'];
+    focusAfter.current = ['.flashcard', '.deck-done h2'];
   }
 
   // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa.
@@ -720,7 +773,7 @@ function App() {
     } else {
       setIdx(idx + 1);
       setAnswer(null);
-      focusAfter.current = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
+      focusAfter.current = QUESTION_FOCUS;
     }
   }
 
@@ -737,7 +790,7 @@ function App() {
       flashcards: [],
       quiz: mistakes.map(m => ({ ...m.item, title: m.title, area: m.area })),
     });
-    setPage('Quizzes');
+    openPage('Quizzes', QUESTION_FOCUS);
     restart();
     // Um aviso ainda na tela com o botão "Abrir" (material pronto) reiniciaria este quiz em vez de abrir o material.
     setNotice(null);
@@ -746,7 +799,7 @@ function App() {
   // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
   function drop(mistake) {
     if (!notebook(list => removeMistake(list, mistake.key))) return;
-    focusAfter.current = ['.undo-row button'];
+    focusAfter.current = ['.undo-row button', '.empty .primary'];
     offerUndo('erro', 'Questão tirada do caderno', () =>
       notebook(list => (list.some(e => e?.key === mistake.key) ? list : [...list, mistake])),
     ['[data-key="' + CSS.escape(mistake.key) + '"] .drop', '.erros-head .primary']);
@@ -754,12 +807,14 @@ function App() {
 
   // "Não entendi, me explique": o tutor responde no lugar do pedido, sem entrar na conversa da página Dúvidas.
   // item é a questão ou o tópico do pedido: a resposta só é desenhada nele, então a que chega depois de o aluno
-  // seguir adiante não aparece em outro lugar.
-  async function explain(item, text, content) {
+  // seguir adiante não aparece em outro lugar. button é o id do botão do pedido.
+  async function explain(item, text, content, button) {
     if (waiting) return;
     const from = origin(item);
     setWhy({ item });
     setBusy({ kind: 'why', label: 'Esperando a explicação…', orb: 'composing', since: Date.now() });
+    // A espera nasce junto com a explicação e não seria lida.
+    say('Esperando a explicação…');
     try {
       const data = await callAI('/api/chat', {
         question: text, content, area: from.area, level: from.level, history: [],
@@ -768,6 +823,8 @@ function App() {
     } catch (e) {
       setWhy(e.cancelled ? null : { item, error: e.message });
     } finally {
+      // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
+      if (adrift('.why, .busy')) focusAfter.current = ['#' + button, 'main h1'];
       setBusy(null);
     }
   }
@@ -776,7 +833,8 @@ function App() {
   // Se a IA aceita a resposta, ela passa a valer como certa na tela (answer e answers), no evento já gravado e no
   // caderno de erros. "parcial" e "incorreta" só são mostrados. A revisão fica guardada na própria resposta.
   async function review() {
-    if (waiting) return;
+    // O botão fica na tela, com aria-disabled, durante a espera e depois do veredito: o clique não pede outra revisão.
+    if (waiting || answer.review?.verdict) return;
     const q = quiz;
     const mine = answer;
     const counted = answers[answers.length - 1];
@@ -802,6 +860,8 @@ function App() {
     } catch (e) {
       if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e.message } } : a));
     } finally {
+      // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
+      if (adrift('.review-wait, .busy')) focusAfter.current = ['#pedir-revisao', 'main h1'];
       setBusy(null);
     }
   }
@@ -825,6 +885,8 @@ function App() {
       }]);
       return;
     }
+    // Pergunta mandada do editor: a pílula de espera nasce junto com a página do Dúvidas e não seria lida.
+    if (latest.current.page !== 'Dúvidas') say('Cérebro está escrevendo…');
     setAsking(Date.now());
     try {
       const data = await callAI('/api/chat', {
@@ -880,6 +942,8 @@ function App() {
     let written = null;
     if (ai) {
       setBusy({ kind: 'example', label: 'Escrevendo um exemplo…', since: Date.now() });
+      // A faixa de espera nasce com o texto e não é lida.
+      say('Escrevendo um exemplo…');
       try {
         const data = await callAI('/api/example', { area, level, avoid: exampleTopic.current.slice(0, 120) });
         if (typeof data?.topic !== 'string' || typeof data.text !== 'string' || !data.text.trim()) {
@@ -915,8 +979,9 @@ function App() {
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
     exampleTopic.current = example.topic;
     setInput(example.text);
-    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás.
-    if (input.trim()) offerUndo('texto', note, () => setInput(input));
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás. O Desfazer do aviso some com
+    // ele e leva o foco ao Limpar.
+    if (input.trim()) offerUndo('texto', note, () => setInput(input), ['#limpar', 'main h1']);
     else toast(note);
   }
 
@@ -939,7 +1004,7 @@ function App() {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
     made.current = { key: '', kinds: [] };
     setResult(material);
-    setPage('Resumos');
+    openPage('Resumos', ['#material-titulo']);
     if (!result || !sameMaterial(result, material)) restart();
   }
 
@@ -982,6 +1047,13 @@ function App() {
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
     [page, saved, query, filter]
   );
+  // O leitor de tela ouve quantos materiais a busca ou o filtro deixou, meio segundo depois da última mudança: a cada
+  // tecla ele seria atropelado. Abrir a Biblioteca não é anunciado (page fica fora das dependências).
+  useEffect(() => {
+    if (page !== 'Biblioteca') return;
+    const timer = setTimeout(() => latest.current.page === 'Biblioteca' && say(libraryCount(shown.length)), 500);
+    return () => clearTimeout(timer);
+  }, [query, filter]);
   // A linha do backup, no pé da Biblioteca e do Desempenho: só nessas páginas, fora do caminho de cada resposta.
   const backupLine = useMemo(
     () => (page === 'Biblioteca' || page === 'Desempenho'
@@ -992,8 +1064,9 @@ function App() {
   const busiest = Math.max(1, ...days.map(d => d.total));
   const chatHints = hints({ chat, input, area, tips });
   const greeting = hello({ user, area, level, input, api: !!API_BASE });
-  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas.
-  const waiting = !!busy || asking;
+  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Sempre true ou false: asking
+  // guarda a hora do pedido, e aria-disabled só vale com "true".
+  const waiting = !!busy || !!asking;
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
@@ -1011,6 +1084,7 @@ function App() {
   // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
   // Dúvidas o atalho também sai (styles.css). Se o foco estava nele, vai para o item da página aberta no menu, o mesmo
   // destino, em vez de cair no body; fora do toque, quem chega ao Dúvidas pelo atalho segue para a caixa (focusAfter).
+  // De 600 a 850 px a faixa também cobre o perfil da barra de cima, que sai do Tab do mesmo jeito (mobile.css).
   // Antes da pintura: o foco não chega a sumir da tela.
   useLayoutEffect(() => {
     const was = document.activeElement;
@@ -1039,7 +1113,18 @@ function App() {
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
       {error && (
-        <m.div key="erro" ref={errorBox} role="alert" className="error" variants={pop} initial={appear()} animate="show" exit="exit">
+        <m.div
+          key="erro"
+          ref={errorBox}
+          id="erro"
+          role="alert"
+          className="error"
+          tabIndex={-1}
+          variants={pop}
+          initial={appear()}
+          animate="show"
+          exit="exit"
+        >
           <Icon name="alerta" />
           <p>{error}</p>
         </m.div>
@@ -1083,7 +1168,7 @@ function App() {
   );
 
   const profileButton = onClick => (
-    <button type="button" className="profile" onClick={onClick}>
+    <button type="button" className="profile" aria-haspopup="dialog" onClick={onClick}>
       <span className="avatar" aria-hidden="true">{(user?.name || 'V')[0].toUpperCase()}</span>
       <span className="profile-text">
         {user?.name || 'Visitante'}
@@ -1099,10 +1184,24 @@ function App() {
     <MotionConfig reducedMotion="user">
     <LazyMotion features={domAnimation} strict>
     <div className="app" data-page={slug}>
+      {/* O primeiro Tab da página: só aparece com o foco (styles.css) e leva o foco ao título da página, no palco, sem as
+          paradas da barra de cima e do menu. O main não ganha tabindex: no Safari o clique num botão dá o foco ao
+          ancestral focável, e o menu do nível do editor fecharia antes de o clique chegar ao item. */}
+      <a
+        className="skip-link"
+        href="#conteudo"
+        onClick={e => {
+          e.preventDefault();
+          [...document.querySelectorAll('main h1')].pop()?.focus();
+        }}
+      >
+        Pular para o conteúdo
+      </a>
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
-              Dúvidas estão na folha "Mais". */}
+              Dúvidas estão na folha "Mais". De 600 a 850 px o perfil continua aqui, e o Dúvidas fica na barra de
+              baixo. */}
           <a
             className="brand"
             href="#"
@@ -1169,7 +1268,7 @@ function App() {
           {SECTIONS.map(s => navButton(s, 'nav-item'))}
         </nav>
         {/* data-instant: a página que sai some sem movimento (styles.css). */}
-        <main style={{ '--sec': 'var(--tab-' + slug + ')' }} data-instant={calm || still || undefined}>
+        <main id="conteudo" style={{ '--sec': 'var(--tab-' + slug + ')' }} data-instant={calm || still || undefined}>
           {/* Cada página é um m.div novo (key): a entrada roda quando ela abre e só então. Os filhos com
               variants={rise} são os blocos que existem desde a abertura; o resto entra sem animação.
               Resumos, Flashcards e Quizzes são abas do mesmo material: a mesma key, então trocar de aba não refaz a
@@ -1189,7 +1288,7 @@ function App() {
               {/* O Dúvidas tem o título dele, no herói do chat. */}
               {page !== 'Dúvidas' && (
                 <m.div className="page-head" variants={titleIn}>
-                  <h1 className="page-title">{TITLES[page] || page}</h1>
+                  <h1 className="page-title" tabIndex={-1}>{TITLES[page] || page}</h1>
                   {page === 'Estudar' && (
                     <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
                   )}
@@ -1209,7 +1308,7 @@ function App() {
                         if (undo?.kind === 'texto') setUndo(null);
                       }}
                       onSend={() => {
-                        setPage('Dúvidas');
+                        openPage('Dúvidas', ASK_FOCUS);
                         ask(input);
                       }}
                       area={area}
@@ -1229,11 +1328,13 @@ function App() {
                         <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
                         <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
                       </button>
+                      {/* Na espera, aria-disabled e não disabled: o botão desligado perdia o foco (addExample não pede
+                          outro exemplo enquanto espera). */}
                       <button
                         type="button"
                         id="usar-exemplo"
                         className="tool"
-                        disabled={waiting}
+                        aria-disabled={waiting || undefined}
                         onClick={addExample}
                       >
                         <Icon name="exemplo" />
@@ -1245,19 +1346,20 @@ function App() {
                       {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
                           voltar a escrever: o foco fica no botão e a chance de voltar não some com o aviso. */}
                       {undo?.kind === 'texto' ? (
-                        <button type="button" className="tool" onClick={() => undoNow(undo)}>
+                        <button type="button" id="limpar" className="tool" onClick={() => undoNow(undo)}>
                           <Icon name="desfazer" />
                           <span>Desfazer</span>
                         </button>
                       ) : (
                         <button
                           type="button"
+                          id="limpar"
                           className="tool"
                           disabled={!input}
                           onClick={() => {
                             const before = input;
                             setInput('');
-                            offerUndo('texto', 'Texto apagado', () => setInput(before));
+                            offerUndo('texto', 'Texto apagado', () => setInput(before), ['#limpar', 'main h1']);
                           }}
                         >
                           <Icon name="limpar" />
@@ -1288,7 +1390,7 @@ function App() {
                           data-tab={s}
                           disabled={waiting}
                           aria-busy={busy?.kind === k || undefined}
-                          onClick={() => (k === 'chat' ? setPage('Dúvidas') : generate(k))}
+                          onClick={() => (k === 'chat' ? openPage('Dúvidas', ASK_FOCUS) : generate(k))}
                         >
                           {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
                               cima: aqui o botão só diz que está gerando. */}
@@ -1303,11 +1405,11 @@ function App() {
                     <div className="progress-head">
                       <h2 id="progresso">Seu progresso</h2>
                       {mistakes.length > 0 && (
-                        <button type="button" className="link" onClick={() => setPage('Erros')}>
+                        <button type="button" className="link" onClick={() => openPage('Erros')}>
                           {mistakes.length + (mistakes.length === 1 ? ' questão para rever' : ' questões para rever')}
                         </button>
                       )}
-                      <button type="button" className="link" onClick={() => setPage('Desempenho')}>
+                      <button type="button" className="link" onClick={() => openPage('Desempenho')}>
                         Ver meu desempenho
                         <Icon name="seta" />
                       </button>
@@ -1349,13 +1451,12 @@ function App() {
                         animate="show"
                         exit="exit"
                       >
-                        {/* O fio da espera corre na borda de cima do painel; o Cancelar fica onde fica o Salvar. */}
+                        {/* O fio da espera corre na borda de cima do painel; o Cancelar fica onde fica o Salvar. A espera
+                            nasce com o texto e não seria lida: quem anuncia é a região fixa (#anuncio). */}
                         <div className="result-header">
                           <div>
                             <Sk w="55%" className="sk-title" />
-                            <div role="status">
-                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
-                            </div>
+                            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
                           </div>
                         </div>
                         {tablist(true)}
@@ -1367,21 +1468,21 @@ function App() {
                       <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
                         <h2>Seu próximo aprendizado está por aqui.</h2>
                         <p>Adicione um texto para criar seu material de estudo.</p>
-                        <button type="button" className="primary" onClick={() => setPage('Estudar')}>Adicionar conteúdo</button>
+                        <button type="button" className="primary" onClick={() => openPage('Estudar')}>Adicionar conteúdo</button>
                       </m.section>
                     ) : (
                       <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
                         {/* O material temporário do caderno de erros só tem quiz: sem o botão de salvar e sem as abas. */}
                         <div className="result-header">
                           <div>
-                            <h2>{result.title}</h2>
+                            <h2 id="material-titulo" tabIndex={-1}>{result.title}</h2>
                             <p className="meta">
                               {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {aiNote}
                           </div>
                           {!result.virtual && (
-                            <button type="button" disabled={isSaved} onClick={save}>
+                            <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
                               <Icon name={isSaved ? 'check' : 'salvar'} />
                               {isSaved ? 'Salvo' : 'Salvar material'}
                             </button>
@@ -1436,8 +1537,9 @@ function App() {
                                         <div className="ai-ask">
                                           <button
                                             type="button"
-                                            disabled={waiting}
-                                            onClick={() => explain(s, whyTopic(s.concept), s.text)}
+                                            id={'explicar-' + i}
+                                            aria-disabled={waiting || undefined}
+                                            onClick={() => explain(s, whyTopic(s.concept), s.text, 'explicar-' + i)}
                                           >
                                             Não entendi, me explique <small>1 chamada de IA</small>
                                           </button>
@@ -1448,7 +1550,11 @@ function App() {
                                   </li>
                                 ))}
                               </ol>
-                              <button type="button" className="primary" onClick={() => setPage('Flashcards')}>
+                              <button
+                                type="button"
+                                className="primary"
+                                onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}
+                              >
                                 Estudar flashcards deste resumo
                                 <Icon name="seta" />
                               </button>
@@ -1457,13 +1563,29 @@ function App() {
                           {page === 'Flashcards' && (session.pos >= session.queue.length ? (
                             // Fim do baralho (Jhey): o painel sobe com um balanço curto e a caneta passa por cada cartão.
                             <m.div className="empty deck-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
-                              <h2>Baralho concluído</h2>
+                              <h2 tabIndex={-1}>Baralho concluído</h2>
                               <p>{deckSummary(session)}</p>
                               <DeckMarks session={session} finale />
+                              {/* Recomeçar tira esta tela, com o botão: o foco vai para o primeiro cartão. */}
                               <div className="row center">
-                                <button type="button" className="primary" onClick={() => setDeck(null)}>Revisar novamente</button>
+                                <button
+                                  type="button"
+                                  className="primary"
+                                  onClick={() => {
+                                    setDeck(null);
+                                    focusAfter.current = ['.flashcard'];
+                                  }}
+                                >
+                                  Revisar novamente
+                                </button>
                                 {deckMissed(session).length > 0 && (
-                                  <button type="button" onClick={() => setDeck(deckRedo(session))}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeck(deckRedo(session));
+                                      focusAfter.current = ['.flashcard'];
+                                    }}
+                                  >
                                     <Icon name="refazer" />
                                     Refazer só os que errei
                                   </button>
@@ -1499,13 +1621,17 @@ function App() {
                                 className={'flashcard' + (flip ? ' flipped' : '')}
                                 onClick={() => {
                                   setFlip(!flip);
+                                  // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a
+                                  // face nova (flip ainda é o de antes do clique).
+                                  say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
                                   cardMotion.current = 'perspective(900px) rotateX(-10deg)';
                                 }}
                               >
                                 <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
+                                {/* A dica serve ao mouse, ao toque e ao teclado. */}
                                 <span className="face-hint">
                                   <Icon name="refazer" />
-                                  {(TOUCH ? 'Toque' : 'Clique') + ' para ' + (flip ? 'ver a pergunta' : 'revelar a resposta')}
+                                  {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
                                 </span>
                               </button>
                               <div className="row center verdicts">
@@ -1555,18 +1681,36 @@ function App() {
                               ) : (
                                 <p>Você acertou todas!</p>
                               )}
+                              {/* Recomeçar tira esta tela, com o botão: o foco vai para a primeira questão. */}
                               <div className="row center">
                                 {wrong.length > 0 && (
-                                  <button type="button" className="primary" onClick={() => restartQuiz(wrong)}>
+                                  <button
+                                    type="button"
+                                    className="primary"
+                                    onClick={() => {
+                                      restartQuiz(wrong);
+                                      focusAfter.current = QUESTION_FOCUS;
+                                    }}
+                                  >
                                     <Icon name="refazer" />
                                     Refazer as que errei
                                   </button>
                                 )}
-                                <button type="button" onClick={() => restartQuiz()}>Refazer o quiz todo</button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    restartQuiz();
+                                    focusAfter.current = QUESTION_FOCUS;
+                                  }}
+                                >
+                                  Refazer o quiz todo
+                                </button>
                                 {result.virtual ? (
-                                  <button type="button" onClick={() => setPage('Erros')}>Voltar ao caderno</button>
+                                  <button type="button" onClick={() => openPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
-                                  <button type="button" onClick={() => setPage('Flashcards')}>Ir para os flashcards</button>
+                                  <button type="button" onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}>
+                                    Ir para os flashcards
+                                  </button>
                                 )}
                               </div>
                             </m.div>
@@ -1574,7 +1718,8 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Questão {idx + 1} de {quizList.length}</span>
-                                {/* Como no baralho. No "Refazer as que errei" recomeça só as erradas (retry). */}
+                                {/* Como no baralho. No "Refazer as que errei" recomeça só as erradas (retry). O foco vai
+                                    para a primeira questão como no "Refazer o quiz todo" (QUESTION_FOCUS). */}
                                 <button
                                   type="button"
                                   className="link"
@@ -1582,7 +1727,7 @@ function App() {
                                   style={{ visibility: answers.length ? undefined : 'hidden' }}
                                   onClick={() => {
                                     restartQuiz(retry);
-                                    focusAfter.current = ['.quiz-question'];
+                                    focusAfter.current = QUESTION_FOCUS;
                                   }}
                                 >
                                   Recomeçar
@@ -1596,7 +1741,9 @@ function App() {
                               <Meter value={answers.length} max={quizList.length} label="Questões respondidas" />
                               <QuizMarks total={quizList.length} answers={answers} idx={idx} />
                               {result.virtual && <p className="hint">Do material: {quiz.title}</p>}
-                              <h2 className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
+                              {/* O enunciado dá a descrição da caixa da resposta e o nome do grupo das alternativas: o
+                                  leitor de tela lê a pergunta junto com elas. */}
+                              <h2 id={'questao-' + idx} className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
                               {quiz.type === 'short' ? (
                                 // Questão nova ou recomeçada: o campo abre vazio. Respondida, ele mostra o que o aluno
                                 // escreveu, também na volta de outra aba ou página.
@@ -1619,6 +1766,7 @@ function App() {
                                   <input
                                     name="response"
                                     aria-label="Sua resposta"
+                                    aria-describedby={'questao-' + idx}
                                     required
                                     maxLength={500}
                                     placeholder="Sua resposta"
@@ -1628,7 +1776,7 @@ function App() {
                                   <button disabled={answer !== null} className="primary">Responder</button>
                                 </form>
                               ) : (
-                                <div className="options">
+                                <div className="options" role="group" aria-labelledby={'questao-' + idx}>
                                   {quiz.options.map((o, i) => (
                                     <button
                                       key={i}
@@ -1690,8 +1838,9 @@ function App() {
                                     <div className="ai-ask">
                                       <button
                                         type="button"
-                                        disabled={waiting}
-                                        onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation)}
+                                        id="explicar-questao"
+                                        aria-disabled={waiting || undefined}
+                                        onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation, 'explicar-questao')}
                                       >
                                         Não entendi, me explique <small>1 chamada de IA</small>
                                       </button>
@@ -1700,7 +1849,8 @@ function App() {
                                       {quiz.type === 'short' && answer.value.trim() && (!answer.ok || answer.review?.verdict) && (
                                         <button
                                           type="button"
-                                          disabled={waiting || !!answer.review?.verdict}
+                                          id="pedir-revisao"
+                                          aria-disabled={waiting || !!answer.review?.verdict || undefined}
                                           aria-busy={busy?.kind === 'review' || undefined}
                                           onClick={review}
                                         >
@@ -1860,35 +2010,38 @@ function App() {
               )}
               {page === 'Erros' && (
                 <m.section className="panel" variants={rise}>
+                  {mistakes.length > 0 && (
+                    <div className="erros-head">
+                      <p className="hint">
+                        Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
+                      </p>
+                      <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
+                        <li><Pen kind="novo" /> novo</li>
+                        <li><Pen kind="errei" /> errei</li>
+                        <li><Pen kind="refazer" /> refazer</li>
+                        <li><Pen kind="certo" /> certo em outro dia</li>
+                      </ol>
+                      <button type="button" className="primary" onClick={redoMistakes}>
+                        <Icon name="refazer" />
+                        Refazer meus erros ({mistakes.length})
+                      </button>
+                    </div>
+                  )}
+                  {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (undoNow, flipList). Fora da
+                      condição da lista, como na Biblioteca: tirar a última questão não leva o Desfazer junto. */}
+                  <AnimatePresence mode="popLayout" custom={byKeyboard()}>
+                    {undo?.kind === 'erro' && <UndoRow key="desfazer" undo={undo} onUndo={undoNow} pop={pop} />}
+                  </AnimatePresence>
                   {mistakes.length === 0 ? (
                     <div className="empty">
                       <h2>Nenhuma questão para rever.</h2>
                       <p className="hint">As que você errar nos quizzes aparecem aqui.</p>
-                      <button type="button" className="primary" onClick={() => setPage(result ? 'Quizzes' : 'Estudar')}>
+                      <button type="button" className="primary" onClick={() => openPage(result ? 'Quizzes' : 'Estudar')}>
                         {result ? 'Fazer o quiz do material aberto' : 'Gerar um material'}
                       </button>
                     </div>
                   ) : (
                     <>
-                      <div className="erros-head">
-                        <p className="hint">
-                          Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
-                        </p>
-                        <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
-                          <li><Pen kind="novo" /> novo</li>
-                          <li><Pen kind="errei" /> errei</li>
-                          <li><Pen kind="refazer" /> refazer</li>
-                          <li><Pen kind="certo" /> certo em outro dia</li>
-                        </ol>
-                        <button type="button" className="primary" onClick={redoMistakes}>
-                          <Icon name="refazer" />
-                          Refazer meus erros ({mistakes.length})
-                        </button>
-                      </div>
-                      {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (undoNow, flipList). */}
-                      <AnimatePresence mode="popLayout" custom={byKeyboard()}>
-                        {undo?.kind === 'erro' && <UndoRow key="desfazer" undo={undo} onUndo={undoNow} pop={pop} />}
-                      </AnimatePresence>
                       {/* data-flip: os blocos que deslizam para fechar o vão de uma questão tirada (anim.js, leave). */}
                       {byMaterial(mistakes).map(([title, list]) => (
                         <section className="mistakes" key={title}>
@@ -1985,6 +2138,7 @@ function App() {
       </div>
       <nav className="tabbar" aria-label="Seções">
         {BAR.map(s => navButton(s, 'tab-item', true))}
+        {MORE.map(s => navButton(s, 'tab-item tab-extra', true))}
         {/* Com a página aberta dentro da folha, "Mais" fica marcado como ela (data-current, a pílula ciano). */}
         <button
           type="button"
@@ -2003,10 +2157,10 @@ function App() {
       {/* Espera de um pedido à IA longe do lugar da resposta (o aluno saiu da página dela): a faixa de cima, com o fio,
           os segundos e o Cancelar, no lugar do atalho do Dúvidas; o atalho sai e o estado da IA esmaece enquanto ela
           está lá (styles.css). Com a espera no lugar da resposta (waitInline) a faixa não existe, e sai na hora quando
-          a espera volta para lá. */}
+          a espera volta para lá. Ela nasce com o texto e não seria lida: quem anuncia é a região fixa (#anuncio). */}
       <AnimatePresence custom={byKeyboard() || waitInline}>
         {band && (
-          <m.div key="espera" className="busy" role="status" variants={pop} initial={appear()} animate="show" exit="exit">
+          <m.div key="espera" className="busy" variants={pop} initial={appear()} animate="show" exit="exit">
             <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
           </m.div>
         )}
@@ -2046,9 +2200,19 @@ function App() {
           )}
         </AnimatePresence>
       </div>
+      {/* Região fixa só para o leitor de tela, fora do main: uma região que nasce junto com o texto (a página que abre, a
+          espera) não é lida, e o main troca a cada página. */}
+      <p id="anuncio" className="sr-only" role="status">{spoken}</p>
       <AnimatePresence>
         {more && (
-          <Modal key="mais" className="sheet" sheet labelledBy="mais-titulo" onClose={() => setMore(false)}>
+          <Modal
+            key="mais"
+            className="sheet"
+            sheet
+            labelledBy="mais-titulo"
+            back=".rail [aria-current=page], .tabbar [aria-current=page]"
+            onClose={() => setMore(false)}
+          >
             <div className="dialog-body">
               <div className="sheet-head">
                 <h2 id="mais-titulo">Mais seções</h2>
@@ -2075,7 +2239,7 @@ function App() {
             key="perfil"
             className="profile-dialog"
             labelledBy="profile-title"
-            back=".tabbar [aria-haspopup=dialog]"
+            back=".tabbar [aria-haspopup=dialog], .topbar .profile"
             onClose={() => setLogin(false)}
           >
             <div className="dialog-body">
@@ -2176,21 +2340,24 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     dialog.showModal();
     if (!byKeyboard()) {
       if (reduced()) {
-        animate(dialog, { opacity: [0, 1] }, { duration: 0.15 });
+        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn });
       } else if (sheet) {
         // A curva da folha do iOS: sai rápido da barra e assenta devagar.
-        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: 0.3, ease: [0.32, 0.72, 0, 1] });
+        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: MODAL.sheetEase });
       } else {
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();
         if (o?.width) dialog.style.transformOrigin = (o.left + o.width / 2 - d.left) + 'px ' + (o.top + o.height / 2 - d.top) + 'px';
-        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: 0.24, ease: EASE_OUT })
+        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: MODAL.in, ease: EASE_OUT })
           .then(() => (dialog.style.filter = ''));
       }
     }
     return () => {
       if (dialog.open) dialog.close();
-      const to = opener?.isConnected ? opener : back && document.querySelector(back);
+      // Quem abriu pode estar na página e fora da vista: com o celular girado para 600 px ou mais, o "Mais" some
+      // (mobile.css). Aí vale o primeiro de back que está na tela.
+      const shown = el => el?.isConnected && el.getClientRects().length > 0;
+      const to = shown(opener) ? opener : back && [...document.querySelectorAll(back)].find(shown);
       if (!document.querySelector('dialog[open]')) to?.focus?.({ preventScroll: true });
     };
   }, []);
@@ -2200,7 +2367,7 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
       // Reaberta no meio da saída: volta ao normal.
       if ('closing' in dialog.dataset) {
         delete dialog.dataset.closing;
-        animate(dialog, { opacity: 1, transform: 'none' }, { duration: 0.12, ease: EASE_OUT });
+        animate(dialog, { opacity: 1, transform: 'none' }, { duration: MODAL.settle, ease: EASE_OUT });
       }
       return;
     }
@@ -2211,7 +2378,8 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     }
     dialog.dataset.closing = '';
     const exit = reduced() ? { opacity: 0 } : sheet ? { transform: 'translateY(100%)' } : { opacity: 0, transform: 'scale(0.98)' };
-    animate(dialog, exit, { duration: reduced() ? 0.1 : sheet ? 0.2 : 0.14, ease: EASE_IN }).then(safeToRemove);
+    animate(dialog, exit, { duration: reduced() ? MODAL.calmOut : sheet ? MODAL.sheetOut : MODAL.out, ease: EASE_IN })
+      .then(safeToRemove);
   }, [present]);
   return (
     <dialog

@@ -25,7 +25,7 @@ O programa não aceita a resposta do modelo sem conferir. Ele valida cada item g
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho e montar o caderno de erros. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar.
+**Privacidade:** o texto do editor, as perguntas e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
 **Segurança da API:**
 
@@ -226,7 +226,8 @@ a3-chatbot-cerebro/
 │   │   └── avalia.py
 │   ├── tests/
 │   ├── requirements.txt
-│   └── requirements-dev.txt
+│   ├── requirements-dev.txt
+│   └── constraints.txt
 │
 ├── frontend/
 │   ├── src/
@@ -250,6 +251,7 @@ a3-chatbot-cerebro/
 │
 ├── docs/
 │   ├── IA.md
+│   ├── PUBLICAR.md
 │   ├── ROTEIRO.md
 │   ├── VALIDACAO.md
 │   ├── avaliacao-2026-11-17.json
@@ -325,7 +327,7 @@ Os testes simulam o provedor de IA: não precisam de chave e não gastam cota.
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -c constraints.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 
 cd ..\frontend
@@ -351,7 +353,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
 - A revisão de resposta curta feita pela IA também pode errar.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
-- O backend precisa de autenticação e controle de chamadas antes de ser disponibilizado para acesso público amplo.
+- O Cérebro é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
 ---
 

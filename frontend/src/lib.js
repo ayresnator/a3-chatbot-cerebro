@@ -431,6 +431,11 @@ export function matches(material, query, filter) {
     ].join(' ')).includes(fold(query));
 }
 
+// Quantos materiais a busca e o filtro da Biblioteca deixaram, na frase que o leitor de tela ouve (App.jsx).
+export function libraryCount(n) {
+  return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
+}
+
 // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (texto do editor ou área) até a primeira resposta;
 // depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
 // As da IA só valem enquanto o texto do editor e a área são os da resposta: se o aluno muda de assunto, voltam as fixas.
