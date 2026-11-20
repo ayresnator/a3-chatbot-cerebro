@@ -33,7 +33,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 3. Clique em "Não entendi, me explique". A resposta aparece ali mesmo, sem trocar de página.
 4. Na questão de resposta curta, digite a resposta certa com um erro pequeno de digitação, como uma letra trocada. A comparação de texto marca como errada. Clique em "Pedir revisão da IA" e mostre o veredito. Não use a sigla, o plural ou um sinônimo: o modelo costuma pôr essas formas no gabarito, a tela aceita a resposta e o botão de revisão não aparece.
 5. Termine o quiz e mostre a lista das questões erradas.
-6. Abra a página Erros: as questões erradas estão no caderno. Diga a regra: a questão sai sozinha quando é acertada em outro dia. O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
+6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá. Diga a regra: a questão sai sozinha quando é acertada em outro dia. O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
 
 ## Bloco 3: dúvidas e desempenho (2 minutos, 1 pedido à IA)
 

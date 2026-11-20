@@ -85,12 +85,14 @@ const SECTIONS = [
   ['Quizzes', 'quizzes'], ['Erros', 'erros'], ['Desempenho', 'desempenho'], ['Biblioteca', 'biblioteca'],
 ];
 const SLUG = Object.fromEntries(SECTIONS);
-// No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e Erros) e "Mais", uma
-// folha com as outras três seções e o perfil. Na barra, "Quizzes" vai como "Quiz": os seis nomes cabem em 320 px.
+// No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e o caderno de erros) e
+// "Mais", uma folha com as outras três seções e o perfil.
 const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n, SLUG[n]]);
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
-const SHORT = { Quizzes: 'Quiz' };
-const TITLES = { Erros: 'Caderno de erros' };
+// Um nome por seção, o mesmo no menu, no título, na aba do material e na aba do navegador. A chave da página não muda:
+// ela está no setPage, nas abas e no data-page do CSS. Na barra do celular vai "Caderno": os seis nomes cabem em 320 px.
+const NAMES = { Resumos: 'Resumo', Quizzes: 'Quiz', Erros: 'Caderno de erros' };
+const SHORT = { Erros: 'Caderno' };
 // As ações de gerar, na ordem do grupo: Resumir é a principal; Tirar dúvidas só abre a página.
 const ACTIONS = [
   ['resumo', 'resumos', 'Resumir'],
@@ -99,6 +101,12 @@ const ACTIONS = [
   ['chat', 'duvidas', 'Tirar dúvidas'],
 ];
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
+// O que o veredito da revisão da IA muda (review): "parcial" soa como meio ponto, e só "correta" muda a resposta.
+const VERDICT_EFFECT = {
+  correta: 'Agora conta como acerto, e a questão saiu do caderno de erros.',
+  parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
+  incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
+};
 
 // Aviso fixo onde há texto escrito pela IA. A demonstração não usa IA e não mostra.
 const aiNote = API_BASE && <p className="ai-note">Gerado por IA. Pode conter erros: confira com o seu material.</p>;
@@ -148,7 +156,8 @@ function App() {
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
-  const [size, setSize] = useState('Médio');
+  // Quantos tópicos do resumo aparecem: 'todos', '6' ou '3' (a lista "Mostrar"). O texto de cada tópico não muda.
+  const [size, setSize] = useState('todos');
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
   const [events, setEvents] = useState(() => readList('events').filter(validEvent));
@@ -276,7 +285,7 @@ function App() {
 
   // A página nova começa do topo; a entrada dela é a do m.div da página (key, anim.js: ROUTINE).
   useLayoutEffect(() => {
-    document.title = page + ' · Cérebro';
+    document.title = (NAMES[page] || page) + ' · Cérebro';
     if (!viewed.current) {
       viewed.current = true;
       return;
@@ -467,7 +476,7 @@ function App() {
     if (busy || asking) return;
     setError('');
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
+      setError('Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
       return;
     }
     // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
@@ -876,12 +885,13 @@ function App() {
     restart();
   }
 
-  // Perfil confirmado na janela (Perfil.jsx).
+  // Perfil confirmado na janela (Perfil.jsx). A área do editor só muda quando o perfil é criado ou a área principal
+  // muda: quem abre a janela só para corrigir o nome continua na área em que está estudando. user ainda é o anterior.
   function saveProfile(profile) {
-    setArea(profile.area);
+    if (!user || profile.area !== user.area) setArea(profile.area);
     setUser(profile);
     setLogin(false);
-    if (persist('user', profile)) toast('Seu espaço está pronto');
+    if (persist('user', profile)) toast(user ? 'Perfil atualizado' : 'Seu espaço está pronto');
   }
 
   const quizList = retry || result?.quiz || [];
@@ -907,7 +917,7 @@ function App() {
   // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
-  const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
+  const topics = size === 'todos' ? summary : summary.slice(0, Number(size));
   // Material com algum trecho de origem: nele, o tópico que não tem trecho ganha a etiqueta de explicação da IA.
   const sourced = summary.some(s => s.source?.trim());
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
@@ -1007,18 +1017,17 @@ function App() {
       onClick={() => go(n)}
     >
       <Icon name={s} />
-      <span>{(short && SHORT[n]) || n}</span>
+      <span>{(short && SHORT[n]) || NAMES[n] || n}</span>
     </button>
   );
 
   const profileButton = onClick => (
-    <button type="button" className="profile" onClick={onClick}>
+    <button type="button" className="profile" aria-haspopup="dialog" onClick={onClick}>
       <span className="avatar" aria-hidden="true">{(user?.name || 'V')[0].toUpperCase()}</span>
       <span className="profile-text">
         {user?.name || 'Visitante'}
         <small>{user ? 'Perfil local' : 'Criar perfil local'}</small>
       </span>
-      <Icon name="abaixo" />
     </button>
   );
 
@@ -1118,7 +1127,7 @@ function App() {
               {/* O Dúvidas tem o título dele, no herói do chat. */}
               {page !== 'Dúvidas' && (
                 <m.div className="page-head" variants={titleIn}>
-                  <h1 className="page-title">{TITLES[page] || page}</h1>
+                  <h1 className="page-title">{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
                     <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
                   )}
@@ -1295,7 +1304,14 @@ function App() {
                       <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
                         <h2>Seu próximo aprendizado está por aqui.</h2>
                         <p>Adicione um texto para criar seu material de estudo.</p>
-                        <button type="button" className="primary" onClick={() => setPage('Estudar')}>Adicionar conteúdo</button>
+                        <div className="row center">
+                          <button type="button" className="primary" onClick={() => setPage('Estudar')}>Adicionar conteúdo</button>
+                          {saved.length > 0 && (
+                            <button type="button" onClick={() => setPage('Biblioteca')}>
+                              Abrir da biblioteca ({saved.length})
+                            </button>
+                          )}
+                        </div>
                       </m.section>
                     ) : (
                       <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
@@ -1325,9 +1341,11 @@ function App() {
                             <>
                               <div className="row summary-tools">
                                 <label className="inline-field">
-                                  Tamanho
+                                  Mostrar
                                   <select value={size} onChange={e => setSize(e.target.value)}>
-                                    {['Curto', 'Médio', 'Detalhado'].map(s => <option key={s}>{s}</option>)}
+                                    <option value="todos">Todos os tópicos</option>
+                                    <option value="6">Os 6 primeiros</option>
+                                    <option value="3">Os 3 primeiros</option>
                                   </select>
                                 </label>
                                 <span className="topic-count">
@@ -1338,9 +1356,11 @@ function App() {
                                   type="button"
                                   onClick={async () => {
                                     try {
-                                      // Copia o resumo inteiro, não só os tópicos que o tamanho escolhido mostra.
+                                      // Copia o resumo inteiro, não só os tópicos que a lista "Mostrar" deixa na tela: o
+                                      // aviso diz quantos foram.
                                       await navigator.clipboard.writeText(summary.map(s => s.concept + ': ' + s.text).join('\n'));
-                                      toast('Resumo copiado');
+                                      toast('Resumo inteiro copiado: ' + summary.length +
+                                        (summary.length === 1 ? ' tópico' : ' tópicos'));
                                     } catch {
                                       toast('Cópia indisponível neste navegador');
                                     }
@@ -1355,7 +1375,7 @@ function App() {
                                   <li key={i}>
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
-                                      <h3>{s.concept}</h3>
+                                      <h3 tabIndex={-1}>{s.concept}</h3>
                                       <p>{s.text}</p>
                                       {s.source?.trim()
                                         ? <p className="source">{'No seu texto: "' + s.source.trim() + '"'}</p>
@@ -1376,6 +1396,23 @@ function App() {
                                   </li>
                                 ))}
                               </ol>
+                              {/* Os flashcards e o quiz cobram também os tópicos escondidos: o fim da lista leva a eles.
+                                  O botão some com o clique, e o foco vai ao primeiro tópico que apareceu. */}
+                              {topics.length < summary.length && (
+                                <div className="row">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      focusAfter.current = ['.summary li:nth-child(' + (topics.length + 1) + ') h3'];
+                                      setSize('todos');
+                                    }}
+                                  >
+                                    {summary.length - topics.length === 1
+                                      ? 'Ver o outro tópico'
+                                      : 'Ver os outros ' + (summary.length - topics.length) + ' tópicos'}
+                                  </button>
+                                </div>
+                              )}
                               <button
                                 type="button"
                                 className="primary"
@@ -1473,6 +1510,18 @@ function App() {
                                 </ol>
                               ) : (
                                 <p>Você acertou todas!</p>
+                              )}
+                              {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
+                                  caderno". */}
+                              {wrong.length > 0 && !result.virtual && (
+                                <p>
+                                  {wrong.length === 1
+                                    ? 'A questão que você errou está no caderno de erros. '
+                                    : 'As ' + wrong.length + ' questões que você errou estão no caderno de erros. '}
+                                  <button type="button" className="link" onClick={() => setPage('Erros')}>
+                                    Abrir o caderno de erros
+                                  </button>
+                                </p>
                               )}
                               <div className="row center">
                                 {wrong.length > 0 && (
@@ -1593,6 +1642,7 @@ function App() {
                                     <m.div variants={focusIn} initial={appear()} animate="show">
                                       <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
                                       <p>{answer.review.feedback}</p>
+                                      <p>{VERDICT_EFFECT[answer.review.verdict]}</p>
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
@@ -1785,11 +1835,12 @@ function App() {
                         <p className="hint">
                           Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
                         </p>
+                        {/* As marcas são as da lista abaixo. A seta, como elas, fica fora do leitor de tela: ele lê os
+                            passos da lista em ordem. */}
                         <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
-                          <li><Pen kind="novo" /> novo</li>
                           <li><Pen kind="errei" /> errei</li>
-                          <li><Pen kind="refazer" /> refazer</li>
-                          <li><Pen kind="certo" /> certo em outro dia</li>
+                          <li><Icon name="seta" /><Pen kind="refazer" /> refazer em outro dia</li>
+                          <li><Icon name="seta" /><Pen kind="certo" /> certo em outro dia: sai do caderno</li>
                         </ol>
                         <button type="button" className="primary" onClick={redoMistakes}>
                           <Icon name="refazer" />
@@ -1884,6 +1935,7 @@ function App() {
                     onImport={importBackup}
                     onOpen={openSaved}
                     onRemove={(material, item) => leave(item, () => remove(material))}
+                    onStart={() => setPage('Estudar')}
                   />
                 </Suspense>
               )}
@@ -1991,10 +2043,21 @@ function App() {
                 <Icon name="fechar" />
               </button>
               <BrandMark />
-              <h2 id="profile-title">Seu próximo aprendizado começa aqui.</h2>
-              <p>Crie um perfil local neste navegador. Não é uma conta com autenticação.</p>
+              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui.'}</h2>
+              <p>
+                {user
+                  ? 'Seu nome e sua área principal ficam só neste navegador. Não é uma conta com senha.'
+                  : 'Crie um perfil local neste navegador. Não é uma conta com autenticação.'}
+              </p>
+              {/* A lista começa na área do perfil, não na do editor: salvar só o nome não troca a área principal. */}
               <Suspense fallback={<PerfilSkeleton />}>
-                <Perfil name={name} setName={setName} area={area} onSave={saveProfile} />
+                <Perfil
+                  name={name}
+                  setName={setName}
+                  area={AREAS.includes(user?.area) ? user.area : area}
+                  fresh={!user}
+                  onSave={saveProfile}
+                />
               </Suspense>
             </div>
           </Modal>

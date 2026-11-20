@@ -46,7 +46,7 @@ As respostas geradas pela IA podem conter erros. Confira as informações com o 
 O aluno pode inserir informações de diferentes maneiras:
 
 - Colar um texto;
-- Digitar uma matéria;
+- Escrever um tema;
 - Fazer uma pergunta;
 - Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz.
 
@@ -69,13 +69,13 @@ Essas configurações ajudam a IA a adaptar o conteúdo ao nível do estudante.
 
 O texto do editor, o material aberto e a conversa ficam guardados no navegador: recarregar a página ou fechar a aba não apaga o trabalho. O botão "Limpar" esvazia o editor e pode ser desfeito.
 
-### 2. Resumos
+### 2. Resumo
 
 Transformam conteúdos extensos em tópicos organizados, destacando os principais conceitos e informações.
 
 O estudante pode:
 
-- Selecionar a quantidade de tópicos, com a contagem "Mostrando N de M tópicos";
+- Escolher quantos tópicos aparecem (por padrão, todos), com a contagem "Mostrando N de M tópicos" e o botão "Ver os outros N tópicos" quando algum fica escondido;
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
 - Acessar os flashcards relacionados;
@@ -95,7 +95,7 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
-### 4. Quizzes
+### 4. Quiz
 
 Oferecem atividades interativas para testar o conhecimento adquirido.
 
@@ -109,7 +109,7 @@ Após cada resposta aparecem a explicação e a opção certa, marcada também c
 
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
-Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido.
+Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
 

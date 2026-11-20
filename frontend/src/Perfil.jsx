@@ -5,10 +5,11 @@ import { AREAS } from './lib.js';
 import { EASE_OUT, byKeyboard } from './anim.js';
 
 // Formulário da janela do perfil local, carregado à parte (App.jsx, lazyView); o Fechar, o título e o texto já estão
-// na janela. O nome e a área continuam no App; ao confirmar, onSave recebe o perfil. O foco vai para o nome quando o
+// na janela. O nome e a área continuam no App; ao confirmar, onSave recebe o perfil. fresh: ainda não há perfil, e o
+// botão é o de quem começa ("Começar a estudar"); com perfil, ele só salva. O foco vai para o nome quando o
 // formulário aparece, chegue ele junto com a janela ou depois dela. Chegando depois, no lugar do esqueleto (do mesmo
 // tamanho), ele só esmaece, em 0,18 s; junto com a janela, a entrada é a dela.
-export default function Perfil({ name, setName, area, onSave }) {
+export default function Perfil({ name, setName, area, fresh, onSave }) {
   const form = useRef(null);
   const field = useRef(null);
   // A janela já estava aberta: o showModal (App.jsx, Modal) roda depois deste efeito quando os dois chegam juntos.
@@ -46,10 +47,17 @@ export default function Perfil({ name, setName, area, onSave }) {
           {AREAS.map(a => <option key={a}>{a}</option>)}
         </select>
       </label>
-      <button className="primary">
-        Começar a estudar
-        <Icon name="seta" />
-      </button>
+      {fresh ? (
+        <button className="primary">
+          Começar a estudar
+          <Icon name="seta" />
+        </button>
+      ) : (
+        <button className="primary">
+          <Icon name="check" />
+          Salvar
+        </button>
+      )}
     </form>
   );
 }

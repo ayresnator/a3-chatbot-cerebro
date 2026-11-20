@@ -9,6 +9,7 @@ import { AREAS } from './lib.js';
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave).
 export default function Biblioteca({
   rise, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, onExport, onImport, onOpen, onRemove,
+  onStart,
 }) {
   const picker = useRef(null);
   return (
@@ -71,17 +72,19 @@ export default function Biblioteca({
           ))}
         </ul>
       )}
-      {!shown.length && (
+      {/* Biblioteca vazia e busca sem resultado pedem coisas diferentes do aluno. */}
+      {!shown.length && (saved.length ? (
         <div className="empty">
           <h2>Nenhum material encontrado</h2>
-          {/* Biblioteca vazia e busca sem resultado pedem coisas diferentes do aluno. */}
-          <p>
-            {saved.length
-              ? 'Nada com essa busca ou essa área. Apague a busca ou escolha "Todas".'
-              : 'Salve um material gerado para estudar novamente depois.'}
-          </p>
+          <p>Nada com essa busca ou essa área. Apague a busca ou escolha "Todas".</p>
         </div>
-      )}
+      ) : (
+        <div className="empty">
+          <h2>Sua biblioteca está vazia</h2>
+          <p>Gere um material e salve aqui para estudar de novo depois. Se você tem um backup, use Importar.</p>
+          <button type="button" className="primary" onClick={onStart}>Gerar um material</button>
+        </div>
+      ))}
     </m.section>
   );
 }
