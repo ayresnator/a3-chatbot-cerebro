@@ -3055,9 +3055,6 @@ main:focus {
     pointer-events: none
 }
 
-/* O aviso flutua por cima da página, às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
-   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
-   está saindo ([data-motion-pop-id]). */
 .toast {
     display: flex;
     align-items: center;
@@ -3070,18 +3067,27 @@ main:focus {
     -webkit-backdrop-filter: var(--blur);
     backdrop-filter: var(--blur);
     font-size: var(--fs-2);
-    pointer-events: none;
+    pointer-events: auto;
     overflow-wrap: anywhere
-}
-
-.toast:not([data-motion-pop-id]) button {
-    pointer-events: auto
 }
 
 .toast button {
     min-height: 2.25rem;
     border-color: var(--line-strong);
     white-space: nowrap
+}
+
+/* Na tela de toque o aviso flutua às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
+   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
+   está saindo ([data-motion-pop-id]). Com mouse o corpo inteiro continua recebendo: o mouse em cima segura o aviso. */
+@media (hover: none) {
+    .toast {
+        pointer-events: none
+    }
+
+    .toast:not([data-motion-pop-id]) button {
+        pointer-events: auto
+    }
 }
 
 /* Espera de um pedido à IA longe do lugar da resposta: o que está acontecendo, os segundos, o limite e o Cancelar,

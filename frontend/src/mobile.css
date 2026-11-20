@@ -18,9 +18,10 @@
     }
 
     /* O Tab rola a página só até o controle entrar na janela, e a barra de baixo, presa, cobria o controle (WCAG
-       2.4.11). A rolagem até o foco, e a de scrollIntoView, param acima dela. Com o retorno do quiz na tela, também acima
-       do "Próxima questão" preso: depois de responder, a linha com a marca ✓ ou ✗ e a nota fica à vista (App.jsx,
-       submit). */
+       2.4.11). A rolagem até o foco, e a de scrollIntoView (o erro, a explicação, o menu do nível, a conversa), param
+       acima dela, com o respiro. Os blocos não têm scroll-margin próprio: somado a este, o respiro contaria duas vezes.
+       Com o retorno do quiz na tela, também acima do "Próxima questão" preso: depois de responder, a linha com a marca
+       ✓ ou ✗ e a nota fica à vista (App.jsx, submit). */
     html {
         scroll-padding-bottom: calc(var(--tabbar-h) + var(--sp-4))
     }
@@ -221,20 +222,6 @@
        título e a saudação saem da vista. */
     .chat-stage[data-state=heroi]:has(.palette) .chat-head {
         visibility: hidden
-    }
-
-    /* O que rola até a vista fica com um respiro a mais acima da barra de baixo (o menu do nível também, quando abre
-       numa janela baixa, e cada item dele que recebe o foco). A barra, a raiz já desconta (html, acima): somada aqui,
-       ela contaria duas vezes, e numa janela baixa o topo do bloco sairia da tela. */
-    .why,
-    .error,
-    .feedback,
-    .chat-end,
-    .undo-row,
-    .quiz-question,
-    .level-menu,
-    .level-menu button {
-        scroll-margin-bottom: var(--sp-4)
     }
 
     /* O retorno do quiz pode ser longo: "Próxima questão" fica preso acima da barra enquanto ele está na tela, numa

@@ -314,12 +314,14 @@ function App() {
     focusAfter.current = null;
     // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
     // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
-    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css), ele vem todo, com o botão de seguir; senão,
-    // só o último elemento que casa, com as marcas ✓ e ✗ e a nota acima da faixa.
+    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
+    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
+    // acima da faixa.
     (document.querySelector(selector) || (fallback && document.querySelector(fallback)))?.focus({ preventScroll: !!show });
     if (!show) return;
     const box = whole && document.querySelector(whole);
-    const fits = box && fitsAbove(box.offsetHeight, innerHeight, getComputedStyle(document.documentElement).scrollPaddingBottom);
+    const fits = box && fitsAbove(box.offsetHeight, innerHeight,
+      getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
     (fits ? box : [...document.querySelectorAll(show)].pop())?.scrollIntoView({ block: 'nearest' });
   });
 
@@ -366,7 +368,7 @@ function App() {
     }
   }
 
-  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some com o mouse no botão dele ou o foco nele.
+  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some enquanto o mouse ou o foco estão nele.
   // O temporizador do aviso anterior é cancelado: ele apagava o aviso novo antes da hora.
   function toast(text, action) {
     clearTimeout(noticeTimer.current);
@@ -1576,10 +1578,13 @@ function App() {
                                   animate="show"
                                 >
                                   <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
-                                  {/* Errou a opção: a certa também em texto, como no fim do quiz e no caderno de erros. No
-                                      celular deitado a marca dela podia ficar fora da vista. */}
+                                  {/* Errou a opção: a marcada e a certa também em texto, como no fim do quiz. No celular
+                                      deitado as marcas delas, nas opções, podiam ficar fora da vista. */}
                                   {quiz.type !== 'short' && !answer.ok && (
-                                    <p className="answer-line">Resposta certa: {expectedText(quiz)}</p>
+                                    <>
+                                      <p className="answer-line">Sua resposta: {quiz.options[answer.value]}</p>
+                                      <p className="answer-line">Resposta certa: {expectedText(quiz)}</p>
+                                    </>
                                   )}
                                   {quiz.type === 'short' && (
                                     <p className="answer-line">
@@ -1935,8 +1940,8 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
-        {/* Só o mouse segura o aviso (sobre o botão dele: o corpo deixa o toque passar, styles.css), e o foco do
-            teclado. O toque virava "mouse em cima" e prendia o aviso por cima dos botões do cartão. */}
+        {/* Só o mouse e o foco do teclado seguram o aviso. O toque virava "mouse em cima" e prendia o aviso por cima dos
+            botões do cartão; na tela de toque o corpo dele deixa o toque passar (styles.css). */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
             <m.div

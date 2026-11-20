@@ -544,15 +544,25 @@ test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
   for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
 });
 
-// O retorno do quiz (uns 300 px) depois de responder: inteiro no computador e no celular em pé; no celular deitado e
-// no zoom de 200%, a barra de baixo e o "Próxima questão" preso reservam 155 px e ele não cabe.
+// O retorno do quiz depois de errar (uns 315 px, com a faixa de "Próxima questão" de 69 px dentro dele): inteiro no
+// computador e no celular em pé. No celular deitado e no zoom de 200% a raiz reserva 155 px (a barra de baixo, a faixa
+// presa e o respiro); sem a faixa, que já está no bloco, sobram 86 px de reserva, e ele não cabe.
 test('fitsAbove: o bloco cabe na janela menos a reserva da raiz; "auto" (computador) não reserva nada', () => {
-  assert.equal(fitsAbove(300, 768, 'auto'), true, 'computador, 1366 x 768');
-  assert.equal(fitsAbove(300, 844, '155px'), true, 'celular em pé, 390 x 844');
-  assert.equal(fitsAbove(300, 390, '155px'), false, 'celular deitado, 844 x 390');
-  assert.equal(fitsAbove(300, 312, '155px'), false, 'zoom de 200%, 683 x 312');
-  assert.equal(fitsAbove(235, 390, '155px'), true, 'na medida exata, cabe');
-  assert.equal(fitsAbove(300, 768, ''), true, 'sem valor, sem reserva');
+  assert.equal(fitsAbove(315, 768, 'auto', 69), true, 'computador, 1366 x 768');
+  assert.equal(fitsAbove(315, 844, '155px', 69), true, 'celular em pé, 390 x 844');
+  assert.equal(fitsAbove(315, 390, '155px', 69), false, 'celular deitado, 844 x 390');
+  assert.equal(fitsAbove(315, 312, '155px', 69), false, 'zoom de 200%, 683 x 312');
+  assert.equal(fitsAbove(304, 390, '155px', 69), true, 'na medida exata, cabe');
+  assert.equal(fitsAbove(315, 768, ''), true, 'sem valor, sem reserva');
+});
+
+// A faixa presa conta uma vez só: em 390 x 844, um retorno de 700 px cabe inteiro acima da barra. No computador a faixa
+// não é presa e a raiz não reserva nada: o bloco mais alto que a janela continua sem caber.
+test('fitsAbove: a faixa dentro do bloco sai da reserva, e no computador não aumenta a janela', () => {
+  assert.equal(fitsAbove(700, 844, '155px'), false, 'com a faixa contada duas vezes, não cabia');
+  assert.equal(fitsAbove(700, 844, '155px', 69), true, 'contada uma vez, cabe');
+  assert.equal(fitsAbove(759, 844, '155px', 69), false, 'passou da barra e do respiro');
+  assert.equal(fitsAbove(800, 768, 'auto', 69), false, 'computador, retorno mais alto que a janela');
 });
 
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
