@@ -71,7 +71,7 @@ npm run dev
 Se o PowerShell disser que a execução de scripts está desabilitada, use `npm.cmd ci` e `npm.cmd run dev`.
 
 Abra http://localhost:5173. O Vite encaminha /api ao Python na porta 8000.
-Use sempre esse endereço. Em http://127.0.0.1:5173 a conexão pode ser recusada, e o que foi salvo em um endereço (biblioteca, desempenho, perfil) não aparece no outro: o navegador guarda esses dados por endereço. Para levar a biblioteca, o desempenho e o caderno de erros a outro navegador ou computador, use Exportar e Importar na Biblioteca. O arquivo exportado também leva o perfil (nome e área), mas o Importar não o traz: crie o perfil de novo no outro navegador.
+Use sempre esse endereço. Em http://127.0.0.1:5173 a conexão pode ser recusada, e o que foi salvo em um endereço (biblioteca, desempenho, perfil) não aparece no outro: o navegador guarda esses dados por endereço. Para levar a biblioteca, o desempenho e o caderno de erros a outro navegador ou computador, use Exportar e Importar na Biblioteca. O arquivo exportado também leva o perfil (nome e área), e o Importar o traz quando o outro navegador ainda não tem perfil; se já tem, fica o dele.
 O cabeçalho mostra o estado da IA: "IA ativa", com o modelo e as chamadas do dia; "IA não configurada", quando falta a chave no .env; ou "Backend desligado", quando o terminal do Python não está rodando.
 O servidor só responde neste computador. Para abrir no celular na mesma rede, use `npm run dev -- --host` e desligue depois: enquanto estiver assim, qualquer pessoa na rede pode usar o chat e gastar a cota da sua chave.
 Se a porta 5173 estiver ocupada, encerre a instância antiga antes de iniciar.

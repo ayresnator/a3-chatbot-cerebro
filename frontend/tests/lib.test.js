@@ -9,6 +9,7 @@ import {
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
   opener, openers, typeDelay, rove, LEVEL_NOTES,
+  read, storageKey, demoStorage, newId, backupStatus, backupSummary,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -931,6 +932,101 @@ test('readDraft: sugestões da IA precisam de chave em texto e lista de textos',
   for (const tips of bad) assert.deepEqual(draft({ tips }).tips, NO_TIPS, JSON.stringify(tips));
 });
 
+// O que esta aba guardou (sessionStorage), como browser() faz com o localStorage. Sem items, a aba fica sem
+// sessionStorage, como no Node: cada teste que usa tab() termina com tab().
+function tab(items) {
+  if (!items) {
+    delete globalThis.sessionStorage;
+    return;
+  }
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: { getItem: k => items[k] ?? null },
+    configurable: true,
+    writable: true,
+  });
+}
+
+// sessionStorage que o navegador bloqueia: ler o nome já lança erro.
+function blockedTab() {
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    get() {
+      throw Error('SecurityError');
+    },
+    configurable: true,
+  });
+}
+
+test('readDraft: o rascunho desta aba vale mais que o último que alguma aba gravou', () => {
+  try {
+    browser({ 'cerebro-rascunho': JSON.stringify({ ...DRAFT, input: 'Texto da outra aba' }) });
+    tab({ 'cerebro-rascunho': JSON.stringify(DRAFT) });
+    assert.deepEqual(readDraft(), DRAFT);
+  } finally {
+    tab();
+  }
+});
+
+test('readDraft: aba sem rascunho, sem sessionStorage ou com ele bloqueado lê o último gravado', () => {
+  const other = { ...DRAFT, input: 'Texto da outra aba' };
+  browser({ 'cerebro-rascunho': JSON.stringify(other) });
+  try {
+    tab({});
+    assert.deepEqual(readDraft(), other, 'aba nova');
+    blockedTab();
+    assert.deepEqual(readDraft(), other, 'sessionStorage bloqueado');
+    tab();
+    assert.deepEqual(readDraft(), other, 'sem sessionStorage');
+  } finally {
+    tab();
+  }
+});
+
+test('read: com session lê o que esta aba guardou; bloqueado ou ausente, devolve o padrão', () => {
+  browser({ 'cerebro-x': '"de todas as abas"' });
+  try {
+    tab({ 'cerebro-x': '"desta aba"' });
+    assert.equal(read('x', 'padrão', true), 'desta aba');
+    assert.equal(read('x', 'padrão'), 'de todas as abas');
+    blockedTab();
+    assert.equal(read('x', 'padrão', true), 'padrão');
+    tab();
+    assert.equal(read('x', 'padrão', true), 'padrão');
+  } finally {
+    tab();
+  }
+});
+
+test('demoStorage: a demonstração lê à parte, com o prefixo cerebro-demo-, e o app com IA não vê o que ela grava', () => {
+  assert.equal(storageKey('events'), 'cerebro-events');
+  browser({
+    'cerebro-saved': JSON.stringify([{ ...GOOD, title: 'Do app com IA' }]),
+    'cerebro-user': JSON.stringify({ name: 'Ana', area: 'Economia' }),
+    'cerebro-rascunho': JSON.stringify({ ...DRAFT, input: 'Texto do app com IA' }),
+    'cerebro-demo-saved': JSON.stringify([GOOD]),
+    'cerebro-demo-rascunho': JSON.stringify(DRAFT),
+  });
+  try {
+    demoStorage(true);
+    assert.equal(storageKey('events'), 'cerebro-demo-events');
+    assert.deepEqual(readList('saved'), [GOOD]);
+    assert.deepEqual(readDraft(), DRAFT);
+    assert.equal(readUser(), null, 'o perfil do app com IA não aparece na demonstração');
+  } finally {
+    demoStorage(false);
+  }
+  assert.equal(storageKey('events'), 'cerebro-events');
+  assert.deepEqual(readList('saved').map(m => m.title), ['Do app com IA']);
+  assert.equal(readDraft().input, 'Texto do app com IA');
+});
+
+test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {
+  assert.equal(newId([], 1000), 1000);
+  assert.equal(newId([{ id: 5 }, { id: 9 }], 1000), 1000);
+  const kept = { id: newId([], 1000) };
+  assert.equal(newId([kept], 1000), 1001, 'o anterior e o novo no mesmo milissegundo');
+  assert.equal(newId([null, 'texto', { id: 'x' }, { id: 1.5 }, { id: 2000 }], 1000), 2001);
+});
+
 test('healthLabel: conferindo, backend desligado e IA não configurada', () => {
   assert.deepEqual(healthLabel(null), { text: 'Conferindo a IA…', tone: '' });
   assert.deepEqual(healthLabel(false), { text: 'Backend desligado', tone: 'off' });
@@ -1243,15 +1339,19 @@ const BACKUP = {
 // O arquivo lido de novo a cada teste, para um teste não mexer no que o outro usa.
 const backup = () => readBackup(JSON.stringify(BACKUP));
 const EMPTY = { saved: [], events: [], erros: [] };
+// Nada ficou de fora do arquivo.
+const NONE = { saved: 0, events: 0, erros: 0 };
 
-test('readBackup: arquivo bom devolve as três listas; o perfil não é importado', () => {
-  assert.deepEqual(backup(), { saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros });
+test('readBackup: arquivo bom devolve as três listas, nada de fora e o perfil', () => {
+  assert.deepEqual(backup(), {
+    saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros, fora: NONE, user: { name: 'Ana', area: 'Economia' },
+  });
 });
 
-test('readBackup: material sem summary fica de fora; o resto do arquivo entra', () => {
+test('readBackup: material sem summary fica de fora e é contado; o resto do arquivo entra', () => {
   const { summary, ...noSummary } = BACKUP.saved[0];
   const got = readBackup(JSON.stringify({ ...BACKUP, saved: [noSummary, ...BACKUP.saved, null, 'texto'] }));
-  assert.deepEqual(got, backup());
+  assert.deepEqual(got, { ...backup(), fora: { ...NONE, saved: 3 } });
 });
 
 test('readBackup: material sem data válida ou com área estragada, resposta e erro fora do formato ficam de fora', () => {
@@ -1262,7 +1362,21 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
     events: [{ ...BACKUP.events[0], ok: 'sim' }, BACKUP.events[1], { kind: 'quiz' }],
     erros: [{ ...BACKUP.erros[0], key: 'outra|chave' }, { ...BACKUP.erros[0], item: { type: 'short' } }, BACKUP.erros[0]],
   }));
-  assert.deepEqual(got, { saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros });
+  assert.deepEqual(got, {
+    saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros, fora: { saved: 3, events: 2, erros: 2 }, user: null,
+  });
+});
+
+test('readBackup: o perfil só vale com nome de 1 a 50 caracteres e área da lista; dele só entram o nome e a área', () => {
+  const user = value => readBackup(JSON.stringify({ ...BACKUP, user: value })).user;
+  assert.deepEqual(user({ name: '  Bia  ', area: 'Direito', admin: true }), { name: 'Bia', area: 'Direito' });
+  assert.deepEqual(user({ name: 'a'.repeat(50), area: 'Escolar' }), { name: 'a'.repeat(50), area: 'Escolar' });
+  const bad = [
+    null, 'Ana', 5, [], { area: 'Economia' }, { name: '', area: 'Economia' }, { name: '   ', area: 'Economia' },
+    { name: 'a'.repeat(51), area: 'Economia' }, { name: 5, area: 'Economia' }, { name: 'Ana' },
+    { name: 'Ana', area: 'Medicina' },
+  ];
+  for (const value of bad) assert.equal(user(value), null, JSON.stringify(value));
 });
 
 test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 1 não são backup', () => {
@@ -1273,13 +1387,15 @@ test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 
   for (const text of notBackup) assert.equal(readBackup(text), null, text);
 });
 
-test('readBackup: lista ausente ou fora do formato vale lista vazia', () => {
-  assert.deepEqual(readBackup('{"versao":1}'), EMPTY);
-  assert.deepEqual(readBackup('{"versao":1,"saved":{},"events":"x","erros":5}'), EMPTY);
+test('readBackup: lista ausente ou fora do formato vale lista vazia, sem nada contado de fora', () => {
+  const none = { ...EMPTY, fora: NONE, user: null };
+  assert.deepEqual(readBackup('{"versao":1}'), none);
+  assert.deepEqual(readBackup('{"versao":1,"saved":{},"events":"x","erros":5}'), none);
 });
 
 test('mergeBackup: num navegador vazio, entra tudo o que o arquivo trouxe', () => {
-  assert.deepEqual(mergeBackup(EMPTY, backup()), backup());
+  const { saved, events, erros } = backup();
+  assert.deepEqual(mergeBackup(EMPTY, backup()), { saved, events, erros });
 });
 
 test('mergeBackup: importar duas vezes o mesmo arquivo não duplica', () => {
@@ -1375,4 +1491,78 @@ test('backupNote: quantos materiais entraram; só respostas ou erros; nada novo'
   assert.equal(backupNote(once, mergeBackup(once, moreAnswers)), 'Desempenho e caderno de erros atualizados');
   const newerMistake = { ...backup(), erros: [mistake(Q_SHORT, 'Inflação', 16)] };
   assert.equal(backupNote(once, mergeBackup(once, newerMistake)), 'Desempenho e caderno de erros atualizados');
+});
+
+test('backupNote: o que ficou de fora e o perfil que entrou vêm depois, e então cada frase termina com ponto', () => {
+  const junto = mergeBackup(EMPTY, backup());
+  assert.equal(backupNote(EMPTY, junto, NONE), '1 material importado', 'nada de fora: a frase de sempre');
+  assert.equal(
+    backupNote(EMPTY, junto, { ...NONE, saved: 2 }),
+    '1 material importado. Ficaram de fora, por estarem incompletos: 2 materiais.'
+  );
+  assert.equal(
+    backupNote(EMPTY, junto, { saved: 1, events: 1, erros: 3 }, 'Bia'),
+    '1 material importado. Ficaram de fora, por estarem incompletos: 1 material, 1 resposta e 3 questões do ' +
+      'caderno de erros. Perfil de Bia importado.'
+  );
+  assert.equal(
+    backupNote(junto, junto, { ...NONE, events: 2, erros: 1 }),
+    'Nada novo neste arquivo. Ficaram de fora, por estarem incompletos: 2 respostas e 1 questão do caderno de erros.'
+  );
+  assert.equal(backupNote(junto, junto, NONE, 'Bia'), 'Nada novo neste arquivo. Perfil de Bia importado.');
+});
+
+test('backupSummary: o que foi no arquivo, no singular e no plural, contado como a tela mostra', () => {
+  const one = { saved: BACKUP.saved, events: [BACKUP.events[0]], erros: BACKUP.erros };
+  assert.equal(backupSummary(one), 'Backup gerado: 1 material, 1 resposta e 1 questão do caderno de erros.');
+  assert.equal(backupSummary(EMPTY), 'Backup gerado: 0 materiais, 0 respostas e 0 questões do caderno de erros.');
+  const two = {
+    saved: [...BACKUP.saved, { ...BACKUP.saved[0], id: 2 }, null],
+    events: [...BACKUP.events, { kind: 'quiz' }],
+    erros: [...BACKUP.erros, mistake(Q_MULTIPLE, 'Juros', 14), 'texto'],
+  };
+  assert.equal(backupSummary(two), 'Backup gerado: 2 materiais, 2 respostas e 2 questões do caderno de erros.');
+});
+
+// A linha do backup com "agora" em 16/11/2026 às 22h, como today().
+const backupLine = (saved, events, last, now = today()) => backupStatus({ saved, events, last, now });
+const datedOn = days => days.map(day => ({ date: at(day) }));
+
+test('backupStatus: sem material nem resposta não lembra', () => {
+  assert.deepEqual(backupLine([], [], null), { text: 'Você ainda não fez backup', due: false });
+  assert.deepEqual(backupLine([], [], at(1)), { text: 'Último backup: há 15 dias', due: false });
+});
+
+test('backupStatus: sem backup, lembra com 5 materiais ou com o registro mais antigo de 7 dias ou mais', () => {
+  assert.deepEqual(backupLine(datedOn([16]), [], null), { text: 'Você ainda não fez backup', due: false });
+  assert.equal(backupLine(datedOn([16, 16, 16, 16, 16]), [], null).due, true, '5 materiais de hoje');
+  assert.equal(backupLine([], datedOn([8]), null).due, true, 'resposta de 8 dias atrás');
+  assert.equal(backupLine([], datedOn([10, 16]), null).due, false, 'a mais antiga é de 6 dias atrás');
+  assert.equal(backupLine([{}, {}, {}, {}, { date: 'ontem' }], [], null).due, false, 'sem data não conta como novo');
+});
+
+test('backupStatus: com backup, só conta o que veio depois dele', () => {
+  assert.equal(backupLine(datedOn([14, 14, 15, 16, 16]), [], at(13)).due, true, '5 materiais depois do backup');
+  assert.equal(backupLine(datedOn([12, 14, 15, 16, 16]), [], at(13)).due, false, 'só 4 depois do backup');
+  assert.equal(backupLine([], datedOn([12]), at(6)).due, true, 'backup de 10 dias atrás e uma resposta depois');
+  assert.equal(backupLine([], [{ date: at(9, 13) }], at(9, 10)).due, true, '7 dias e uma resposta depois');
+  assert.equal(backupLine([], [{ date: at(10, 13) }], at(10, 10)).due, false, '6 dias e uma resposta depois');
+  assert.equal(backupLine(datedOn([5]), datedOn([2, 5]), at(6)).due, false, 'backup de 10 dias atrás e nada depois');
+});
+
+test('backupStatus: os dias contam pelo calendário, não por 24 horas', () => {
+  assert.equal(backupLine([], [], at(16, 8)).text, 'Último backup: hoje');
+  assert.equal(backupLine([], [], at(15)).text, 'Último backup: há 1 dia');
+  assert.equal(backupLine([], [], at(4)).text, 'Último backup: há 12 dias');
+  assert.equal(
+    backupLine([], [], at(15, 23), new Date(2026, 10, 16, 1)).text,
+    'Último backup: há 1 dia',
+    'backup ontem às 23h, conferido à 1h'
+  );
+});
+
+test('backupStatus: data do backup inválida vale como nunca', () => {
+  for (const last of ['ontem', 5, null, undefined, {}, '']) {
+    assert.deepEqual(backupLine([], datedOn([8]), last), { text: 'Você ainda não fez backup', due: true }, String(last));
+  }
 });

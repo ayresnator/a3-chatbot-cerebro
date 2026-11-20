@@ -62,7 +62,7 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "O serviço de IA está temporariamente indisponível" (`AI_PROVIDER_UNAVAILABLE`) | É erro do lado do Gemini. Tente de novo uma vez. Se repetir, abra um material importado na Biblioteca. |
 | `AI_QUOTA_EXCEEDED` ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "Backend desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat, os botões "Não entendi, me explique" e "Pedir revisão da IA" e o trecho "No seu texto". Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat, os botões "Não entendi, me explique" e "Pedir revisão da IA" e o trecho "No seu texto". A biblioteca, o desempenho e o caderno de erros dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).

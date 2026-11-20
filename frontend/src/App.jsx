@@ -17,7 +17,8 @@ import {
   PerfilSkeleton,
 } from './ui.jsx';
 import {
-  AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
+  AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
+  backupSummary, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
@@ -29,6 +30,8 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 // ?demo no endereço abre a demonstração pelo Vite (http://localhost:5173/?demo),
 // sem servir a raiz do repositório, onde fica o .env.
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
+// A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
+demoStorage(DEMO);
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
 // Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
@@ -152,6 +155,8 @@ function App() {
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
   const [events, setEvents] = useState(() => readList('events').filter(validEvent));
+  // Data do último backup (Exportar ou "Fazer backup"), em texto ISO: a linha do pé da Biblioteca e do Desempenho.
+  const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
   const [answer, setAnswer] = useState(null);
@@ -252,6 +257,26 @@ function App() {
     };
   }, []);
 
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, o perfil ou a data do backup: esta mostra a
+  // mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O rascunho fica de fora:
+  // cada aba fica com o seu. key null: outra aba apagou tudo.
+  useEffect(() => {
+    const sync = e => {
+      const changed = k => e.key === null || e.key === storageKey(k);
+      if (changed('saved')) setSaved(readList('saved').filter(validMaterial));
+      if (changed('events')) setEvents(readList('events').filter(validEvent));
+      if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
+      if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('user')) {
+        const profile = readUser();
+        setUser(profile);
+        setName(profile?.name || '');
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+
   useEffect(() => {
     if (API_BASE) checkHealth();
   }, []);
@@ -331,28 +356,40 @@ function App() {
     restart();
   }
 
+  // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
+  // try: a que falha não impede a outra.
   function saveDraft() {
     if (!draft.current) return;
+    const text = JSON.stringify(draft.current);
     try {
-      localStorage.setItem('cerebro-rascunho', JSON.stringify(draft.current));
+      localStorage.setItem(storageKey('rascunho'), text);
+    } catch {}
+    try {
+      sessionStorage.setItem(storageKey('rascunho'), text);
     } catch {}
   }
 
-  // Volta ao início do baralho ou do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
-  function restart(list = null) {
+  // Volta ao início do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
+  function restartQuiz(list = null) {
     setIdx(0);
     setDone(false);
-    setFlip(false);
     setAnswer(null);
     setAnswers([]);
     setRetry(list);
-    setDeck(null);
     setWhy(null);
+  }
+
+  // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
+  // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
+  function restart() {
+    restartQuiz();
+    setFlip(false);
+    setDeck(null);
   }
 
   function persist(k, v) {
     try {
-      localStorage.setItem('cerebro-' + k, JSON.stringify(v));
+      localStorage.setItem(storageKey(k), JSON.stringify(v));
       return true;
     } catch {
       toast('Não foi possível salvar no navegador. Verifique o espaço e as permissões.');
@@ -453,13 +490,16 @@ function App() {
     };
   }
 
-  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página.
+  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página: volta o material que
+  // estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
   function go(next) {
-    if (result?.virtual) setResult(parked);
+    if (result?.virtual) {
+      setResult(parked);
+      restart();
+    }
     setPage(next);
     // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
     setError('');
-    restart();
     setMore(false);
   }
 
@@ -477,12 +517,10 @@ function App() {
     const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
     // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
     // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
+    // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
     const wait = !reuse && !!API_BASE;
     setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
-    if (wait) {
-      setPage(target);
-      restart();
-    }
+    if (wait) setPage(target);
     try {
       let data;
       if (reuse) {
@@ -501,7 +539,14 @@ function App() {
       // material do mesmo texto.
       const previous = latest.current.result;
       const kept = !!previous && !sameMaterial(previous, data) && keep(previous);
-      setResult({ ...data, area, level });
+      // O novo também vai para a biblioteca na hora, depois do anterior, para ficar no topo: com o app em duas abas,
+      // o rascunho de uma podia apagar o material que a outra gerou e não salvou. O que já está lá com o mesmo
+      // conteúdo, a mesma área e o mesmo nível (o reaproveitamento, ou a demonstração com o mesmo texto) abre sem
+      // cópia. Se o navegador recusar, ele abre sem id, e o "Salvar material" continua lá para tentar de novo.
+      const material = { ...data, area, level };
+      const twin = readList('saved').find(m =>
+        validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
+      setResult(twin || store(material) || material);
       made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
       restart();
       const at = latest.current.page;
@@ -533,8 +578,9 @@ function App() {
   // Grava o material no topo da biblioteca e devolve a cópia gravada, ou null se o navegador recusou.
   // Parte da lista do navegador, não da cópia desta aba: outra aba pode ter salvo algo depois que esta abriu.
   function store(material) {
-    const entry = { ...material, id: Date.now(), date: new Date().toISOString() };
-    const next = [entry, ...readList('saved')];
+    const stored = readList('saved');
+    const entry = { ...material, id: newId(stored), date: new Date().toISOString() };
+    const next = [entry, ...stored];
     if (!persist('saved', next)) return null;
     setSaved(next.filter(validMaterial));
     return entry;
@@ -577,9 +623,15 @@ function App() {
     }, ['[data-id="' + material.id + '"] .open', '#busca']);
   }
 
-  // Exportar: um arquivo com tudo o que este navegador guarda (biblioteca, desempenho, caderno de erros e perfil),
-  // para levar a outro computador. Parte do que está gravado, não das listas desta aba.
+  // Exportar (e o "Fazer backup" do pé da Biblioteca e do Desempenho): um arquivo com tudo o que este navegador guarda
+  // (biblioteca, desempenho, caderno de erros e perfil), para levar a outro computador. Parte do que está gravado, não
+  // das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes, como quando outro toma
+  // o lugar dele, e assim vai no arquivo; no quiz do caderno de erros, o aberto é o que ficou guardado (parked).
   function exportBackup() {
+    const unsaved = !!opened && !opened.id;
+    const entry = unsaved ? store(opened) : null;
+    if (entry && result.virtual) setParked(entry);
+    else if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
     };
@@ -589,6 +641,11 @@ function App() {
     link.click();
     // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
     setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    // A data marca o clique: o navegador pode perguntar onde salvar, e o aluno, cancelar.
+    const now = new Date().toISOString();
+    if (persist('backup', now)) setLastBackup(now);
+    toast(backupSummary(backup) + (entry ? ' O material aberto foi salvo na biblioteca e foi junto.'
+      : unsaved ? ' O material aberto não pôde ser salvo no navegador e ficou de fora.' : ''));
   }
 
   // Importar: junta o arquivo ao que já está gravado, sem duplicar (lib.js). O arquivo vem de fora: o que não passa
@@ -612,7 +669,14 @@ function App() {
     setEvents(after.events.filter(validEvent));
     if (!persist('erros', after.erros)) return;
     setMistakes(after.erros.filter(validMistake));
-    toast(backupNote(before, after));
+    // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
+    // A área do editor não muda.
+    const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
+    if (profile) {
+      setUser(profile);
+      setName(profile.name);
+    }
+    toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados.
@@ -854,7 +918,8 @@ function App() {
     else toast(note);
   }
 
-  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
+  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto. O quiz e o baralho ficam
+  // onde estavam.
   function tabKeys(e) {
     const at = TABS.findIndex(([p]) => p === page);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
@@ -862,7 +927,6 @@ function App() {
     e.preventDefault();
     const [next] = TABS[(to + TABS.length) % TABS.length];
     setPage(next);
-    restart();
     // A aba dentro desta mesma faixa: a do esqueleto da geração não tem id.
     e.currentTarget.querySelector('[data-tab=' + SLUG[next] + ']')?.focus();
   }
@@ -914,6 +978,13 @@ function App() {
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
     [page, saved, query, filter]
+  );
+  // A linha do backup, no pé da Biblioteca e do Desempenho: só nessas páginas, fora do caminho de cada resposta.
+  const backupLine = useMemo(
+    () => (page === 'Biblioteca' || page === 'Desempenho'
+      ? backupStatus({ saved, events, last: lastBackup, now: new Date() })
+      : null),
+    [page, saved, events, lastBackup, today]
   );
   const busiest = Math.max(1, ...days.map(d => d.total));
   const chatHints = hints({ chat, input, area, tips });
@@ -986,10 +1057,7 @@ function App() {
           aria-selected={page === p}
           aria-controls={wait ? undefined : 'material-painel'}
           tabIndex={page === p ? 0 : -1}
-          onClick={() => {
-            setPage(p);
-            restart();
-          }}
+          onClick={() => setPage(p)}
         >
           {l}
         </button>
@@ -1205,7 +1273,8 @@ function App() {
                       <Icon name={API_BASE ? 'privacidade' : 'info'} />
                       {API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
-                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
+                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
+                          'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
                     <div className="actions" role="group" aria-label="Gerar material">
                       {ACTIONS.map(([k, s, title]) => (
@@ -1376,14 +1445,7 @@ function App() {
                                   </li>
                                 ))}
                               </ol>
-                              <button
-                                type="button"
-                                className="primary"
-                                onClick={() => {
-                                  setPage('Flashcards');
-                                  restart();
-                                }}
-                              >
+                              <button type="button" className="primary" onClick={() => setPage('Flashcards')}>
                                 Estudar flashcards deste resumo
                                 <Icon name="seta" />
                               </button>
@@ -1409,6 +1471,21 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Cartão {session.pos + 1} de {session.queue.length}</span>
+                                {/* Trocar de aba ou de página não recomeça o baralho: este botão recomeça. Antes do primeiro
+                                    cartão avaliado ele guarda o lugar invisível, e aparecer não empurra o cartão. */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o baralho"
+                                  style={{ visibility: session.pos ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    setDeck(null);
+                                    setFlip(false);
+                                    focusAfter.current = ['.flashcard'];
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">{flip ? 'Resposta' : 'Pergunta'}</span>
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
@@ -1476,24 +1553,16 @@ function App() {
                               )}
                               <div className="row center">
                                 {wrong.length > 0 && (
-                                  <button type="button" className="primary" onClick={() => restart(wrong)}>
+                                  <button type="button" className="primary" onClick={() => restartQuiz(wrong)}>
                                     <Icon name="refazer" />
                                     Refazer as que errei
                                   </button>
                                 )}
-                                <button type="button" onClick={() => restart()}>Refazer o quiz todo</button>
+                                <button type="button" onClick={() => restartQuiz()}>Refazer o quiz todo</button>
                                 {result.virtual ? (
                                   <button type="button" onClick={() => setPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPage('Flashcards');
-                                      restart();
-                                    }}
-                                  >
-                                    Ir para os flashcards
-                                  </button>
+                                  <button type="button" onClick={() => setPage('Flashcards')}>Ir para os flashcards</button>
                                 )}
                               </div>
                             </m.div>
@@ -1501,6 +1570,19 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Questão {idx + 1} de {quizList.length}</span>
+                                {/* Como no baralho. No "Refazer as que errei" recomeça só as erradas (retry). */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o quiz"
+                                  style={{ visibility: answers.length ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    restartQuiz(retry);
+                                    focusAfter.current = ['.quiz-question'];
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">
                                   {quiz.type === 'short' ? 'Resposta curta'
                                     : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
@@ -1864,6 +1946,8 @@ function App() {
                     mistakes={mistakes}
                     redoMistakes={redoMistakes}
                     events={events}
+                    backup={backupLine}
+                    onExport={exportBackup}
                   />
                 </Suspense>
               )}
@@ -1880,6 +1964,7 @@ function App() {
                     saved={saved}
                     undo={undo}
                     onUndo={undoNow}
+                    backup={backupLine}
                     onExport={exportBackup}
                     onImport={importBackup}
                     onOpen={openSaved}

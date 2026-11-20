@@ -149,9 +149,20 @@ export function rove(key, at, count) {
   return step ? (at + step + count) % count : -1;
 }
 
-export function read(k, d) {
+// Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
+// não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
+// nela. O App liga a demonstração antes da primeira leitura.
+let prefix = 'cerebro-';
+export function demoStorage(on) {
+  prefix = on ? 'cerebro-demo-' : 'cerebro-';
+}
+export const storageKey = k => prefix + k;
+
+// session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
+// que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
+export function read(k, d, session = false) {
   try {
-    return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d;
+    return JSON.parse((session ? sessionStorage : localStorage).getItem(storageKey(k))) ?? d;
   } catch {
     return d;
   }
@@ -187,6 +198,13 @@ export function sameMaterial(a, b) {
   return content(a) === content(b);
 }
 
+// Id de um material que entra na biblioteca: a hora ou, se ela já foi usada, um a mais que o maior id da lista.
+// Guardar o material anterior e o novo no mesmo clique (App.jsx, generate) dava o mesmo Date.now() aos dois, e excluir
+// um deles apagava os dois.
+export function newId(list, now = Date.now()) {
+  return Math.max(now, ...list.map(m => (Number.isSafeInteger(m?.id) ? m.id + 1 : 0)));
+}
+
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
 export function validEvent(e) {
   return !!e && isText(e.kind) && e.kind !== '' && typeof e.ok === 'boolean' && isDate(e.date);
@@ -206,9 +224,11 @@ export function readUser() {
 }
 
 // Rascunho do que estava aberto (editor, material, conversa), gravado a cada mudança para sobreviver a um F5.
+// Vale primeiro o desta aba (sessionStorage): com o app aberto em duas abas, o F5 traz o texto da própria aba, e não o
+// da última que gravou. Aba nova ainda não tem o seu e abre com o último gravado (localStorage).
 // Volta já conferido: o que está fora do formato sai, e rascunho ausente ou estragado dá tudo vazio.
 export function readDraft() {
-  const d = read('rascunho', null) || {};
+  const d = read('rascunho', null, true) || read('rascunho', null) || {};
   const result = validMaterial(d.result) ? d.result : null;
   const chat = Array.isArray(d.chat)
     ? d.chat.filter(m => (m?.role === 'user' || m?.role === 'assistant') && isText(m.text))
@@ -617,7 +637,9 @@ export function fixLastQuizEvent(events, title, q, until) {
 // Cópia de segurança: os dados ficam presos a um navegador, e o arquivo os leva para outro computador.
 // Lê o texto do arquivo e devolve as listas já conferidas, ou null se ele não é um backup do Cérebro (JSON de
 // objeto com versao 1). O arquivo vem de fora: cada item passa pela mesma conferência da leitura do navegador, e
-// o que não passa fica de fora. Material sem data válida também sai: é pela data que mergeBackup o reconhece.
+// o que não passa fica de fora e é contado em fora, para o aviso dizer o que não entrou. Material sem data válida
+// também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
+// limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área.
 export function readBackup(text) {
   let data;
   try {
@@ -627,15 +649,22 @@ export function readBackup(text) {
   }
   if (data?.versao !== 1) return null;
   const list = (value, ok) => (Array.isArray(value) ? value.filter(ok) : []);
+  const saved = list(data.saved, m => validMaterial(m) && isDate(m.date));
+  const events = list(data.events, validEvent);
+  const erros = list(data.erros, validMistake);
+  const left = (value, kept) => (Array.isArray(value) ? value.length - kept.length : 0);
+  const name = isText(data.user?.name) ? data.user.name.trim() : '';
   return {
-    saved: list(data.saved, m => validMaterial(m) && isDate(m.date)),
-    events: list(data.events, validEvent),
-    erros: list(data.erros, validMistake),
+    saved,
+    events,
+    erros,
+    fora: { saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros) },
+    user: name && name.length <= 50 && AREAS.includes(data.user.area) ? { name, area: data.user.area } : null,
   };
 }
 
 // Junta o backup lido (novo) ao que está gravado no navegador (atual) sem duplicar: importar o mesmo arquivo
-// duas vezes não muda nada. O perfil não é importado.
+// duas vezes não muda nada. O perfil fica com o App (importBackup): só entra num navegador que ainda não tem um.
 export function mergeBackup(atual, novo) {
   // Material com o mesmo título e a mesma data já está na biblioteca. O que entra com id já usado, ou sem id,
   // ganha id novo: é pelo id que a tela marca o material como salvo e o exclui.
@@ -677,11 +706,61 @@ export function mergeBackup(atual, novo) {
   return { saved: [...fresh, ...atual.saved], events, erros };
 }
 
-// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas ou erros.
-export function backupNote(atual, junto) {
+// Contagens numa frase: "2 materiais, 1 resposta e 3 questões do caderno de erros", cada palavra no singular ou no
+// plural. items é uma lista de [número, singular, plural].
+function countList(items) {
+  const said = items.map(([n, one, many]) => n + ' ' + (n === 1 ? one : many));
+  return said.length > 1 ? said.slice(0, -1).join(', ') + ' e ' + said[said.length - 1] : said.join('');
+}
+
+// As três partes do backup, cada uma com o seu número, para countList.
+const backupItems = ({ saved, events, erros }) => [
+  [saved, 'material', 'materiais'],
+  [events, 'resposta', 'respostas'],
+  [erros, 'questão do caderno de erros', 'questões do caderno de erros'],
+];
+
+// Aviso depois de exportar: o que foi no arquivo, contado como a tela mostra (só o que passa na conferência).
+export function backupSummary(backup) {
+  return 'Backup gerado: ' + countList(backupItems({
+    saved: backup.saved.filter(validMaterial).length,
+    events: backup.events.filter(validEvent).length,
+    erros: backup.erros.filter(validMistake).length,
+  })) + '.';
+}
+
+// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas ou erros. Depois,
+// só quando houver, o que ficou de fora por estar incompleto (fora, de readBackup) e o nome do perfil que entrou.
+export function backupNote(atual, junto, fora = {}, perfil = '') {
   const materials = junto.saved.length - atual.saved.length;
-  if (materials) return materials === 1 ? '1 material importado' : materials + ' materiais importados';
-  return junto.events.length > atual.events.length || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
-    ? 'Desempenho e caderno de erros atualizados'
-    : 'Nada novo neste arquivo';
+  const main = materials ? (materials === 1 ? '1 material importado' : materials + ' materiais importados')
+    : junto.events.length > atual.events.length || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
+      ? 'Desempenho e caderno de erros atualizados'
+      : 'Nada novo neste arquivo';
+  const left = countList(backupItems(fora).filter(([n]) => n > 0));
+  const parts = [
+    main, left && 'Ficaram de fora, por estarem incompletos: ' + left, perfil && 'Perfil de ' + perfil + ' importado',
+  ].filter(Boolean);
+  // Uma frase só fica como sempre, sem ponto; com mais de uma, cada uma termina com ponto.
+  return parts.length > 1 ? parts.join('. ') + '.' : main;
+}
+
+// Linha do backup no pé da Biblioteca e do Desempenho. last é a data do último backup, em texto ISO; valor inválido
+// vale como nunca. Novo é o material ou a resposta com data depois dele. Os dias contam pelo calendário, no fuso do
+// aluno: backup ontem às 23h, conferido à 1h, foi "há 1 dia". due (lembrar o backup) quando há algo novo e são 5
+// materiais novos ou 7 dias ou mais desde o backup (sem backup, desde o registro mais antigo).
+export function backupStatus({ saved, events, last, now }) {
+  const done = isDate(last);
+  const since = done ? Date.parse(last) : -Infinity;
+  const newer = list => list.map(x => Date.parse(x?.date)).filter(time => time > since);
+  const materials = newer(saved);
+  const fresh = [...materials, ...newer(events)];
+  const noon = date => Date.parse(localDay(date) + 'T12:00');
+  const daysTo = date => Math.round((noon(now) - noon(date)) / 864e5);
+  const age = done ? daysTo(last) : fresh.length ? daysTo(fresh.reduce((a, b) => Math.min(a, b))) : 0;
+  return {
+    text: !done ? 'Você ainda não fez backup'
+      : 'Último backup: ' + (age < 1 ? 'hoje' : age === 1 ? 'há 1 dia' : 'há ' + age + ' dias'),
+    due: fresh.length > 0 && (materials.length >= 5 || age >= 7),
+  };
 }
