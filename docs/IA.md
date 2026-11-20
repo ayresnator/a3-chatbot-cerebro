@@ -8,14 +8,14 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 | Rota | O que a IA faz | O que dispara |
 |---|---|---|
-| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Gerar o material na página Estudar |
-| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Enter, fora de tela de toque) e o botão "Não entendi, me explique" |
+| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Botão "Gerar resumo, flashcards e quiz" na página Estudar e, com o material do mesmo texto aberto, "Gerar de novo". Os botões de "Abrir" ao lado só abrem o material |
+| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Ctrl + Enter, ⌘ + Enter no Mac) e o botão "Não entendi, me explique" |
 | `POST /api/grade` | Julga o sentido de uma resposta curta que a comparação de texto marcou como errada | Botão "Pedir revisão da IA" |
 | `POST /api/example` | Escreve um texto curto de estudo sobre um tema sorteado da área | Botão "Usar um exemplo" na página Estudar. Na demonstração, com a IA desligada ou quando ela falha, a tela usa um exemplo pronto da área, sem chamar o modelo |
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e os botões que gastam cota fora do fluxo principal avisam ao lado: "1 chamada de IA".
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 

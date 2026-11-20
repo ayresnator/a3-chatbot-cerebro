@@ -149,6 +149,14 @@ export function rove(key, at, count) {
   return step ? (at + step + count) % count : -1;
 }
 
+// A tecla que pergunta ao Cérebro pelo editor do Estudar: Ctrl + Enter (⌘ + Enter no Mac). Lá o Enter sozinho quebra a
+// linha, porque o editor guarda o texto da aula e as anotações, e cada pergunta gasta uma chamada da IA. Tecla da
+// composição de texto (acento, IME) não pergunta. Recebe o evento do navegador (nativeEvent), não o do React.
+export function askKey(e) {
+  return e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey &&
+    !e.isComposing && e.keyCode !== 229;
+}
+
 export function read(k, d) {
   try {
     return JSON.parse(localStorage.getItem('cerebro-' + k)) ?? d;
@@ -221,10 +229,9 @@ export function readDraft() {
     area: AREAS.includes(d.area) ? d.area : '',
     level: LEVELS.includes(d.level) ? d.level : '',
     result,
-    // Sem o material, a marca de reaproveitamento não tem o que reaproveitar.
-    made: result && isText(d.made?.key) && texts(d.made.kinds)
-      ? { key: d.made.key, kinds: d.made.kinds }
-      : { key: '', kinds: [] },
+    // A marca da última geração (o texto, a área e o nível do material aberto) só vale com o material. O rascunho
+    // gravado antes de um botão só de gerar traz também kinds, que fica de fora.
+    made: { key: result && isText(d.made?.key) ? d.made.key : '' },
     chat,
     tips: isText(d.tips?.key) && texts(d.tips.list) ? { key: d.tips.key, list: d.tips.list } : { key: '', list: [] },
   };

@@ -271,8 +271,8 @@
     }
 }
 
-/* Celular. O editor fica mais baixo e os quatro botões de gerar ficam em duas linhas: tudo até eles cabe na primeira
-   tela, acima da barra, de 360 × 780 para cima. */
+/* Celular. O editor fica mais baixo: tudo até os botões de gerar cabe na primeira tela, acima da barra, de 360 × 780
+   para cima. */
 @media (max-width: 550px) {
     :root {
         --fs-6: 2rem;
@@ -369,9 +369,12 @@
     }
 
     /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
-       Dúvidas, "Enviar" fica só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. */
+       Dúvidas, "Enviar" e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O
+       custo do "Perguntar ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
     .tool .full,
-    .composer-bar .primary span {
+    .ask small,
+    .composer-bar .primary span,
+    .composer-bar .primary small {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -468,10 +471,30 @@
         font-size: var(--fs-1)
     }
 
-    /* Os botões de gerar enchem cada linha: duas linhas de dois na primeira tela, acima da barra, até 360 px. */
+    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. */
     .action {
         flex: 1 1 auto;
-        padding: 0 var(--sp-3)
+        padding: var(--sp-1) var(--sp-3)
+    }
+
+    /* Com o material do texto aberto, "Abrir:" fica em cima e as três partes em colunas iguais, só com o nome: numa
+       linha até 320 px (com o ícone, "Flashcards" não cabia). O "Gerar de novo" fica na linha de baixo. */
+    .open-parts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        flex: 1 1 100%
+    }
+
+    .open-parts > span {
+        grid-column: 1 / -1
+    }
+
+    .open-parts .action {
+        padding: 0 var(--sp-1)
+    }
+
+    .open-parts .icon {
+        display: none
     }
 
     .result-header h2 {

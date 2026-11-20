@@ -8,7 +8,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES,
+  opener, openers, typeDelay, rove, askKey, LEVEL_NOTES,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -544,6 +544,32 @@ test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
   for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
 });
 
+// Tecla no editor do Estudar como o navegador manda (nativeEvent): Enter, sem modificador e fora da composição.
+const press = change => ({
+  key: 'Enter', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, isComposing: false, keyCode: 13,
+  ...change,
+});
+
+test('askKey: Ctrl + Enter e ⌘ + Enter perguntam ao Cérebro', () => {
+  assert.equal(askKey(press({ ctrlKey: true })), true);
+  assert.equal(askKey(press({ metaKey: true })), true);
+});
+
+test('askKey: Enter, Shift + Enter e Alt + Enter ficam com a caixa de texto (linha nova)', () => {
+  assert.equal(askKey(press({})), false);
+  assert.equal(askKey(press({ shiftKey: true })), false);
+  assert.equal(askKey(press({ altKey: true })), false);
+  assert.equal(askKey(press({ ctrlKey: true, shiftKey: true })), false);
+  assert.equal(askKey(press({ metaKey: true, altKey: true })), false);
+});
+
+test('askKey: tecla da composição de texto (acento, IME) e Ctrl com outra tecla não perguntam', () => {
+  assert.equal(askKey(press({ ctrlKey: true, isComposing: true })), false);
+  assert.equal(askKey(press({ ctrlKey: true, keyCode: 229 })), false);
+  assert.equal(askKey(press({ metaKey: true, isComposing: true })), false);
+  for (const key of ['a', 'Tab', 'Process', ' ']) assert.equal(askKey(press({ ctrlKey: true, key })), false, key);
+});
+
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
   assert.deepEqual(Object.keys(LEVEL_NOTES), LEVELS);
 });
@@ -847,14 +873,14 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 });
 
 const NO_DRAFT = {
-  input: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [], tips: NO_TIPS,
+  input: '', area: '', level: '', result: null, made: { key: '' }, chat: [], tips: NO_TIPS,
 };
 const DRAFT = {
   input: 'Inflação e juros',
   area: 'Economia',
   level: 'Avançado',
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
-  made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']), kinds: ['resumo', 'quiz'] },
+  made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']) },
   chat: ANSWERED,
   tips: { key: JSON.stringify(['Inflação e juros', 'Economia']), list: ['E o PIB per capita?', 'Como se mede?'] },
 };
@@ -894,7 +920,7 @@ test('readDraft: área e nível só valem se forem da lista', () => {
   for (const level of LEVELS) assert.equal(draft({ level }).level, level);
 });
 
-test('readDraft: material que não passa na conferência sai, e o reaproveitamento sai junto', () => {
+test('readDraft: material que não passa na conferência sai, e a marca da última geração sai junto', () => {
   const { summary, ...noSummary } = GOOD;
   const got = draft({ result: noSummary });
   assert.equal(got.result, null);
@@ -903,9 +929,16 @@ test('readDraft: material que não passa na conferência sai, e o reaproveitamen
   assert.deepEqual(got.chat, DRAFT.chat);
 });
 
-test('readDraft: reaproveitamento fora do formato volta vazio', () => {
-  const bad = [null, 'k', { key: 5, kinds: [] }, { key: 'k' }, { key: 'k', kinds: 'resumo' }, { key: 'k', kinds: [1] }];
+test('readDraft: marca da última geração fora do formato volta vazia', () => {
+  const bad = [null, 'k', 5, {}, { key: 5 }, { key: null }, { key: ['k'] }, { kinds: ['resumo'] }];
   for (const made of bad) assert.deepEqual(draft({ made }).made, NO_DRAFT.made, JSON.stringify(made));
+});
+
+test('readDraft: rascunho de antes do botão só de gerar (com kinds) continua valendo, sem os kinds', () => {
+  const key = DRAFT.made.key;
+  assert.deepEqual(draft({ made: { key, kinds: ['resumo', 'quiz'] } }).made, { key });
+  assert.deepEqual(draft({ made: { key, kinds: 'resumo' } }).made, { key });
+  assert.deepEqual(draft({ made: { key: 'k', kinds: [1] } }).made, { key: 'k' });
 });
 
 test('readDraft: da conversa só ficam mensagens { role, text } de user ou assistant', () => {
