@@ -248,6 +248,15 @@
         flex: 1
     }
 
+    /* Desempenho: a coluna do gráfico fica estreita para "6 respostas" e "50% certas", e o rótulo vira "50% · 6". */
+    .chart .full {
+        display: none
+    }
+
+    .chart .short {
+        display: inline
+    }
+
     .mistakes li {
         grid-template-columns: minmax(0, 1fr) auto
     }

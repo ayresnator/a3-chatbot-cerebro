@@ -28,7 +28,7 @@ export function useFit(field, value) {
   }, []);
 }
 
-// Contador da faixa de progresso, em frase ("3 dias de constância"). No Estudar e no Desempenho cada contador é um
+// Contador da faixa de progresso, em frase ("3 dias seguidos de estudo"). No Estudar e no Desempenho cada contador é um
 // cartão de número, e o primeiro fica em destaque (styles.css, .stats).
 export function Stat({ value, label }) {
   return <p className="stat"><strong>{value}</strong> {label}</p>;

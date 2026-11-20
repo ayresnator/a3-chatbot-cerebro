@@ -3,7 +3,7 @@ import { AnimatePresence, m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { UndoRow } from './ui.jsx';
 import { byKeyboard } from './anim.js';
-import { AREAS } from './lib.js';
+import { AREAS, plural } from './lib.js';
 
 // Página Biblioteca, carregada à parte (App.jsx, lazyView). A lista, a busca e o desfazer continuam no App; aqui só o
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave).
@@ -53,7 +53,10 @@ export default function Biblioteca({
               <div>
                 <small>{s.area} · {new Date(s.date).toLocaleDateString('pt-BR')}</small>
                 <h2>{s.title}</h2>
-                <p>Resumo · {s.flashcards.length} flashcards · {s.quiz.length} questões</p>
+                <p>
+                  {'Resumo · ' + s.flashcards.length + ' ' + plural(s.flashcards.length, 'cartão', 'cartões') +
+                    ' · ' + s.quiz.length + ' ' + plural(s.quiz.length, 'questão', 'questões')}
+                </p>
               </div>
               <button type="button" className="open" onClick={() => onOpen(s)}>
                 Abrir

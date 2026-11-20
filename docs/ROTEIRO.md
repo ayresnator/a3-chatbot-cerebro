@@ -39,8 +39,8 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
-3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada.
-4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e o botão "Refazer meus erros".
+3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
+4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 

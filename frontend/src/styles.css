@@ -1513,8 +1513,11 @@ main:focus {
     color: var(--on-accent)
 }
 
+/* As 7 marcas quebram a linha no cartão estreito (cerca de 144 px em 820 px), em vez de vazar dele. */
 .day-marks {
-    display: flex
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--sp-1)
 }
 
 .day-marks .pen svg {
@@ -2917,6 +2920,16 @@ main:focus {
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums;
     text-align: center
+}
+
+/* O rótulo que diz o que mede, em duas linhas: em 13 px "20 respostas" e "100% certas" cabem inteiros na coluna de
+   5 rem (em 14 px quebravam em quatro). O curto ("50% · 6") fica para o celular (mobile.css). */
+.chart .full {
+    font-size: var(--fs-1)
+}
+
+.chart .short {
+    display: none
 }
 
 /* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. A barra cresce do chão

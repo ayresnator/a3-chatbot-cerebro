@@ -8,7 +8,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES,
+  opener, openers, typeDelay, rove, LEVEL_NOTES, plural,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -158,6 +158,34 @@ test('quizRate e cardRate: percentual arredondado; sem respostas é zero', () =>
   );
 });
 
+// O caso da auditoria nos cartões: um baralho de 4, com o cartão 1 errado (ele volta no fim da fila e é acertado), e
+// depois "Revisar novamente" no mesmo dia. Contando cliques, davam 9 cartões revisados.
+const DECK = [[1, false], [2, true], [3, true], [4, true], [1, true], [1, true], [2, true], [3, true], [4, true]]
+  .map(([n, ok]) => cardAt(16, ok, { q: 'cartao ' + n }));
+
+test('cardRate: de cada cartão vale a primeira avaliação do dia; rever o baralho não muda o número', () => {
+  assert.deepEqual(cardRate(DECK), { total: 4, correct: 3, rate: 75 });
+  assert.deepEqual(firstAttempts(DECK, 'flashcard'), DECK.slice(0, 4));
+  assert.deepEqual(firstAttempts(DECK), [], 'sem o tipo, só o quiz');
+});
+
+test('cardRate: no dia seguinte o cartão conta de novo; em outro material é outro cartão', () => {
+  const next = cardAt(17, true, { q: 'cartao 1' });
+  const other = cardAt(16, true, { q: 'cartao 1', title: 'Juros' });
+  assert.deepEqual(cardRate([...DECK, next, other]), { total: 6, correct: 5, rate: 83 });
+});
+
+test('cardRate: registro antigo, sem a pergunta do cartão, conta como está', () => {
+  const old = cardAt(16, false);
+  assert.deepEqual(cardRate([old, old, { ...old, ok: true }, ...DECK]), { total: 7, correct: 4, rate: 57 });
+});
+
+test('plural: o singular só com 1; com 0 e com 2, o plural', () => {
+  assert.equal(plural(1, 'cartão', 'cartões'), 'cartão');
+  assert.equal(plural(0, 'cartão', 'cartões'), 'cartões');
+  assert.equal(plural(2, 'questão respondida', 'questões respondidas'), 'questões respondidas');
+});
+
 test('weakSpot: o material com a maior taxa de erro, não o que tem mais erros', () => {
   const events = [...answersOf('Juros', 16, 10, 4), ...answersOf('Fotossíntese', 15, 3, 2)];
   assert.deepEqual(weakSpot(events, today()), { name: 'Fotossíntese', wrong: 2, total: 3 });
@@ -270,6 +298,12 @@ test('areaLine: quiz e cartões da área, separados; sem resposta de quiz não h
   assert.equal(areaLine(events, 'Escolar'), 'Quiz sem respostas · 2 cartões');
   assert.equal(areaLine(events, 'Matemática'), 'Sem registros ainda');
   assert.equal(areaLine(SIX_ANSWERS, 'Economia'), '33% de acerto no quiz · 6 questões · 0 cartões');
+});
+
+test('areaLine: o cartão avaliado de novo no mesmo dia conta uma vez', () => {
+  assert.equal(areaLine(DECK, 'Economia'), 'Quiz sem respostas · 4 cartões');
+  const twice = [cardAt(16, false, { q: 'cartao 1' }), cardAt(16, true, { q: 'cartao 1' })];
+  assert.equal(areaLine(twice, 'Economia'), 'Quiz sem respostas · 1 cartão');
 });
 
 test('expectedText: o gabarito em texto, a opção certa ou as formas da resposta curta', () => {
