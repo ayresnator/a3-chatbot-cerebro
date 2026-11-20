@@ -17,8 +17,8 @@ const FINE = window.matchMedia('(pointer: fine)').matches;
 const FOLLOW = { damping: 25, stiffness: 150, mass: 0.5 };
 
 export function ChatComposer({
-  value, onChange, onSend, hints, area, onArea, level, onLevel, about, swap, onSwap, waiting, touch, status, note, variants,
-  pop,
+  value, onChange, onSend, hints, area, onArea, level, onLevel, about, swap, onSwap, waiting, touch, cost, status, note,
+  variants, pop,
 }) {
   const field = useRef(null);
   const list = useRef(null);
@@ -128,8 +128,9 @@ export function ChatComposer({
       setOpen(false);
       return;
     }
-    // Enter envia e Shift + Enter quebra a linha. No toque o Enter só quebra a linha (o teclado do celular não tem
-    // Shift + Enter) e quem envia é o botão, como no editor do Estudar. O Enter repetido de uma tecla presa não envia.
+    // Enter envia e Shift + Enter quebra a linha: aqui é um chat (no editor do Estudar o Enter quebra a linha). No
+    // toque o Enter só quebra a linha (o teclado do celular não tem Shift + Enter) e quem envia é o botão. O Enter
+    // repetido de uma tecla presa não envia.
     if (!touch && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!waiting && !e.repeat && value.trim()) onSend();
@@ -243,6 +244,7 @@ export function ChatComposer({
           {swap && <button type="button" className="link" onClick={onSwap}>{swap}</button>}
           <button type="submit" className="primary" disabled={waiting || !value.trim()}>
             <span>Enviar</span>
+            {cost && <small>1 chamada de IA</small>}
             <Icon name="seta" />
           </button>
         </div>

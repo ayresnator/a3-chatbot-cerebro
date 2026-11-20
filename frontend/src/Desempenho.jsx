@@ -1,14 +1,15 @@
 import React from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
-import { Stat } from './ui.jsx';
+import { Stat, BackupNote } from './ui.jsx';
 import { AREAS, spokenDay, areaLine } from './lib.js';
 
 // Página Desempenho, carregada à parte (App.jsx, lazyView): o código dela só vem quando o aluno chega nela ou quando
-// o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho.
+// o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho. backup é a linha do pé (ui.jsx,
+// BackupNote).
 export default function Desempenho({
   rise, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, mistakes, redoMistakes,
-  events,
+  events, backup, onExport,
 }) {
   return (
     <>
@@ -69,6 +70,7 @@ export default function Desempenho({
           ))}
         </ul>
       </m.section>
+      {backup && <BackupNote status={backup} onExport={onExport} variants={rise} />}
     </>
   );
 }

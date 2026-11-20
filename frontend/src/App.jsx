@@ -14,24 +14,31 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton,
+  PerfilSkeleton, Countdown,
 } from './ui.jsx';
 import {
-  AREAS, LEVELS, EXAMPLE, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
+  AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
+  backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
-  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, dictate, dictationError,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
+  originNote,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
 // ?demo no endereço abre a demonstração pelo Vite (http://localhost:5173/?demo),
 // sem servir a raiz do repositório, onde fica o .env.
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
+// A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
+demoStorage(DEMO);
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
-// Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
+// Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
+// botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// No Mac o atalho do editor é ⌘ + Enter, e a dica embaixo dele diz isso.
+const MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
 // Foco da questão nova do quiz: no computador, direto na caixa da resposta curta; no toque, o enunciado, para o
 // teclado da tela não abrir sozinho. E o de quem chega ao Dúvidas para perguntar: a caixa (no toque, o título).
 const QUESTION_FOCUS = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
@@ -45,7 +52,8 @@ function adrift(sel) {
   return !at || at === document.body || !!at.closest(sel);
 }
 
-// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa.
+// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa. O erro sai com a frase para o aluno
+// (message), os detalhes técnicos (tech) e a espera do limite por minuto (wait): lib.js, errorText e FAILS.
 // stop é o sinal do botão "Cancelar" da espera: o pedido para na hora e o erro sai marcado com cancelled, para a tela
 // não mostrar uma falha que o aluno pediu.
 async function requestAPI(path, payload, stop) {
@@ -65,22 +73,21 @@ async function requestAPI(path, payload, stop) {
     try {
       data = JSON.parse(raw);
     } catch {
-      throw Error(
-        'O backend não retornou JSON (HTTP ' + response.status +
-        '). Confira se o Python está rodando em http://127.0.0.1:8000 e reinicie o Vite.'
-      );
+      throw Object.assign(Error(FAILS.noJson), {
+        tech: 'HTTP ' + response.status + ', resposta sem JSON. Confira o Python em http://127.0.0.1:8000 e o proxy do Vite.',
+      });
     }
     if (!response.ok) {
-      throw Error(errorText(data?.detail, response.status));
+      throw Object.assign(Error(), errorText(data?.detail, response.status));
     }
     return data;
   } catch (error) {
     if (error.name === 'AbortError') {
       if (stop?.aborted) throw Object.assign(Error('Pedido cancelado.'), { cancelled: true });
-      throw Error('Tempo de espera esgotado. Verifique o terminal do backend e tente novamente.');
+      throw Object.assign(Error(FAILS.timeout), { tech: 'O navegador desistiu depois de 105 s sem resposta do backend.' });
     }
     if (error instanceof TypeError) {
-      throw Error('Não foi possível conectar ao backend. Confira se o Python está iniciado e se a URL e o proxy estão corretos.');
+      throw Object.assign(Error(FAILS.off), { tech: 'Sem conexão com o backend (' + error.message + ').' });
     }
     throw error;
   } finally {
@@ -102,17 +109,11 @@ const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
 const SHORT = { Quizzes: 'Quiz' };
 const TITLES = { Erros: 'Caderno de erros' };
-// As ações de gerar, na ordem do grupo: Resumir é a principal; Tirar dúvidas só abre a página.
-const ACTIONS = [
-  ['resumo', 'resumos', 'Resumir'],
-  ['flashcards', 'flashcards', 'Criar flashcards'],
-  ['quiz', 'quizzes', 'Fazer quiz'],
-  ['chat', 'duvidas', 'Tirar dúvidas'],
-];
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 
-// Aviso fixo onde há texto escrito pela IA. A demonstração não usa IA e não mostra.
-const aiNote = API_BASE && <p className="ai-note">Gerado por IA. Pode conter erros: confira com o seu material.</p>;
+// Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
+// demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
+const aiNote = API_BASE && <p className="ai-note">{AI_NOTE}</p>;
 
 // O modelo às vezes devolve **negrito** em Markdown: mostra em negrito em vez de asteriscos soltos.
 // Só casa um par colado ao texto, para não mexer em código como "a ** 2" ou "x**2".
@@ -153,16 +154,21 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o botão que pediu (resumo, flashcards,
-  // quiz, why, review), para a espera aparecer nele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, example),
+  // para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
   // Wait); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
-  const [error, setError] = useState('');
+  // Aviso de erro do Estudar e do Dúvidas: { message, tech, until } (Problem, abaixo), ou null.
+  const [error, setError] = useState(null);
+  // Limite por minuto: a hora em que os botões da IA voltam (o backend manda quantos segundos esperar), ou 0.
+  const [pausedUntil, setPausedUntil] = useState(0);
   const [size, setSize] = useState('Médio');
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
   const [events, setEvents] = useState(() => readList('events').filter(validEvent));
+  // Data do último backup (Exportar ou "Fazer backup"), em texto ISO: a linha do pé da Biblioteca e do Desempenho.
+  const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
   const [answer, setAnswer] = useState(null);
@@ -204,7 +210,8 @@ function App() {
   const [why, setWhy] = useState(null);
   // Ditado em andamento: o botão vira "Parar ditado".
   const [listening, setListening] = useState(false);
-  // Última geração: texto, área e nível usados, e quais botões já mostraram esse material.
+  // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
+  // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
@@ -220,6 +227,11 @@ function App() {
   const recognition = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
+  // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
+  // trecho do material que sai dele não é do aluno (generate). Vai no rascunho, para valer depois de um F5.
+  const aiExample = useRef(DRAFT.exemplo);
+  // O mesmo para o exemplo pronto, que também não é do aluno ('' quando o exemplo é da IA e depois do Limpar).
+  const readyExample = useRef(DRAFT.exemploPronto);
   // Rascunho mais recente, gravado no navegador com atraso (veja abaixo).
   const draft = useRef(null);
   const viewed = useRef(false);
@@ -245,7 +257,8 @@ function App() {
   // Marcas do caderno de erros já mostradas (chave e data do erro): na volta ao caderno só a de um erro novo desde a
   // última visita se desenha, as outras aparecem prontas. As que já estavam no caderno na abertura contam como vistas.
   const [penned] = useState(() => new Set(mistakes.map(m => m.key + m.date)));
-  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva].
+  // Foco pedido por uma ação que tirou o controle da tela (excluir, desfazer, responder): [seletor, reserva] e, ao
+  // responder, o que rola até a vista (show e whole, no efeito abaixo).
   const focusAfter = useRef(null);
 
   // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário do caderno de erros
@@ -254,7 +267,10 @@ function App() {
   // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
-    draft.current = { input, area, level, result: opened, made: made.current, chat, tips, editorChat };
+    draft.current = {
+      input, area, level, result: opened, made: made.current, chat, tips, editorChat,
+      exemplo: aiExample.current, exemploPronto: readyExample.current,
+    };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
   }, [input, area, level, opened, chat, tips, editorChat]);
@@ -267,6 +283,26 @@ function App() {
       window.removeEventListener('pagehide', saveDraft);
       document.removeEventListener('visibilitychange', hidden);
     };
+  }, []);
+
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, o perfil ou a data do backup: esta mostra a
+  // mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O rascunho fica de fora:
+  // cada aba fica com o seu. key null: outra aba apagou tudo.
+  useEffect(() => {
+    const sync = e => {
+      const changed = k => e.key === null || e.key === storageKey(k);
+      if (changed('saved')) setSaved(readList('saved').filter(validMaterial));
+      if (changed('events')) setEvents(readList('events').filter(validEvent));
+      if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
+      if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('user')) {
+        const profile = readUser();
+        setUser(profile);
+        setName(profile?.name || '');
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
   }, []);
 
   useEffect(() => {
@@ -314,8 +350,16 @@ function App() {
   useEffect(() => setUndo(null), [page]);
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
-  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
-  useEffect(() => setError(''), [input]);
+  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
+  // espera acabar: é ele que conta os segundos até os botões da IA voltarem.
+  useEffect(() => setError(e => (e?.until > Date.now() ? e : null)), [input]);
+
+  // Os botões da IA voltam sozinhos quando a espera do limite por minuto acaba.
+  useEffect(() => {
+    if (!pausedUntil) return;
+    const timer = setTimeout(() => setPausedUntil(0), pausedUntil - Date.now());
+    return () => clearTimeout(timer);
+  }, [pausedUntil]);
 
   // A frase da região fixa (#anuncio) sai dela 8 s depois de lida: a velha ("Gerando o material", depois de um erro ou
   // do Cancelar) não fica na página para quem a percorre com o leitor de tela.
@@ -334,14 +378,21 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show] = focusAfter.current;
+    const [selector, fallback, show, whole] = focusAfter.current;
     focusAfter.current = null;
     // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova.
     const last = s => s && [...document.querySelectorAll(s)].pop();
-    (last(selector) || last(fallback))?.focus();
-    // show: o último elemento que casa rola até a vista. No celular a margem dele (mobile.css) desconta a barra de baixo
-    // e o "Próxima questão" preso: as marcas ✓ e ✗ com a nota ficam acima deles, não por baixo.
-    if (show) [...document.querySelectorAll(show)].pop()?.scrollIntoView({ block: 'nearest' });
+    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
+    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
+    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
+    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
+    // acima da faixa.
+    (last(selector) || last(fallback))?.focus({ preventScroll: !!show });
+    if (!show) return;
+    const box = last(whole);
+    const fits = box && fitsAbove(box.offsetHeight, innerHeight,
+      getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
+    (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -358,28 +409,40 @@ function App() {
     restart();
   }
 
+  // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
+  // try: a que falha não impede a outra.
   function saveDraft() {
     if (!draft.current) return;
+    const text = JSON.stringify(draft.current);
     try {
-      localStorage.setItem('cerebro-rascunho', JSON.stringify(draft.current));
+      localStorage.setItem(storageKey('rascunho'), text);
+    } catch {}
+    try {
+      sessionStorage.setItem(storageKey('rascunho'), text);
     } catch {}
   }
 
-  // Volta ao início do baralho ou do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
-  function restart(list = null) {
+  // Volta ao início do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
+  function restartQuiz(list = null) {
     setIdx(0);
     setDone(false);
-    setFlip(false);
     setAnswer(null);
     setAnswers([]);
     setRetry(list);
-    setDeck(null);
     setWhy(null);
+  }
+
+  // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
+  // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
+  function restart() {
+    restartQuiz();
+    setFlip(false);
+    setDeck(null);
   }
 
   function persist(k, v) {
     try {
-      localStorage.setItem('cerebro-' + k, JSON.stringify(v));
+      localStorage.setItem(storageKey(k), JSON.stringify(v));
       return true;
     } catch {
       toast('Não foi possível salvar no navegador. Verifique o espaço e as permissões.');
@@ -440,11 +503,19 @@ function App() {
   }
 
   // Todo pedido à IA termina com uma consulta nova: o contador de chamadas anda e um backend que caiu aparece na hora.
+  // No limite por minuto os botões da IA ficam desligados pelo tempo que o backend mandou; o erro leva a hora da volta
+  // (until) para a contagem dele.
   async function callAI(path, payload) {
     const stop = new AbortController();
     pending.current = stop;
     try {
       return await requestAPI(path, payload, stop.signal);
+    } catch (e) {
+      if (e.wait) {
+        e.until = Date.now() + e.wait * 1000;
+        setPausedUntil(e.until);
+      }
+      throw e;
     } finally {
       if (pending.current === stop) pending.current = null;
       checkHealth();
@@ -486,13 +557,16 @@ function App() {
     };
   }
 
-  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página.
+  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página: volta o material que
+  // estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
   function go(next) {
-    if (result?.virtual) setResult(parked);
+    if (result?.virtual) {
+      setResult(parked);
+      restart();
+    }
     setPage(next);
     // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
-    setError('');
-    restart();
+    setError(null);
     setMore(false);
   }
 
@@ -503,25 +577,27 @@ function App() {
     focusAfter.current = focus;
   }
 
-  async function generate(kind = 'resumo') {
-    if (busy || asking) return;
-    setError('');
+  async function generate() {
+    if (waiting) return;
+    setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
+      setError({ message: 'Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
       return;
     }
-    // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
-    // O mesmo botão de novo gera material novo.
+    // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
+    // mesmo texto, a mesma área e o mesmo nível (made), o Estudar oferece abrir as partes sem chamar a IA.
     const key = JSON.stringify([input, area, level]);
-    const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
-    const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
-    // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
-    // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
-    const wait = !reuse && !!API_BASE;
-    setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
+    // Os exemplos que acompanham o texto deste clique: o Desfazer do aviso pode trocar tudo durante a espera.
+    const example = aiExample.current;
+    const ready = readyExample.current;
+    const target = 'Resumos';
+    // Espera de verdade só com a IA: o Resumo abre na hora, com o esqueleto dele no lugar onde o material vai entrar. A
+    // demonstração é instantânea e não mostra espera nenhuma.
+    // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
+    const wait = !!API_BASE;
+    setBusy({ kind: 'gerar', label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
-      restart();
       // O botão apertado sai da tela com o Estudar: o foco espera no título da página do material, e o leitor de tela
       // ouve que a IA está trabalhando (os segundos ficam de fora).
       say('Gerando o material. A IA pode levar até 1 minuto.');
@@ -529,29 +605,40 @@ function App() {
     }
     try {
       let data;
-      if (reuse) {
-        data = result;
-      } else if (API_BASE) {
+      if (API_BASE) {
         data = await callAI('/api/generate', { content: input, area, level });
       } else {
         data = demo(input);
       }
       // A mesma conferência do rascunho e da biblioteca: o que abre aqui também volta depois de um F5.
       if (!validMaterial(data)) {
-        throw Error('Material incompleto recebido do backend');
+        throw Error('A IA mandou um material incompleto. Tente de novo.');
       }
+      // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
+      // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
+      // biblioteca, o rascunho e o backup. Na demonstração o trecho é a própria frase: a do exemplo pronto ganha marca.
+      data = { ...data, summary: markExample(data.summary, example, ready) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
-      // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
-      // material do mesmo texto.
+      // Se o novo é igual a ele, não há o que guardar: é a demonstração, que repete o material do mesmo texto.
       const previous = latest.current.result;
       const kept = !!previous && !sameMaterial(previous, data) && keep(previous);
-      setResult({ ...data, area, level });
-      made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
+      // O novo também vai para a biblioteca na hora, depois do anterior, para ficar no topo: com o app em duas abas,
+      // o rascunho de uma podia apagar o material que a outra gerou e não salvou. O que já está lá com o mesmo
+      // conteúdo, a mesma área e o mesmo nível (a demonstração, no "Gerar de novo" com o mesmo texto) abre sem cópia.
+      // Se o navegador recusar, ele abre sem id, e o "Salvar material" continua lá para tentar de novo.
+      const material = { ...data, area, level };
+      const twin = readList('saved').find(m =>
+        validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
+      setResult(twin || store(material) || material);
+      made.current = { key };
       setEditorChat(false);
-      restart();
+      // O quiz e o baralho recomeçam com outro material. O "Gerar de novo" da demonstração, com o mesmo texto, reabre o
+      // mesmo, e eles seguem onde estavam. Depois da espera pela IA recomeçam sempre: durante ela o aluno pode ter
+      // aberto outro material ou o quiz do caderno de erros.
+      if (wait || !previous || !sameMaterial(previous, data)) restart();
       const at = latest.current.page;
       if (at === 'Estudar' || MATERIAL.includes(at)) {
-        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
+        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para o Resumo.
         if (at === 'Estudar') setPage(target);
         // O leitor de tela ouve que ele chegou, e o foco que estava na espera, no botão de gerar ou no body vai para o
         // título dele.
@@ -577,10 +664,10 @@ function App() {
       // O foco que estava no que sai da tela vai para o erro (o alerta já é lido) ou, no Cancelar, para o botão que pediu
       // o material; longe do Estudar, para o título da página.
       if (adrift(back ? 'main, .busy' : '.busy')) {
-        focusAfter.current = e.cancelled ? ['.actions [data-tab=' + SLUG[target] + ']', 'main h1'] : ['#erro'];
+        focusAfter.current = e.cancelled ? ['#gerar', 'main h1'] : ['#erro'];
       }
       if (e.cancelled) toast('Pedido cancelado');
-      else setError('Não foi possível gerar: ' + e.message);
+      else setError({ ...e, message: 'Não deu para gerar o material. ' + e.message });
     } finally {
       setBusy(null);
     }
@@ -589,8 +676,9 @@ function App() {
   // Grava o material no topo da biblioteca e devolve a cópia gravada, ou null se o navegador recusou.
   // Parte da lista do navegador, não da cópia desta aba: outra aba pode ter salvo algo depois que esta abriu.
   function store(material) {
-    const entry = { ...material, id: Date.now(), date: new Date().toISOString() };
-    const next = [entry, ...readList('saved')];
+    const stored = readList('saved');
+    const entry = { ...material, id: newId(stored), date: new Date().toISOString() };
+    const next = [entry, ...stored];
     if (!persist('saved', next)) return null;
     setSaved(next.filter(validMaterial));
     return entry;
@@ -633,9 +721,14 @@ function App() {
     }, ['[data-id="' + material.id + '"] .open', '#busca']);
   }
 
-  // Exportar: um arquivo com tudo o que este navegador guarda (biblioteca, desempenho, caderno de erros e perfil),
-  // para levar a outro computador. Parte do que está gravado, não das listas desta aba.
+  // Exportar (e o "Fazer backup" do pé da Biblioteca e do Desempenho): um arquivo com tudo o que este navegador guarda
+  // (biblioteca, desempenho, caderno de erros e perfil), para levar a outro computador. Parte do que está gravado, não
+  // das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes, como quando outro toma
+  // o lugar dele, e assim vai no arquivo.
   function exportBackup() {
+    const unsaved = !!opened && !opened.id;
+    const entry = unsaved ? store(opened) : null;
+    if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
     };
@@ -645,6 +738,11 @@ function App() {
     link.click();
     // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
     setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    // A data marca o clique: o navegador pode perguntar onde salvar, e o aluno, cancelar.
+    const now = new Date().toISOString();
+    if (persist('backup', now)) setLastBackup(now);
+    toast(backupSummary(backup) + (entry ? ' O material aberto foi salvo na biblioteca e foi junto.'
+      : unsaved ? ' O material aberto não pôde ser salvo no navegador e ficou de fora.' : ''));
   }
 
   // Importar: junta o arquivo ao que já está gravado, sem duplicar (lib.js). O arquivo vem de fora: o que não passa
@@ -668,7 +766,14 @@ function App() {
     setEvents(after.events.filter(validEvent));
     if (!persist('erros', after.erros)) return;
     setMistakes(after.erros.filter(validMistake));
-    toast(backupNote(before, after));
+    // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
+    // A área do editor não muda.
+    const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
+    if (profile) {
+      setUser(profile);
+      setName(profile.name);
+    }
+    toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados.
@@ -696,8 +801,9 @@ function App() {
     notebook(list => (ok
       ? clearMistake(list, mistakeKey(from.title, q.question), now)
       : addMistake(list, q, from.title, from.area, now)));
-    // Depois do foco, a página rola até a última linha com marca da caneta (ou o próprio retorno) ficar à vista.
-    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line'];
+    // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
+    // última linha com marca da caneta (ou o próprio retorno).
+    focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
   }
 
   // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
@@ -758,7 +864,7 @@ function App() {
       });
       setWhy({ item, text: data.answer });
     } catch (e) {
-      setWhy(e.cancelled ? null : { item, error: e.message });
+      setWhy(e.cancelled ? null : { item, error: e });
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.why, .busy')) focusAfter.current = ['#' + button, 'main h1'];
@@ -783,7 +889,7 @@ function App() {
     try {
       const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
       if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
-        throw Error('Revisão incompleta recebida do backend');
+        throw Error('A IA mandou uma revisão incompleta. Tente de novo.');
       }
       const accepted = data.verdict === 'correta';
       setAnswer(a => (a === mine ? { ...a, ok: accepted, review: data } : a));
@@ -795,7 +901,7 @@ function App() {
         notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
       }
     } catch (e) {
-      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e.message } } : a));
+      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.review-wait, .busy')) focusAfter.current = ['#pedir-revisao', 'main h1'];
@@ -810,7 +916,7 @@ function App() {
   // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
   // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
   async function ask(message = question) {
-    if (busy || asking || !message.trim()) return;
+    if (waiting || !message.trim()) return;
     const msg = message.trim();
     const mine = { role: 'user', text: msg };
     const own = msg === input.trim();
@@ -821,7 +927,7 @@ function App() {
       setUndo(null);
       setNotice(n => (n?.text === undo.text ? null : n));
     }
-    setError('');
+    setError(null);
     if (message === question) setQuestion('');
     setChat(c => [...c, mine]);
     if (!API_BASE) {
@@ -848,7 +954,7 @@ function App() {
       setChat(c => [...c, { role: 'assistant', text: data.answer }]);
       setTips({ key: JSON.stringify([topic.content, topic.area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
     } catch (e) {
-      if (!e.cancelled) setError(e.message);
+      if (!e.cancelled) setError(e);
       setChat(c => c.filter(m => m !== mine));
       if (message === question) setQuestion(q => q || msg);
     } finally {
@@ -897,8 +1003,10 @@ function App() {
         }
         written = { topic: data.topic, text: data.text.trim() };
       } catch (e) {
-        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto.
+        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto. No limite por
+        // minuto os botões da IA ficam desligados alguns segundos (callAI): o aviso de erro conta a espera.
         if (e.cancelled) return;
+        if (e.wait) setError(e);
       } finally {
         // O botão desabilitado na espera, ou o Cancelar da faixa que sai com ela, deixa o foco no vazio: ele volta ao
         // botão. Quem foi escrever ou foi para outra página continua onde está.
@@ -919,19 +1027,27 @@ function App() {
       }
     }
     const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
-    // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
-    // quem escreveu.
+    // O aviso diz quem escreveu. O texto fica guardado em aiExample, o da IA, ou em readyExample, o pronto: o material
+    // feito dele cita o trecho como "No exemplo escrito pela IA" ou "No texto de exemplo", e não como "No seu texto".
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
       : ai ? 'A IA não respondeu. Exemplo pronto adicionado: ' : 'Exemplo adicionado: ') + example.topic;
+    const before = [aiExample.current, readyExample.current];
     exampleTopic.current = example.topic;
+    aiExample.current = written ? example.text : '';
+    readyExample.current = written ? '' : example.text;
     setInput(example.text);
-    // O exemplo troca o que estava no editor: com outro texto lá, dá para voltar atrás. O Desfazer do aviso some com
-    // ele e leva o foco ao Limpar.
-    if (input.trim()) offerUndo('texto', note, () => setInput(input), ['#limpar', 'main h1']);
-    else toast(note);
+    // O exemplo troca o que estava no editor: com outro texto lá, dá para desfazer, e o exemplo anterior volta junto.
+    // O Desfazer do aviso some com ele e leva o foco ao Limpar.
+    if (input.trim()) {
+      offerUndo('texto', note, () => {
+        [aiExample.current, readyExample.current] = before;
+        setInput(input);
+      }, ['#limpar', 'main h1']);
+    } else toast(note);
   }
 
-  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
+  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto. O quiz e o baralho ficam
+  // onde estavam.
   function tabKeys(e) {
     const at = TABS.findIndex(([p]) => p === page);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
@@ -939,19 +1055,19 @@ function App() {
     e.preventDefault();
     const [next] = TABS[(to + TABS.length) % TABS.length];
     setPage(next);
-    restart();
     // A aba dentro desta mesma faixa: a do esqueleto da geração não tem id.
     e.currentTarget.querySelector('[data-tab=' + SLUG[next] + ']')?.focus();
   }
 
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
+  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho.
   function openSaved(material) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
-    made.current = { key: '', kinds: [] };
+    made.current = { key: '' };
     setEditorChat(false);
     setResult(material);
     openPage('Resumos', ['#material-titulo']);
-    restart();
+    if (!result || !sameMaterial(result, material)) restart();
   }
 
   // Perfil confirmado na janela (Perfil.jsx).
@@ -986,8 +1102,6 @@ function App() {
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
   const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
-  // Material com algum trecho de origem: nele, o tópico que não tem trecho ganha a etiqueta de explicação da IA.
-  const sourced = summary.some(s => s.source?.trim());
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1000,6 +1114,13 @@ function App() {
     const timer = setTimeout(() => latest.current.page === 'Biblioteca' && say(libraryCount(shown.length)), 500);
     return () => clearTimeout(timer);
   }, [query, filter]);
+  // A linha do backup, no pé da Biblioteca e do Desempenho: só nessas páginas, fora do caminho de cada resposta.
+  const backupLine = useMemo(
+    () => (page === 'Biblioteca' || page === 'Desempenho'
+      ? backupStatus({ saved, events, last: lastBackup, now: new Date() })
+      : null),
+    [page, saved, events, lastBackup, today]
+  );
   const busiest = Math.max(1, ...days.map(d => d.total));
   // O chat pergunta sobre o material aberto ou sobre o texto do editor (lib.js): o pedido, as sugestões, a saudação e a
   // caixa usam o mesmo assunto.
@@ -1008,16 +1129,23 @@ function App() {
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
   });
-  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Sempre true ou false: asking
-  // guarda a hora do pedido, e aria-disabled só vale com "true".
-  const waiting = !!busy || !!asking;
+  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
+  // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
+  const waiting = !!busy || !!asking || !!pausedUntil;
+  // IA sem chave neste computador: o botão de gerar fica desligado, e o aviso embaixo do editor diz por quê.
+  const aiOff = !!API_BASE && health?.ai_configured === false;
+  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração e o
+  // backend sem a IA configurada não gastam chamada.
+  const cost = !!API_BASE && !aiOff;
+  // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
+  const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
   // do clique (o aluno pode abrir outro da biblioteca enquanto espera).
-  const making = !!busy && ['resumo', 'flashcards', 'quiz'].includes(busy.kind) && result === busy.prior;
+  const making = busy?.kind === 'gerar' && result === busy.prior;
   // A espera de busy fica no lugar da resposta quando esse lugar está na tela (o esqueleto do material, a explicação
   // do tópico ou da questão aberta, a revisão no retorno); senão, na faixa de cima. Decidido aqui, não no CSS: a faixa
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
@@ -1054,9 +1182,16 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
+  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
+  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
+  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
+    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
+    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  const problem = pause || error;
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
-      {error && (
+      {problem && (
         <m.div
           key="erro"
           ref={errorBox}
@@ -1070,7 +1205,7 @@ function App() {
           exit="exit"
         >
           <Icon name="alerta" />
-          <p>{error}</p>
+          <Problem error={problem} />
         </m.div>
       )}
     </AnimatePresence>
@@ -1089,10 +1224,7 @@ function App() {
           aria-selected={page === p}
           aria-controls={wait ? undefined : 'material-painel'}
           tabIndex={page === p ? 0 : -1}
-          onClick={() => {
-            setPage(p);
-            restart();
-          }}
+          onClick={() => setPage(p)}
         >
           {l}
         </button>
@@ -1180,11 +1312,15 @@ function App() {
           <div className="top-actions">
             {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
             {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
-            <p className="ai-status" data-tone={status.tone}>
+            {/* A dica (title) explica que a conta é deste computador e a cota, do projeto inteiro. Com a IA ativa, o modelo
+                vai à parte: com a barra estreita ele sai da vista e continua no leitor de tela (styles.css, @container). */}
+            <p className="ai-status" data-tone={status.tone} title={status.note}>
               <span className="status-dot" aria-hidden="true"></span>
               <AnimatePresence mode="popLayout" initial={false}>
                 <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
-                  {status.text}
+                  {status.model
+                    ? <>IA ativa<span className="status-model">{' · ' + status.model}</span>{status.count && ' · ' + status.count}</>
+                    : status.text}
                 </m.span>
               </AnimatePresence>
             </p>
@@ -1247,7 +1383,8 @@ function App() {
                 <>
                   <m.div variants={rise}>
                     {/* A caixa do editor (prompt-composer.jsx): o campo, a área em chips, o nível no menu e, na última
-                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Enter). */}
+                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Ctrl +
+                        Enter). */}
                     <PromptComposer
                       value={input}
                       onChange={text => {
@@ -1263,7 +1400,7 @@ function App() {
                       level={level}
                       onLevel={setLevel}
                       waiting={waiting}
-                      touch={TOUCH}
+                      cost={cost}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1305,8 +1442,15 @@ function App() {
                           disabled={!input}
                           onClick={() => {
                             const before = input;
+                            // O exemplo, da IA ou pronto, sai junto com o texto: o que o aluno escrever depois é
+                            // dele. O Desfazer devolve os dois.
+                            const examples = [aiExample.current, readyExample.current];
+                            aiExample.current = readyExample.current = '';
                             setInput('');
-                            offerUndo('texto', 'Texto apagado', () => setInput(before), ['#limpar', 'main h1']);
+                            offerUndo('texto', 'Texto apagado', () => {
+                              [aiExample.current, readyExample.current] = examples;
+                              setInput(before);
+                            }, ['#limpar', 'main h1']);
                           }}
                         >
                           <Icon name="limpar" />
@@ -1317,33 +1461,67 @@ function App() {
                     <p id="composer-keyboard-hint" className="hint">
                       {TOUCH
                         ? 'Use o botão para perguntar ao Cérebro'
-                        : <><kbd>Enter</kbd> para perguntar ao Cérebro · <kbd>Shift</kbd> + <kbd>Enter</kbd> para nova linha</>}
+                        : <><kbd>{MAC ? '⌘' : 'Ctrl'}</kbd> + <kbd>Enter</kbd> para perguntar ao Cérebro</>}
                     </p>
                   </m.div>
                   <m.div variants={rise}>
-                    <p className="note">
-                      <Icon name={API_BASE ? 'privacidade' : 'info'} />
-                      {API_BASE
+                    {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
+                        funciona sem IA. */}
+                    <p className="note" id="aviso-ia">
+                      <Icon name={API_BASE && !aiOff ? 'privacidade' : 'info'} />
+                      {aiOff ? (
+                        <span>
+                          A IA não está ligada neste computador: o botão de gerar fica desligado.{' '}
+                          <a href="?demo">Ver a demonstração</a>
+                        </span>
+                      ) : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
-                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
+                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
+                          'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
                     <div className="actions" role="group" aria-label="Gerar material">
-                      {ACTIONS.map(([k, s, title]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          className={'action' + (k === 'resumo' ? ' primary' : '')}
-                          data-tab={s}
-                          disabled={waiting}
-                          aria-busy={busy?.kind === k || undefined}
-                          onClick={() => (k === 'chat' ? openPage('Dúvidas', ASK_FOCUS) : generate(k))}
-                        >
-                          {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
-                              cima: aqui o botão só diz que está gerando. */}
-                          <Icon name={s} />
-                          {busy?.kind === k ? 'Gerando…' : title}
-                        </button>
-                      ))}
+                      {/* Uma chamada traz resumo, flashcards e quiz. Com o material deste texto aberto, as três partes
+                          só abrem, sem chamar a IA, e o botão de gerar vira o "Gerar de novo". A parte aberta tira o
+                          botão da tela com o Estudar: o foco vai para o título do material (na espera, o da página).
+                          Elas só trocam de página: continuam ligadas sem a chave da IA e na espera do limite por
+                          minuto, quando o botão de gerar fica desligado. */}
+                      {fresh && (
+                        <div className="open-parts" role="group" aria-labelledby="abrir-partes">
+                          <span id="abrir-partes">Abrir:</span>
+                          {TABS.map(([p, l]) => (
+                            <button
+                              key={p}
+                              type="button"
+                              className="action"
+                              data-tab={SLUG[p]}
+                              onClick={() => {
+                                go(p);
+                                focusAfter.current = ['#material-titulo', 'main h1'];
+                              }}
+                            >
+                              <Icon name={SLUG[p]} />
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        id="gerar"
+                        className={fresh ? 'action' : 'action primary'}
+                        disabled={waiting || aiOff}
+                        aria-describedby={aiOff ? 'aviso-ia' : undefined}
+                        aria-busy={busy?.kind === 'gerar' || undefined}
+                        onClick={() => generate()}
+                      >
+                        {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
+                            cima: aqui o botão só diz que está gerando. */}
+                        <Icon name={fresh ? 'refazer' : 'resumos'} />
+                        {busy?.kind === 'gerar'
+                          ? 'Gerando…'
+                          : fresh ? 'Gerar de novo' : 'Gerar resumo, flashcards e quiz'}
+                        {cost && busy?.kind !== 'gerar' && <small>1 chamada de IA</small>}
+                      </button>
                     </div>
                   </m.div>
                   {errorBanner}
@@ -1425,7 +1603,11 @@ function App() {
                             <p className="meta">
                               {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
-                            {aiNote}
+                            {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
+                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                            {result.virtual
+                              ? aiNote
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
                           {!result.virtual && (
                             <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
@@ -1476,9 +1658,12 @@ function App() {
                                     <div>
                                       <h3>{s.concept}</h3>
                                       <p>{s.text}</p>
-                                      {s.source?.trim()
-                                        ? <p className="source">{'No seu texto: "' + s.source.trim() + '"'}</p>
-                                        : sourced && <span className="ai-tag">Explicação da IA: confira</span>}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                      {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
+                                          exemplo pronto não é da IA: o trecho dele confere, como o do aluno. */}
+                                      {result.semIA !== true && (s.ia || !s.source?.trim()) && (
+                                        <span className="ai-tag">Explicação da IA: confira</span>
+                                      )}
                                       {API_BASE && (
                                         <div className="ai-ask">
                                           <button
@@ -1499,10 +1684,7 @@ function App() {
                               <button
                                 type="button"
                                 className="primary"
-                                onClick={() => {
-                                  openPage('Flashcards', ['.flashcard', 'main h1']);
-                                  restart();
-                                }}
+                                onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}
                               >
                                 Estudar flashcards deste resumo
                                 <Icon name="seta" />
@@ -1545,6 +1727,22 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Cartão {session.pos + 1} de {session.queue.length}</span>
+                                {/* Trocar de aba ou de página não recomeça o baralho: este botão recomeça. Antes do primeiro
+                                    cartão avaliado ele guarda o lugar invisível, e aparecer não empurra o cartão. No
+                                    "Refazer só os que errei" recomeça só esses (deckRestart). */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o baralho"
+                                  style={{ visibility: session.pos ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    setDeck(deckRestart(session));
+                                    setFlip(false);
+                                    focusAfter.current = ['.flashcard'];
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">{flip ? 'Resposta' : 'Pergunta'}</span>
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
@@ -1621,7 +1819,7 @@ function App() {
                                     type="button"
                                     className="primary"
                                     onClick={() => {
-                                      restart(wrong);
+                                      restartQuiz(wrong);
                                       focusAfter.current = QUESTION_FOCUS;
                                     }}
                                   >
@@ -1632,7 +1830,7 @@ function App() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    restart();
+                                    restartQuiz();
                                     focusAfter.current = QUESTION_FOCUS;
                                   }}
                                 >
@@ -1641,13 +1839,7 @@ function App() {
                                 {result.virtual ? (
                                   <button type="button" onClick={() => openPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      openPage('Flashcards', ['.flashcard', 'main h1']);
-                                      restart();
-                                    }}
-                                  >
+                                  <button type="button" onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}>
                                     Ir para os flashcards
                                   </button>
                                 )}
@@ -1657,6 +1849,20 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Questão {idx + 1} de {quizList.length}</span>
+                                {/* Como no baralho. No "Refazer as que errei" recomeça só as erradas (retry). O foco vai
+                                    para a primeira questão como no "Refazer o quiz todo" (QUESTION_FOCUS). */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o quiz"
+                                  style={{ visibility: answers.length ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    restartQuiz(retry);
+                                    focusAfter.current = QUESTION_FOCUS;
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">
                                   {quiz.type === 'short' ? 'Resposta curta'
                                     : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
@@ -1670,8 +1876,10 @@ function App() {
                                   leitor de tela lê a pergunta junto com elas. */}
                               <h2 id={'questao-' + idx} className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
                               {quiz.type === 'short' ? (
+                                // Questão nova ou recomeçada: o campo abre vazio. Respondida, ele mostra o que o aluno
+                                // escreveu, também na volta de outra aba ou página.
                                 <form
-                                  key={idx}
+                                  key={idx + '-' + answers.length}
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
@@ -1693,6 +1901,7 @@ function App() {
                                     required
                                     maxLength={500}
                                     placeholder="Sua resposta"
+                                    defaultValue={answer?.value}
                                     disabled={answer !== null}
                                   />
                                   <button disabled={answer !== null} className="primary">Responder</button>
@@ -1728,6 +1937,14 @@ function App() {
                                   animate="show"
                                 >
                                   <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  {/* Errou a opção: a marcada e a certa também em texto, como no fim do quiz. No celular
+                                      deitado as marcas delas, nas opções, podiam ficar fora da vista. */}
+                                  {quiz.type !== 'short' && !answer.ok && (
+                                    <>
+                                      <p className="answer-line">Sua resposta: {quiz.options[answer.value]}</p>
+                                      <p className="answer-line">Resposta certa: {expectedText(quiz)}</p>
+                                    </>
+                                  )}
                                   {quiz.type === 'short' && (
                                     <p className="answer-line">
                                       Resposta esperada: {expectedText(quiz)} <Pen kind="certo" note="certa" draw />
@@ -1755,7 +1972,7 @@ function App() {
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
-                                  {answer.review?.error && <p role="alert" className="error">{answer.review.error}</p>}
+                                  {answer.review?.error && <div role="alert" className="error"><Problem error={answer.review.error} /></div>}
                                   {API_BASE && (
                                     <div className="ai-ask">
                                       <button
@@ -1904,6 +2121,7 @@ function App() {
                       onSwap={() => setEditorChat(e => !e)}
                       waiting={waiting}
                       touch={TOUCH}
+                      cost={cost}
                       variants={hero.box}
                       pop={pop}
                       note={aiNote}
@@ -2044,6 +2262,8 @@ function App() {
                     mistakes={mistakes}
                     redoMistakes={redoMistakes}
                     events={events}
+                    backup={backupLine}
+                    onExport={exportBackup}
                   />
                 </Suspense>
               )}
@@ -2060,6 +2280,7 @@ function App() {
                     saved={saved}
                     undo={undo}
                     onUndo={undoNow}
+                    backup={backupLine}
                     onExport={exportBackup}
                     onImport={importBackup}
                     onOpen={openSaved}
@@ -2104,6 +2325,8 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
+        {/* Só o mouse e o foco do teclado seguram o aviso. O toque virava "mouse em cima" e prendia o aviso por cima dos
+            botões do cartão; na tela de toque o corpo dele deixa o toque passar (styles.css). */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
             <m.div
@@ -2113,8 +2336,8 @@ function App() {
               initial={appear()}
               animate="show"
               exit="exit"
-              onMouseEnter={holdNotice}
-              onMouseLeave={releaseNotice}
+              onPointerEnter={e => e.pointerType === 'mouse' && holdNotice()}
+              onPointerLeave={e => e.pointerType === 'mouse' && releaseNotice()}
               onFocus={holdNotice}
               onBlur={releaseNotice}
             >
@@ -2342,7 +2565,11 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
     box.current?.scrollIntoView({ block: 'nearest' });
   }, [text, error]);
   if (error) {
-    return <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">{error}</m.div>;
+    return (
+      <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">
+        <Problem error={error} />
+      </m.div>
+    );
   }
   return (
     <m.div ref={box} className="why" role="status" variants={pop} initial={appear()} animate="show">
@@ -2363,6 +2590,26 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
         </>
       )}
     </m.div>
+  );
+}
+
+// Erro de um pedido (lib.js, errorText): a frase para o aluno e, embaixo, "Detalhes técnicos", fechado, com o código e a
+// frase do backend para quem instalou o Cérebro. No limite por minuto a frase conta os segundos até os botões da IA
+// voltarem (until, callAI).
+function Problem({ error }) {
+  return (
+    <div>
+      <p>
+        {error.message}
+        {error.until > 0 && <> <Countdown until={error.until} /></>}
+      </p>
+      {error.tech && (
+        <details>
+          <summary>Detalhes técnicos</summary>
+          <p>{error.tech}</p>
+        </details>
+      )}
+    </div>
   );
 }
 
