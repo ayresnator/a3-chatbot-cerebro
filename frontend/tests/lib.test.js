@@ -8,6 +8,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
+  opener, openers, typeDelay, rove, LEVEL_NOTES,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -471,6 +472,80 @@ test('pickExample: área fora da lista cai nos exemplos de Escolar', () => {
     assert.equal(pickExample(area, null, () => 0), EXAMPLES.Escolar[0], String(area));
   }
   assert.equal(pickExample('Medicina', EXAMPLES.Escolar[0], () => 0), EXAMPLES.Escolar[1]);
+});
+
+test('openers: a primeira frase de cada exemplo pronto da área, com reticências no lugar do ponto', () => {
+  assert.equal(openers('Economia')[1], 'A lei da oferta e da demanda explica como os preços se formam em um mercado…');
+  assert.equal(openers('Matemática')[1], 'Uma equação do 1º grau tem uma incógnita com expoente 1, como em 2x + 3 = 11…');
+  assert.equal(openers('Escolar')[2], 'A Independência do Brasil marcou a separação política entre o Brasil e Portugal…');
+});
+
+test('openers: frase com mais de 80 caracteres para numa palavra inteira, sem palavrinha solta nem vírgula no fim', () => {
+  // "…energia luminosa em energia química": o corte cai depois de "em", que sai.
+  assert.equal(openers('Escolar')[0], 'A fotossíntese é o processo pelo qual plantas transformam energia luminosa…');
+  // Duas palavrinhas seguidas ("e a") saem juntas.
+  assert.equal(openers('Escolar')[1], 'O ciclo da água é o caminho que a água percorre entre a superfície da Terra…');
+  // A vírgula antes da palavrinha sai com ela ("menores, de").
+  assert.equal(openers('Tecnologia')[1], 'A internet é uma rede mundial que interliga milhões de redes menores…');
+  // Palavra de três letras também sai ("forma que").
+  assert.equal(openers('Tecnologia')[2], 'Um banco de dados é um conjunto organizado de informações, guardado de forma…');
+  // Palavra de quatro letras ou mais fica.
+  assert.equal(openers('Direito')[0], 'A Constituição Federal é a lei máxima do Brasil, e nenhuma outra norma pode…');
+});
+
+test('opener: o corte que cai logo depois de uma vírgula não deixa a vírgula no fim', () => {
+  assert.equal(
+    opener('A internet é uma rede mundial que interliga milhões de redes bem menores, residências e empresas e universidades.'),
+    'A internet é uma rede mundial que interliga milhões de redes bem menores…',
+  );
+});
+
+test('opener: texto curto sem ponto fica inteiro', () => {
+  assert.equal(opener('Frase sem ponto final'), 'Frase sem ponto final…');
+});
+
+test('openers: uma frase por exemplo, nenhuma repetida entre as áreas, todas de 20 a 81 caracteres', () => {
+  const all = AREAS.flatMap(area => {
+    assert.equal(openers(area).length, EXAMPLES[area].length, area);
+    return openers(area);
+  });
+  assert.equal(new Set(all).size, all.length, 'frase repetida');
+  for (const line of all) assert.match(line, /^[^.!?…]{18,79}[^\s,.!?…]…$/, line);
+});
+
+test('openers: área fora da lista vale Escolar', () => {
+  for (const area of ['Medicina', '', undefined, null, 'constructor', '__proto__']) {
+    assert.equal(openers(area)[2], 'A Independência do Brasil marcou a separação política entre o Brasil e Portugal…', String(area));
+  }
+});
+
+test('typeDelay: a frase mais longa das seis áreas se escreve letra a letra e termina antes de 5 s, mesmo no sorteio mais lento', () => {
+  // WCAG 2.2.2: o que se move sozinho ao lado do conteúdo para antes de 5 s.
+  const longest = Math.max(...AREAS.flatMap(area => openers(area)).map(line => line.length));
+  let slowest = 0;
+  for (let shown = 0; shown < longest; shown++) slowest += typeDelay(shown, () => 1);
+  assert.ok(slowest < 5000, slowest + ' ms para ' + longest + ' letras');
+  // Uma letra por vez, no ritmo de quem digita: nunca na hora.
+  assert.ok(typeDelay(1, () => 0) >= 20, String(typeDelay(1, () => 0)));
+});
+
+test('rove: as setas andam um item e dão a volta nas pontas', () => {
+  assert.equal(rove('ArrowRight', 0, 6), 1);
+  assert.equal(rove('ArrowDown', 2, 6), 3);
+  assert.equal(rove('ArrowRight', 5, 6), 0);
+  assert.equal(rove('ArrowLeft', 3, 6), 2);
+  assert.equal(rove('ArrowUp', 1, 6), 0);
+  assert.equal(rove('ArrowLeft', 0, 6), 5);
+});
+
+test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
+  assert.equal(rove('Home', 4, 6), 0);
+  assert.equal(rove('End', 1, 6), 5);
+  for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
+});
+
+test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
+  assert.deepEqual(Object.keys(LEVEL_NOTES), LEVELS);
 });
 
 const MATERIAL = {

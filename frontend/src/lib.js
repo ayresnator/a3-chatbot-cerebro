@@ -2,6 +2,12 @@
 
 export const AREAS = ['Tecnologia', 'Administração', 'Economia', 'Matemática', 'Direito', 'Escolar'];
 export const LEVELS = ['Básico', 'Intermediário', 'Avançado'];
+// A nota de cada nível no menu do editor: o que muda no vocabulário e na profundidade (backend, prompts.py).
+export const LEVEL_NOTES = {
+  Básico: 'Linguagem simples, sem jargão',
+  Intermediário: 'Um pouco mais de detalhe',
+  Avançado: 'Com os termos técnicos da área',
+};
 // Limite do texto do editor, o mesmo do backend.
 const MAX_INPUT = 20000;
 // Perguntas de partida de cada área: aparecem como sugestão no chat antes da primeira resposta, sem chamar a IA.
@@ -109,6 +115,38 @@ export function pickExample(area, current, random = Math.random) {
   const options = EXAMPLES[AREAS.includes(area) ? area : 'Escolar']
     .filter(e => e.text !== current?.text?.trim() && topic(e.topic) !== topic(current?.topic));
   return options[Math.floor(random() * options.length)];
+}
+
+// O começo de um texto, para a frase de exemplo do campo vazio do Estudar: a primeira frase, com reticências no lugar do
+// ponto. Com mais de 80 caracteres ela para numa palavra inteira, sem palavrinha solta ("e", "de", "que") nem vírgula
+// no fim.
+export function opener(text) {
+  const end = text.search(/[.!?]/);
+  const first = end < 0 ? text : text.slice(0, end);
+  const cut = first.length <= 80 ? first : first.slice(0, first.lastIndexOf(' ', 80)).replace(/(?:[\s,]+\S{0,3})+$/, '');
+  return cut + '…';
+}
+
+// As frases de exemplo de uma área: o começo de cada exemplo pronto dela. Área fora da lista vale Escolar, como no
+// pickExample.
+export function openers(area) {
+  return EXAMPLES[AREAS.includes(area) ? area : 'Escolar'].map(({ text }) => opener(text));
+}
+
+// Espera antes da próxima letra da frase de exemplo, com shown letras já na tela: a primeira sai em 0,9 s, depois da
+// entrada da página, e as outras com a espera sorteada de quem digita, de 26 a 46 ms. Assim a frase mais longa termina
+// antes de 5 s (WCAG 2.2.2). random devolve de 0 a 1; os testes passam o deles.
+export function typeDelay(shown, random = Math.random) {
+  return shown ? 26 + random() * 20 : 900;
+}
+
+// Setas, Home e End num grupo de opções ou num menu: o índice aonde a tecla leva, dando a volta nas pontas; -1 quando
+// a tecla não anda.
+export function rove(key, at, count) {
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  const step = key === 'ArrowRight' || key === 'ArrowDown' ? 1 : key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 0;
+  return step ? (at + step + count) % count : -1;
 }
 
 export function read(k, d) {

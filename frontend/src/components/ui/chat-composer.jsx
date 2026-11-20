@@ -1,7 +1,8 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, m, useMotionValue, useReducedMotion, useSpring } from 'motion/react';
 import { Icon } from '../../icons.jsx';
+import { useFit } from '../../ui.jsx';
 import { appear, byKeyboard } from '../../anim.js';
 import { AREAS, LEVELS, slashHints } from '../../lib.js';
 
@@ -42,19 +43,8 @@ export function ChatComposer({
   const glow = focused && FINE && !calm;
 
   // O campo cresce com o texto entre o mínimo e o máximo do CSS (60 e 200 px) e volta ao mínimo quando esvazia depois
-  // do envio. Medir encolhe o campo por um instante: a rolagem da página volta ao lugar em vez de pular.
-  function fit() {
-    const el = field.current;
-    const top = window.scrollY;
-    el.style.height = '0px';
-    el.style.height = el.scrollHeight + 'px';
-    if (window.scrollY !== top) window.scrollTo(0, top);
-  }
-  useLayoutEffect(fit, [value]);
-  useEffect(() => {
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, []);
+  // do envio.
+  useFit(field, value);
 
   // Clique fora da lista, do botão de atalhos e do campo fecha a lista.
   useEffect(() => {
