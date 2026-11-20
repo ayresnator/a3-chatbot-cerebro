@@ -7,7 +7,7 @@ import { AREAS, spokenDay, areaLine } from './lib.js';
 // Página Desempenho, carregada à parte (App.jsx, lazyView): o código dela só vem quando o aluno chega nela ou quando
 // o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho.
 export default function Desempenho({
-  rise, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, mistakes, redoMistakes,
+  rise, fade, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, mistakes, redoMistakes,
   events,
 }) {
   return (
@@ -21,7 +21,8 @@ export default function Desempenho({
           label={'autoavaliação nos cartões · ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
         />
       </m.div>
-      <m.section className="panel" variants={rise}>
+      {/* Com a lista "Área do gráfico" dentro, o painel só esmaece (anim.js, fade). */}
+      <m.section className="panel" variants={fade}>
         <div className="panel-head">
           <h2>Respostas e acertos nos últimos 7 dias</h2>
           <label className="inline-field">

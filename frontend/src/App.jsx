@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
-  AnimatePresence, LazyMotion, MotionConfig, domAnimation, m, usePresence, useReducedMotion,
+  AnimatePresence, LazyMotion, MotionConfig, domMin, m, usePresence, useReducedMotion,
 } from 'motion/react';
 import { BrandMark, Icon } from './icons.jsx';
 import { Pen } from './marks.jsx';
@@ -22,7 +22,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary,
   matches, hints, hello, healthLabel, errorText, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -217,7 +217,7 @@ function App() {
   // Variantes do Motion (anim.js): com movimento reduzido, só a opacidade. A primeira página (a abertura do app) entra
   // na mola de 0,45 s, bloco a bloco; as trocas de seção, na de 0,3 s.
   const calm = useReducedMotion();
-  const { view: viewIn, title: titleIn, rise } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
+  const { view: viewIn, title: titleIn, rise, fade } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
   const pop = calm ? POP_CALM : POP;
   const focusIn = calm ? FOCUS_CALM : FOCUS;
   const hero = calm ? HERO_CALM : HERO;
@@ -256,10 +256,23 @@ function App() {
     if (API_BASE) checkHealth();
   }, []);
 
-  // O código das páginas carregadas à parte vem quando o navegador fica livre: na hora do clique ele já está aqui e
-  // o esqueleto do Suspense não pisca.
+  // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
+  // pelo persist(), como nas outras gravações. Relido aqui, depois do primeiro desenho: outra aba pode ter gravado nesse
+  // meio-tempo. Se a gravação falhar, a lista gravada continua inteira. Os números da tela não mudam, e a próxima
+  // resposta já parte da lista nova.
   useEffect(() => {
-    const load = () => [Desempenho, Biblioteca, Perfil].forEach(page => page.preload().catch(() => {}));
+    const stored = readList('events');
+    const list = compactEvents(stored, new Date());
+    if (list.length < stored.length) persist('events', list);
+  }, []);
+
+  // O código das páginas carregadas à parte vem quando o navegador fica livre: na hora do clique ele já está aqui e
+  // o esqueleto do Suspense não pisca. O do orbe da IA (ui.jsx, Orb) também: ele só aparece numa espera ou no ditado.
+  useEffect(() => {
+    const load = () => {
+      [Desempenho, Biblioteca, Perfil].forEach(page => page.preload().catch(() => {}));
+      import('thinking-orbs').catch(() => {});
+    };
     if (!window.requestIdleCallback) {
       const timer = setTimeout(load, 1500);
       return () => clearTimeout(timer);
@@ -298,7 +311,11 @@ function App() {
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
   // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
-  useEffect(() => setError(''), [input]);
+  // Só quando há erro: sem a guarda, cada tecla fazia um segundo desenho, vazio. error fica fora das dependências de
+  // propósito: com ele, o erro sumiria logo depois de aparecer.
+  useEffect(() => {
+    if (error) setError('');
+  }, [input]);
 
   // O texto do cartão virado ou do seguinte muda com movimento, em 0,16 s, e o cartão fica parado: o aluno faz isso
   // muitas vezes (anim.js, enter).
@@ -604,8 +621,12 @@ function App() {
       toast('Este arquivo não é um backup do Cérebro.');
       return;
     }
-    const before = { saved: readList('saved'), events: readList('events'), erros: readList('erros') };
+    // O histórico entra e sai sem as repetições de dias passados (lib.js, compactEvents): o backup não as traz de volta,
+    // e o aviso no fim compara duas listas compactadas.
+    const now = new Date();
+    const before = { saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros') };
     const after = mergeBackup(before, backup);
+    after.events = compactEvents(after.events, now);
     if (!persist('saved', after.saved)) return;
     setSaved(after.saved.filter(validMaterial));
     if (!persist('events', after.events)) return;
@@ -842,7 +863,8 @@ function App() {
         return;
       }
     }
-    const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
+    // Os exemplos prontos ficam à parte (exemplos.js), fora do JavaScript da abertura; a caixa do editor já os trouxe.
+    const example = written || (await import('./exemplos.js')).pickExample(area, { topic: exampleTopic.current, text: input });
     // O texto da IA fica no editor como se fosse do aluno, e o material feito dele cita "No seu texto": o aviso diz
     // quem escreveu.
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
@@ -1022,11 +1044,7 @@ function App() {
     </button>
   );
 
-  // LazyMotion com domAnimation: só a parte da Motion que estas animações usam (sem arrastar nem layout). MotionConfig
-  // com reducedMotion="user" é a rede de segurança: com movimento reduzido, nenhum deslocamento passa.
   return (
-    <MotionConfig reducedMotion="user">
-    <LazyMotion features={domAnimation} strict>
     <div className="app" data-page={slug}>
       <div className="shell">
         <header className="topbar">
@@ -1105,8 +1123,11 @@ function App() {
               entrada e a aba que tem o foco do teclado continua na tela (com uma key por página ela era recriada e o
               foco caía na página).
               A página que sai (popLayout) sai do fluxo na hora e esmaece por cima da nova, sem receber clique. Numa
-              troca no meio de outra (cut) a nova aparece parada e a do meio some na hora. */}
-          <AnimatePresence mode="popLayout" custom={still}>
+              troca no meio de outra (cut) a nova aparece parada e a do meio some na hora.
+              presenceAffectsLayout false: sem ele a página passava um contexto novo a cada desenho do App, e cada tecla
+              redesenhava o que mora dentro dela, até os balões da conversa (ChatLog). Ele só importa para animação de
+              layout, que o app não usa. */}
+          <AnimatePresence mode="popLayout" custom={still} presenceAffectsLayout={false}>
             <m.div
               key={viewKey}
               className="view"
@@ -1261,7 +1282,8 @@ function App() {
                 </>
               )}
               {MATERIAL.includes(page) && (
-                <m.div variants={rise}>
+                // Com a lista "Tamanho" do Resumo dentro, o bloco só esmaece (anim.js, fade).
+                <m.div variants={fade}>
                   {/* Esqueleto, vazio ou material: a troca entre eles esmaece no lugar (popLayout tira do fluxo o que
                       sai). Na abertura da página nada disso anima à parte (live false: a entrada é a da página). O
                       initial fica em cada painel e não no AnimatePresence: lá ele valeria para tudo o que monta depois
@@ -1680,38 +1702,7 @@ function App() {
                       </div>
                     )}
                     <div className="chat" role="log" aria-live="polite">
-                      {/* Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam
-                          na conversa quando a página abriu não animam à parte (initial false). A pergunta enviada pelo
-                          teclado aparece parada. A resposta toma o lugar do balão de espera, que esmaece por cima dela. */}
-                      <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
-                        {chat.map((msg, i) => (
-                          <m.div
-                            key={i}
-                            className={'message ' + msg.role}
-                            variants={pop}
-                            initial={msg.role === 'user' ? appear() : 'hidden'}
-                            animate="show"
-                          >
-                            <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
-                            <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
-                          </m.div>
-                        ))}
-                        {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula
-                            acima da caixa, uma vez só para o leitor de tela. */}
-                        {asking && (
-                          <m.div
-                            key="espera"
-                            className="message assistant thinking"
-                            aria-hidden="true"
-                            variants={pop}
-                            initial={appear()}
-                            animate="show"
-                            exit="exit"
-                          >
-                            <span className="dots"><span></span><span></span><span></span></span>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
+                      <ChatLog chat={chat} asking={asking} pop={pop} />
                     </div>
                   </div>
                   {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
@@ -1852,6 +1843,7 @@ function App() {
                 <Suspense fallback={<DesempenhoSkeleton rise={rise} />}>
                   <Desempenho
                     rise={rise}
+                    fade={fade}
                     streakDays={streakDays}
                     quizzes={quizzes}
                     cards={cards}
@@ -1870,7 +1862,7 @@ function App() {
               {page === 'Biblioteca' && (
                 <Suspense fallback={<BibliotecaSkeleton rise={rise} />}>
                   <Biblioteca
-                    rise={rise}
+                    fade={fade}
                     pop={pop}
                     query={query}
                     setQuery={setQuery}
@@ -2001,10 +1993,47 @@ function App() {
         )}
       </AnimatePresence>
     </div>
-    </LazyMotion>
-    </MotionConfig>
   );
 }
+
+// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa, a espera ou o movimento mudam (memo): cada
+// tecla na caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
+// Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam na conversa quando a
+// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A resposta toma o
+// lugar do balão de espera, que esmaece por cima dela.
+const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
+  return (
+    <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
+      {chat.map((msg, i) => (
+        <m.div
+          key={i}
+          className={'message ' + msg.role}
+          variants={pop}
+          initial={msg.role === 'user' ? appear() : 'hidden'}
+          animate="show"
+        >
+          <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
+          <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
+        </m.div>
+      ))}
+      {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula acima da caixa, uma
+          vez só para o leitor de tela. */}
+      {asking && (
+        <m.div
+          key="espera"
+          className="message assistant thinking"
+          aria-hidden="true"
+          variants={pop}
+          initial={appear()}
+          animate="show"
+          exit="exit"
+        >
+          <span className="dots"><span></span><span></span><span></span></span>
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+});
 
 // Margem do baralho: um ✓ ou ✗ da caneta para cada cartão já avaliado nesta sessão. O cartão errado volta para o fim
 // da fila (lib.js): o que aparece de novo mais adiante na fila foi o errado. Com fresh, a marca mais nova se desenha,
@@ -2092,8 +2121,7 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();
         if (o?.width) dialog.style.transformOrigin = (o.left + o.width / 2 - d.left) + 'px ' + (o.top + o.height / 2 - d.top) + 'px';
-        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: 0.24, ease: EASE_OUT })
-          .then(() => (dialog.style.filter = ''));
+        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'] }, { duration: 0.24, ease: EASE_OUT });
       }
     }
     return () => {
@@ -2191,4 +2219,17 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+// LazyMotion com domMin: só a parte da Motion que estas animações usam, a entrada e a saída (sem gestos, arrastar nem
+// layout). whileHover, whileTap, whileFocus e whileInView não funcionam com ele. MotionConfig com reducedMotion="user" é
+// a rede de segurança: com movimento reduzido, nenhum deslocamento passa. Os dois ficam fora do App: o LazyMotion passa
+// um contexto novo a cada desenho dele, e dentro do App cada tecla redesenhava todos os blocos animados da página, até
+// os balões da conversa (ChatLog).
+createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <MotionConfig reducedMotion="user">
+      <LazyMotion features={domMin} strict>
+        <App />
+      </LazyMotion>
+    </MotionConfig>
+  </ErrorBoundary>
+);

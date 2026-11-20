@@ -7,10 +7,14 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <title>Cérebro | Assistente de estudos</title>
-    <!-- Fontes direto no HTML (antes vinham de um @import dentro do styles.css, um passo a mais na fila). -->
+    <!-- Fontes direto no HTML (antes vinham de um @import dentro do styles.css, um passo a mais na fila). A folha do Google
+         não segura a primeira pintura: ela entra como "print", que a tela não espera, e passa a valer para a tela quando
+         chega (onload). Até lá o texto sai na fonte do sistema, como já saía até o arquivo da Manrope chegar (swap).
+         O preload a busca logo, com a prioridade de uma folha da tela. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap" media="print" onload="this.media='all'" />
     <link rel="stylesheet" href="/src/styles.css" />
     <link rel="stylesheet" href="/src/mobile.css" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">

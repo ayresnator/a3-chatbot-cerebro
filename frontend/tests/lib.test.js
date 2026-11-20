@@ -1,4 +1,4 @@
-// Testes da lógica pura do Cérebro (src/lib.js), com o executor que já vem no Node: npm test
+// Testes da lógica pura do Cérebro (src/lib.js e src/exemplos.js), com o executor que já vem no Node: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -7,9 +7,10 @@ import {
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
+  typeDelay, rove, LEVEL_NOTES,
 } from '../src/lib.js';
+import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
 const at = (day, hour = 12) => new Date(2026, 10, day, hour).toISOString();
@@ -146,6 +147,23 @@ test('firstAttempts: a questão é a mesma com o mesmo dia, material e enunciado
   assert.deepEqual(firstAttempts([events[1], first]), [events[1]], 'a primeira é a que foi gravada antes');
 });
 
+test('firstAttempts: a mesma lista devolve o resultado guardado; outra lista tem a conta dela', () => {
+  const events = [...SIX_ANSWERS, ...redo(16)];
+  const first = firstAttempts(events);
+  assert.equal(firstAttempts(events), first, 'a mesma lista, o mesmo resultado');
+  const more = [...events, quizAt(16, 7, true)];
+  assert.deepEqual(firstAttempts(more), [...SIX_ANSWERS, more.at(-1)], 'a lista com uma resposta a mais');
+  assert.deepEqual(firstAttempts(events), SIX_ANSWERS);
+});
+
+test('localDay: a mesma data em texto dá o mesmo dia na primeira e na segunda vez, e Date continua valendo', () => {
+  const late = at(16, 23); // 23h: no Brasil, em UTC já é dia 17
+  assert.equal(localDay(late), '2026-11-16');
+  assert.equal(localDay(late), '2026-11-16');
+  assert.equal(localDay(new Date(late)), '2026-11-16');
+  assert.equal(localDay(new Date(2026, 10, 17, 0, 0)), '2026-11-17');
+});
+
 test('quizRate e cardRate: percentual arredondado; sem respostas é zero', () => {
   assert.deepEqual(quizRate([]), { total: 0, correct: 0, rate: 0 });
   assert.deepEqual(quizRate(TWELVE_CARDS), { total: 0, correct: 0, rate: 0 });
@@ -270,6 +288,55 @@ test('areaLine: quiz e cartões da área, separados; sem resposta de quiz não h
   assert.equal(areaLine(events, 'Escolar'), 'Quiz sem respostas · 2 cartões');
   assert.equal(areaLine(events, 'Matemática'), 'Sem registros ainda');
   assert.equal(areaLine(SIX_ANSWERS, 'Economia'), '33% de acerto no quiz · 6 questões · 0 cartões');
+});
+
+// Histórico com repetições, como o App grava, com "hoje" em 16/11 às 22h. OLD é a resposta antiga, sem o enunciado.
+const OLD = (({ q, ...e }) => e)(quizAt(14, 9, false));
+const BROKEN = { kind: 'quiz', ok: 'sim', date: 'ontem' };
+const HISTORY = [
+  // Dia 14: a questão 1 errada, refeita errada, acertada e acertada de novo; a 2 certa e refeita errada.
+  quizAt(14, 1, false, { date: at(14, 9) }), quizAt(14, 1, false, { date: at(14, 10) }),
+  quizAt(14, 1, true, { date: at(14, 11) }), quizAt(14, 1, true, { date: at(14, 12) }),
+  quizAt(14, 2, true, { date: at(14, 9) }), quizAt(14, 2, false, { date: at(14, 10) }),
+  OLD, OLD, BROKEN, cardAt(14, true), cardAt(14, true), cardAt(14, false),
+  // Dia 15: a questão 1 de novo (outro dia, conta de novo), a 1 de outro material e a 3, refeita às 23h, quando em UTC
+  // já é dia 16.
+  quizAt(15, 1, true), quizAt(15, 1, true, { date: at(15, 13) }),
+  quizAt(15, 1, false, { title: 'Juros', area: 'Direito' }), quizAt(15, 1, false, { title: 'Juros', area: 'Direito', date: at(15, 13) }),
+  quizAt(15, 3, false, { date: at(15, 22) }), quizAt(15, 3, true, { date: at(15, 23) }), quizAt(15, 3, false, { date: at(15, 23) }),
+  // Hoje: tudo fica, até as repetições.
+  ...SIX_ANSWERS, ...redo(16), ...redo(16), cardAt(16, true),
+];
+// O que a tela mostra do histórico e o que a revisão espaçada e o acerto que ficou vão usar: a primeira resposta de cada
+// questão em cada dia e os dias com acerto de cada questão.
+const shown = list => {
+  const ok = list.filter(validEvent);
+  return {
+    quiz: quizRate(ok), cards: cardRate(ok), streak: streak(ok, today()), last: lastDays(ok, 5, today()),
+    weak: weakSpot(ok, today()), chart: ['Todas', 'Direito'].map(area => chartDays(ok, area, today())),
+    lines: AREAS.map(area => areaLine(ok, area)),
+    firsts: firstAttempts(ok).map(e => [localDay(e.date), e.title, e.q, e.ok]),
+    hits: [...new Set(ok.filter(e => e.kind === 'quiz' && e.ok && e.q).map(e => [localDay(e.date), e.title, e.q].join('|')))].sort(),
+  };
+};
+
+test('compactEvents: nos dias passados fica a primeira resposta de cada questão e, se foi erro, o primeiro acerto', () => {
+  const compact = compactEvents(HISTORY, today());
+  // Saem: a questão 1 refeita errada e acertada de novo e a 2 refeita no dia 14; a 1 acertada de novo, a de Juros
+  // refeita e a 3 errada depois do acerto no dia 15. Os cartões, a resposta sem enunciado, o item estragado e hoje ficam.
+  assert.deepEqual(HISTORY.filter(e => !compact.includes(e)), [1, 3, 5, 13, 15, 18].map(i => HISTORY[i]));
+  assert.deepEqual(compactEvents(compact, today()), compact, 'compactar de novo não muda nada');
+});
+
+test('compactEvents: os números da tela, a primeira resposta e os acertos de cada questão em cada dia não mudam', () => {
+  assert.deepEqual(shown(compactEvents(HISTORY, today())), shown(HISTORY));
+});
+
+test('compactEvents: importar um backup com as repetições de dias passados não faz a lista compactada crescer', () => {
+  const stored = compactEvents(HISTORY, today());
+  const merged = mergeBackup({ saved: [], events: stored, erros: [] }, { saved: [], events: HISTORY, erros: [] });
+  assert.ok(merged.events.length > stored.length, 'o backup traz as repetições de volta');
+  assert.equal(compactEvents(merged.events, today()).length, stored.length);
 });
 
 test('expectedText: o gabarito em texto, a opção certa ou as formas da resposta curta', () => {
@@ -578,6 +645,17 @@ test('matches: não casa nome de campo', () => {
 test('matches: respeita o filtro de área', () => {
   assert.equal(matches(MATERIAL, 'fotossintese', 'Escolar'), true);
   assert.equal(matches(MATERIAL, 'fotossintese', 'Direito'), false);
+});
+
+test('matches: o texto guardado de um material não vale para outro', () => {
+  const other = { ...MATERIAL, title: 'Juros compostos', area: 'Economia', summary: [{ concept: 'Montante', text: 'Capital e juros.' }] };
+  for (let i = 0; i < 2; i++) {
+    assert.equal(matches(MATERIAL, 'FOTOSSINTESE', 'Todas'), true, 'a mesma busca na segunda vez');
+    assert.equal(matches(other, 'fotossíntese', 'Todas'), false, 'outro objeto, outro texto');
+    assert.equal(matches(other, 'montante', 'Todas'), true);
+    assert.equal(matches(MATERIAL, 'montante', 'Todas'), false);
+    assert.equal(matches(other, 'montante', 'Escolar'), false, 'o filtro de área continua valendo');
+  }
 });
 
 const NO_TIPS = { key: '', list: [] };

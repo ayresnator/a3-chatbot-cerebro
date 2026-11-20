@@ -8,11 +8,12 @@ import { AREAS } from './lib.js';
 // Página Biblioteca, carregada à parte (App.jsx, lazyView). A lista, a busca e o desfazer continuam no App; aqui só o
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave).
 export default function Biblioteca({
-  rise, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, onExport, onImport, onOpen, onRemove,
+  fade, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, onExport, onImport, onOpen, onRemove,
 }) {
   const picker = useRef(null);
+  // Com a lista de áreas na barra, o painel só esmaece (anim.js, fade).
   return (
-    <m.section className="panel" variants={rise}>
+    <m.section className="panel" variants={fade}>
       <div className="toolbar">
         <label className="search">
           <Icon name="buscar" />

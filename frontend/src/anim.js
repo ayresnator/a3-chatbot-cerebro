@@ -3,9 +3,10 @@
 // depois (entrada = opacidade, 8 px de subida e 4 px de desfoque numa mola sem balanço; saída mais curta e mais
 // discreta), Jhey só nos estados vazios e no fim do baralho e do quiz.
 // Regras deste arquivo: nada que o teclado disparou se move; só transform, opacity e filter; movimento reduzido é só a
-// opacidade, curta, sem deslocamento nem desfoque. O desfoque fica onde ele diz "entrou em foco": o título da página,
-// o que chegou no lugar do esqueleto, a janela e o fim do baralho e do quiz. Os outros blocos só sobem e aparecem
-// (desfocar cada bloco grande pesava no celular e deixava tudo com a mesma entrada).
+// opacidade, curta, sem deslocamento nem desfoque. O desfoque fica só no título da página, onde ele diz "entrou em
+// foco": ele roda no fio principal a cada quadro, e no material que chega, na janela, no fim do baralho e do quiz e no
+// material excluído pesava sem mudar a leitura. Os outros blocos só sobem e aparecem, e o bloco com uma lista de opções
+// (<select>) dentro só esmaece (fade).
 import { flushSync } from 'react-dom';
 import { animate } from 'motion/mini';
 import { stagger } from 'motion/react';
@@ -47,6 +48,9 @@ const rise = (transition, blur = false) => ({
   hidden: { opacity: 0, y: 8, ...(blur && { filter: 'blur(4px)' }) },
   show: { opacity: 1, y: 0, ...(blur && { filter: 'blur(0px)', transitionEnd: { filter: 'none' } }), transition },
 });
+// Bloco com uma lista de opções (<select>) dentro: só esmaece, na mesma mola, sem subir nem crescer. Mover um bloco com
+// uma lista dentro fazia o Chromium recalcular o layout a cada quadro da entrada da página.
+const fade = transition => ({ hidden: { opacity: 0 }, show: { opacity: 1, transition } });
 
 // Página que abre: o m.div da página (view), o título (title) e os outros blocos (rise). A que sai só esmaece por cima
 // da nova, numa mola curta que some logo no começo (AnimatePresence com popLayout a tira do fluxo na hora, e styles.css
@@ -64,22 +68,25 @@ const VIEW = {
   show: { transition: { delayChildren: i => Math.min(i, 1) * 0.04 } },
   exit: still => (still ? gone : { opacity: 0, transition: EXIT_FAST }),
 };
-export const ROUTINE = { view: VIEW, title: rise(SPRING_QUICK, true), rise: rise(SPRING_QUICK) };
+export const ROUTINE = { view: VIEW, title: rise(SPRING_QUICK, true), rise: rise(SPRING_QUICK), fade: fade(SPRING_QUICK) };
 export const OPENING = {
   view: { ...VIEW, show: { transition: { delayChildren: stagger(0.04) } } },
   title: rise(SPRING, true),
   rise: rise(SPRING),
+  fade: fade(SPRING),
 };
-export const CALM = { view: { hidden: {}, show: {}, exit: gone }, title: FADE, rise: FADE };
+export const CALM = { view: { hidden: {}, show: {}, exit: gone }, title: FADE, rise: FADE, fade: FADE };
 
 // Tela Dúvidas (#57, no estilo do Animated AI Chat): o título sobe 10 px, o fio embaixo dele se desenha da esquerda
-// para a direita, a saudação aparece, a caixa cresce de 0,98 e os chips entram em cascata. Vale na abertura da página e
+// para a direita, a saudação aparece, a caixa esmaece e os chips entram em cascata. Vale na abertura da página e
 // quando o herói volta (Nova conversa). Movimento reduzido: só a opacidade, curta, tudo junto.
+// A caixa não cresce: as listas de área e de nível ficam dentro dela (fade, acima). Se ela trocar as listas por chips e
+// um menu, como o editor do Estudar, o crescimento de 0,98 pode voltar.
 export const HERO = {
   title: { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: SPRING } },
   rule: { hidden: { opacity: 0, scaleX: 0 }, show: { opacity: 1, scaleX: 1, transition: { duration: 0.6, delay: 0.2, ease: EASE_OUT } } },
   lead: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.3, delay: 0.1 } } },
-  box: { hidden: { opacity: 0, scale: 0.98 }, show: { opacity: 1, scale: 1, transition: { ...SPRING, delay: 0.05 } } },
+  box: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { ...SPRING, delay: 0.05 } } },
   chips: { hidden: {}, show: { transition: { delayChildren: stagger(0.06, { startDelay: 0.15 }) } } },
   chip: { hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: SPRING_SMALL } },
 };
@@ -104,19 +111,19 @@ export const POP_CALM = {
 export const undoExit = still => (still || reduced() ? gone : { opacity: 0, transition: { duration: 0.08, ease: EASE_OUT } });
 
 // O que estava carregando ficou pronto no mesmo lugar (o material no lugar do esqueleto, a explicação no lugar das
-// linhas): entra em foco, sem subir, porque o lugar já era dele.
+// linhas): esmaece, sem subir, porque o lugar já era dele.
 export const FOCUS = {
-  hidden: { opacity: 0, filter: 'blur(4px)' },
-  show: { opacity: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' }, transition: { duration: 0.3, ease: EASE_OUT } },
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.3, ease: EASE_OUT } },
   exit: still => (still ? gone : { opacity: 0, transition: EXIT_FAST }),
 };
 export const FOCUS_CALM = POP_CALM;
 
 // Fim do baralho e do quiz (Jhey: o único lugar com um pouco de brincadeira): sobe de 0,97 com um balanço curto.
 export const FINALE = {
-  hidden: { opacity: 0, y: 10, scale: 0.97, filter: 'blur(4px)' },
+  hidden: { opacity: 0, y: 10, scale: 0.97 },
   show: {
-    opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' },
+    opacity: 1, y: 0, scale: 1,
     transition: { default: { type: 'spring', duration: 0.5, bounce: 0.2 }, opacity: { duration: 0.25, ease: EASE_OUT } },
   },
 };
@@ -157,17 +164,17 @@ export function flipList(scope, commit) {
 }
 
 // Exclusão com saída marcada (uma saída que importa pode chamar mais atenção que as outras): o item desliza 16 px
-// para a esquerda, desfoca e some em 0,2 s; só então a exclusão acontece e a lista fecha o vão com flipList().
+// para a esquerda e some em 0,2 s; só então a exclusão acontece e a lista fecha o vão com flipList().
 // Se a exclusão não acontecer (o navegador recusou gravar), o item volta.
 export function leave(item, commit) {
   const scope = item?.closest('.panel');
   if (!item || keyboard || reduced()) return flipList(scope, commit);
   item.style.pointerEvents = 'none';
-  animate(item, { opacity: 0, transform: 'translateX(-16px)', filter: 'blur(4px)' }, { duration: 0.2, ease: EASE_IN })
+  animate(item, { opacity: 0, transform: 'translateX(-16px)' }, { duration: 0.2, ease: EASE_IN })
     .then(() => {
       flipList(scope, commit);
       if (!item.isConnected) return;
       item.style.pointerEvents = '';
-      animate(item, { opacity: 1, transform: 'none', filter: 'none' }, { duration: 0.15, ease: EASE_OUT });
+      animate(item, { opacity: 1, transform: 'none' }, { duration: 0.15, ease: EASE_OUT });
     });
 }

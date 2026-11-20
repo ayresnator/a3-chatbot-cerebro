@@ -156,6 +156,8 @@ Entre as informações disponíveis estão:
 
 O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número.
 
+Ao abrir o app e ao importar um backup, o histórico perde as repetições de dias passados: de cada questão do quiz, em cada dia, ficam a primeira resposta e, se ela foi um erro, o primeiro acerto. Os números da tela não mudam, e o histórico ocupa menos espaço no navegador.
+
 ### 8. Biblioteca
 
 Reúne os materiais salvos para consulta posterior.
@@ -235,6 +237,7 @@ a3-chatbot-cerebro/
 │   │   ├── marks.jsx
 │   │   ├── anim.js
 │   │   ├── lib.js
+│   │   ├── exemplos.js
 │   │   ├── styles.css
 │   │   ├── mobile.css
 │   │   └── components/ui/chat-composer.jsx
@@ -279,7 +282,8 @@ a3-chatbot-cerebro/
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
-| `frontend/tests/` | Testes das regras de `lib.js` |
+| `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
+| `frontend/tests/` | Testes das regras de `lib.js` e `exemplos.js` |
 | `frontend/public/` | Arquivos públicos |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
