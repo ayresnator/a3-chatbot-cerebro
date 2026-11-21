@@ -11,7 +11,7 @@ import {
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
-  pretestCards, readSkips, recallStart, recallLine,
+  pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
@@ -1132,8 +1132,10 @@ test('recallStart: nada escrito nem marcado; o bloco abre sozinho até o 2º pul
   assert.deepEqual(recallStart(material), { of: material, tries: ['', ''], pre: 'aberto', shown: {}, marks: {} });
   browser({ 'cerebro-antes-de-ler': '1' });
   assert.equal(recallStart(material).pre, 'aberto', 'um pulo só');
+  assert.equal(pretestOpens(), true, 'o esqueleto da geração desenha o bloco');
   browser({ 'cerebro-antes-de-ler': '2' });
   assert.equal(recallStart(material).pre, null, 'dois pulos seguidos: o bloco fica no botão');
+  assert.equal(pretestOpens(), false);
   try {
     demoStorage(true);
     assert.equal(recallStart(material).pre, 'aberto', 'a demonstração conta os pulos dela');
@@ -1148,6 +1150,29 @@ test('recallLine: o placar do modo lembrar, no singular e no plural; sem tópico
   assert.equal(recallLine([true, false, true, true, false, true]), 'Você lembrou 4 de 6 tópicos.');
   assert.equal(recallLine([false, false]), 'Você lembrou 0 de 2 tópicos.');
   assert.equal(recallLine([]), '');
+});
+
+test('nextSkips: a resposta escrita zera a conta; pular ou fechar em branco soma 1, com o aviso no 2º pulo', () => {
+  assert.deepEqual(nextSkips(1, ['Luz vira energia', '']), { skips: 0, warn: false }, 'um campo escrito basta');
+  assert.deepEqual(nextSkips(0, []), { skips: 1, warn: false }, 'Pular');
+  assert.deepEqual(nextSkips(1, []), { skips: 2, warn: true }, '2º pulo seguido');
+  assert.deepEqual(nextSkips(1, ['', ' \n ']), { skips: 2, warn: true }, '"Ler o resumo" em branco conta como pulo');
+  assert.deepEqual(nextSkips(2, []), { skips: 3, warn: false }, 'o aviso já saiu');
+});
+
+test('markRecall: marca o tópico, troca a marca, e apertar de novo a marca escolhida a tira', () => {
+  const lembrei = markRecall({}, 0, true);
+  assert.deepEqual(lembrei, { 0: true });
+  assert.deepEqual(markRecall(lembrei, 0, false), { 0: false }, 'Não lembrei troca a marca');
+  assert.deepEqual(markRecall({ ...lembrei, 2: false }, 0, true), { 2: false }, 'Lembrei de novo solta a marca');
+  assert.deepEqual(lembrei, { 0: true }, 'não muda as marcas recebidas');
+});
+
+test('shownMarks: o placar conta só os tópicos que a lista "Mostrar" deixa na tela, na ordem', () => {
+  const marks = { 0: true, 2: false, 4: true };
+  assert.deepEqual(shownMarks(marks, 6), [true, false, true]);
+  assert.deepEqual(shownMarks(marks, 3), [true, false], 'os 3 primeiros');
+  assert.deepEqual(shownMarks({}, 6), []);
 });
 
 const EVENT = { kind: 'quiz', ok: true, area: 'Economia', title: 'Inflação', date: at(16) };

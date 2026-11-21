@@ -1967,6 +1967,17 @@ main:focus {
     resize: vertical
 }
 
+/* O bloco a caminho (ui.jsx, SummarySkeleton): cada barra fica numa linha do título, da frase ou do rótulo, que dá a
+   altura; a frase tem 2 linhas, e 4 no celular (mobile.css). */
+.pretest .sk {
+    display: inline-block;
+    vertical-align: middle
+}
+
+.pretest .sk-phone {
+    display: none
+}
+
 .pretest-review {
     margin: var(--sp-3) 0 0;
     padding: 0;
@@ -2712,6 +2723,12 @@ main:focus {
 
 .sk-control {
     height: var(--control-h);
+    border-radius: var(--r-2)
+}
+
+/* O campo de 2 linhas do "Tente responder antes de ler". */
+.sk-area {
+    height: calc(var(--fs-3) * var(--lh-ui) * 2 + var(--sp-2) * 2 + var(--hair) * 2);
     border-radius: var(--r-2)
 }
 
@@ -3835,6 +3852,11 @@ main[data-instant] > .view[data-motion-pop-id] {
        esqueleto da geração. */
     .study-head .link {
         margin-block: calc((1.5rem - var(--control-h)) / 2)
+    }
+
+    /* A vaga da caixa "Esconder o texto" no esqueleto do resumo: a barra do rótulo na linha de 44 px dela. */
+    .sk-check {
+        margin-block: calc((var(--control-h) - .75rem) / 2)
     }
 }
 

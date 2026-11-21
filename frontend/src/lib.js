@@ -148,19 +148,43 @@ export function originNote(summary) {
 // ler" usa as 2 primeiras perguntas dos flashcards do material; com menos de 2 cartões ele não aparece.
 export const pretestCards = flashcards => (flashcards.length >= 2 ? flashcards.slice(0, 2) : []);
 
-// Quantas vezes seguidas o aluno pulou o bloco: a única coisa do resumo ativo gravada no navegador. "Ler o resumo"
-// zera a conta. Valor estragado vale zero.
+// Quantas vezes seguidas o aluno pulou o bloco: a única coisa do resumo ativo gravada no navegador. A resposta escrita
+// zera a conta (nextSkips). Valor estragado vale zero.
 export function readSkips() {
   const skips = read('antes-de-ler', 0);
   return Number.isSafeInteger(skips) && skips > 0 ? skips : 0;
 }
 
+// O bloco abre sozinho até o aluno pulá-lo 2 vezes seguidas; depois fica fechado, no botão "Tentar antes de ler". O
+// esqueleto da geração também pergunta (ui.jsx, SummarySkeleton).
+export const pretestOpens = () => readSkips() < 2;
+
 // O resumo ativo de um material aberto (of), do zero: nada escrito (tries), mostrado (shown) nem marcado (marks, pelo
-// índice do tópico: true em "Lembrei", false em "Não lembrei"). O bloco abre sozinho (pre 'aberto') até o aluno pulá-lo
-// 2 vezes seguidas; depois fica fechado (null), no botão "Tentar antes de ler". 'lido' é o bloco respondido.
+// índice do tópico: true em "Lembrei", false em "Não lembrei"). O bloco começa aberto ('aberto') ou fechado (null), por
+// pretestOpens. 'lido' é o bloco fechado pelo "Ler o resumo".
 export function recallStart(of) {
-  return { of, tries: ['', ''], pre: readSkips() < 2 ? 'aberto' : null, shown: {}, marks: {} };
+  return { of, tries: ['', ''], pre: pretestOpens() ? 'aberto' : null, shown: {}, marks: {} };
 }
+
+// A conta de pulos (before) quando o bloco fecha. tries é o que o aluno escreveu, no "Ler o resumo" (no "Pular", nada):
+// só a resposta escrita zera a conta, e o bloco fechado em branco conta como pulo. warn é o 2º pulo seguido, quando o
+// bloco passa a abrir fechado.
+export function nextSkips(before, tries) {
+  const skips = tries.some(t => t.trim()) ? 0 : before + 1;
+  return { skips, warn: skips === 2 };
+}
+
+// "Lembrei" (ok true) ou "Não lembrei" (false) no tópico i. Os botões são de alternância: apertar de novo a marca
+// escolhida a tira.
+export function markRecall(marks, i, ok) {
+  const next = { ...marks, [i]: ok };
+  if (marks[i] === ok) delete next[i];
+  return next;
+}
+
+// As marcas dos count primeiros tópicos, os que a lista "Mostrar" deixa na tela: os outros não contam no placar.
+export const shownMarks = (marks, count) =>
+  Array.from({ length: count }, (_, i) => marks[i]).filter(ok => ok !== undefined);
 
 // Placar do modo lembrar: marks são os tópicos já marcados, true em "Lembrei" e false em "Não lembrei". Sem tópico
 // marcado não há placar.

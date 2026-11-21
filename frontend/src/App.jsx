@@ -25,7 +25,7 @@ import {
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
-  pretestCards, readSkips, recallStart, recallLine,
+  pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -415,8 +415,9 @@ function App() {
     if (!focusAfter.current) return;
     const [selector, fallback, show, whole] = focusAfter.current;
     focusAfter.current = null;
-    // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova.
-    const last = s => s && [...document.querySelectorAll(s)].pop();
+    // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova. Só a
+    // que está na tela: o focus() num alvo escondido (display none) não pega, e o foco caía no body sem tentar a reserva.
+    const last = s => s && [...document.querySelectorAll(s)].filter(e => e.getClientRects().length).pop();
     // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
     // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
     // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
@@ -898,8 +899,8 @@ function App() {
 
   // "Não entendi, me explique": o tutor responde no lugar do pedido, sem entrar na conversa da página Dúvidas.
   // item é a questão ou o tópico do pedido: a resposta só é desenhada nele, então a que chega depois de o aluno
-  // seguir adiante não aparece em outro lugar. button é o id do botão do pedido.
-  async function explain(item, text, content, button) {
+  // seguir adiante não aparece em outro lugar. back é o seletor do botão do pedido, para onde o foco volta.
+  async function explain(item, text, content, back) {
     if (waiting) return;
     const from = origin(item);
     setWhy({ item });
@@ -915,19 +916,19 @@ function App() {
       setWhy(e.cancelled ? null : { item, error: e });
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
-      if (adrift('.why, .busy')) focusAfter.current = ['#' + button, 'main h1'];
+      if (adrift('.why, .busy')) focusAfter.current = [back, 'main h1'];
       setBusy(null);
     }
   }
 
   // "Ler o resumo" (answered) ou "Pular": o bloco "Tente responder antes de ler" sai, e o foco vai ao primeiro tópico,
   // onde a leitura começa. O que o aluno escreveu fica para o "Confira o que você pensou", no fim do resumo. A resposta
-  // zera a conta de pulos seguidos (lib.js, readSkips), e o pulo a aumenta; no 2º pulo seguido o aviso diz onde o bloco
-  // vai ficar.
+  // escrita zera a conta de pulos seguidos, e o pulo ou o bloco fechado em branco a aumenta (lib.js, nextSkips); no 2º
+  // pulo seguido o aviso diz onde o bloco vai ficar.
   function closePretest(answered) {
     const before = readSkips();
-    const skips = answered ? 0 : before + 1;
-    if (skips !== before && persist('antes-de-ler', skips) && skips === 2) {
+    const { skips, warn } = nextSkips(before, answered ? recall.tries : []);
+    if (skips !== before && persist('antes-de-ler', skips) && warn) {
       toast('Nos próximos resumos o bloco fica fechado, no botão "Tentar antes de ler"');
     }
     setRecall({ ...recall, pre: answered ? 'lido' : null });
@@ -937,9 +938,9 @@ function App() {
   // "Lembrei" ou "Não lembrei" num tópico do modo lembrar: o placar muda no fim da lista, longe do botão, e o leitor de
   // tela o ouve na hora. Nada disso conta no desempenho.
   function markTopic(i, ok) {
-    const marks = { ...recall.marks, [i]: ok };
+    const marks = markRecall(recall.marks, i, ok);
     setRecall({ ...recall, marks });
-    say(recallLine(markedOf(marks)));
+    say(recallLine(shownMarks(marks, topics.length)) || 'Nenhum tópico marcado.');
   }
 
   // "Pedir revisão da IA": a comparação de texto marca errado quem escreve o certo com outras palavras.
@@ -1182,11 +1183,9 @@ function App() {
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
   const topics = size === 'todos' ? summary : summary.slice(0, Number(size));
-  // As perguntas do "Tente responder antes de ler" e as marcas do modo lembrar dos tópicos que estão na lista: os que a
-  // lista "Mostrar" deixa de fora não contam no placar.
+  // As perguntas do "Tente responder antes de ler" e as marcas do modo lembrar dos tópicos que estão na lista.
   const pretest = pretestCards(result?.flashcards || []);
-  const markedOf = marks => topics.map((_, i) => marks[i]).filter(ok => ok !== undefined);
-  const marked = markedOf(recall.marks);
+  const marked = shownMarks(recall.marks, topics.length);
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1685,7 +1684,9 @@ function App() {
                         </div>
                         {tablist(true)}
                         <div role="tabpanel" aria-label={TABS.find(([p]) => p === page)?.[1]}>
-                          {page === 'Resumos' ? <SummarySkeleton /> : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
+                          {page === 'Resumos'
+                            ? <SummarySkeleton pretest={pretestOpens()} />
+                            : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
                         </div>
                       </m.section>
                     ) : !result ? (
@@ -1833,6 +1834,7 @@ function App() {
                                       {hide && (
                                         <button
                                           type="button"
+                                          id={'mostrar-' + i}
                                           className="link reveal"
                                           aria-expanded={!!recall.shown[i]}
                                           onClick={() => setRecall({ ...recall, shown: { ...recall.shown, [i]: !recall.shown[i] } })}
@@ -1864,13 +1866,15 @@ function App() {
                                           ))}
                                         </div>
                                       )}
+                                      {/* O foco volta ao botão do pedido ou, com o tópico escondido durante a espera, ao
+                                          "Mostrar" dele: dos dois, vale o último que está na tela, e o "Mostrar" vem antes. */}
                                       {API_BASE && (
                                         <div className="ai-ask">
                                           <button
                                             type="button"
                                             id={'explicar-' + i}
                                             aria-disabled={waiting || undefined}
-                                            onClick={() => explain(s, whyTopic(s.concept), s.text, 'explicar-' + i)}
+                                            onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #explicar-' + i)}
                                           >
                                             Não entendi, me explique <small>1 chamada de IA</small>
                                           </button>
@@ -2242,7 +2246,7 @@ function App() {
                                         type="button"
                                         id="explicar-questao"
                                         aria-disabled={waiting || undefined}
-                                        onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation, 'explicar-questao')}
+                                        onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation, '#explicar-questao')}
                                       >
                                         Não entendi, me explique <small>1 chamada de IA</small>
                                       </button>
