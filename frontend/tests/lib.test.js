@@ -1610,6 +1610,18 @@ test('demoStorage: a demonstração lê à parte, com o prefixo cerebro-demo-, e
   assert.equal(readDraft().input, 'Texto do app com IA');
 });
 
+test('storageKey: o "Fundo animado" é do aparelho, e a demonstração lê a mesma chave do app com IA', () => {
+  browser({ 'cerebro-fundo': 'false', 'cerebro-demo-fundo': 'true' });
+  try {
+    demoStorage(true);
+    assert.equal(storageKey('fundo'), 'cerebro-fundo');
+    assert.equal(read('fundo', true), false, 'as ondas paradas no app com IA continuam paradas na demonstração');
+  } finally {
+    demoStorage(false);
+  }
+  assert.equal(storageKey('fundo'), 'cerebro-fundo');
+});
+
 test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {
   assert.equal(newId([], 1000), 1000);
   assert.equal(newId([{ id: 5 }, { id: 9 }], 1000), 1000);
