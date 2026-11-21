@@ -269,6 +269,13 @@ export function readUser() {
   return isText(user?.name) ? user : null;
 }
 
+// "Escrever antes de virar", nos Flashcards: a escolha gravada no navegador. Sem escolha, ou com uma que não é sim nem
+// não, o campo começa ligado no computador e desligado na tela de toque, onde digitar pesa mais.
+export function readWriteFirst(touch) {
+  const on = read('escrever', null);
+  return typeof on === 'boolean' ? on : !touch;
+}
+
 // Rascunho do que estava aberto (editor, material, conversa), gravado a cada mudança para sobreviver a um F5.
 // Vale primeiro o desta aba (sessionStorage): com o app aberto em duas abas, o F5 traz o texto da própria aba, e não o
 // da última que gravou. Aba nova ainda não tem o seu e abre com o último gravado (localStorage).
@@ -840,6 +847,17 @@ export function deckSummary(deck) {
   const missed = deckMissed(deck).length;
   return cards + (cards === 1 ? ' cartão revisado; ' : ' cartões revisados; ') +
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
+}
+
+// Lembrete embaixo do "Você escreveu", com o cartão virado.
+export const CARD_REMINDER = 'Conte como acerto só se você disse o essencial.';
+
+// O que a região fixa diz ao virar o cartão (toAnswer: para a resposta). Com o que o aluno escreveu na tela (wrote), a
+// resposta vem com o lembrete: o foco não passa por ele. A resposta sem ponto final ganha um, para a pausa antes dele.
+export function spokenCard(card, toAnswer, wrote) {
+  if (!toAnswer) return 'Pergunta: ' + card.question;
+  const text = 'Resposta: ' + card.answer.trim();
+  return wrote ? text + (/[.!?…]$/.test(text) ? ' ' : '. ') + CARD_REMINDER : text;
 }
 
 // Revisão espaçada dos cartões, nas caixas de Leitner: cada cartão avaliado fica em cerebro-cartoes como { key, title,

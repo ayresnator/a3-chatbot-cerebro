@@ -2165,6 +2165,8 @@ main:focus {
     color: var(--ink)
 }
 
+/* A folga em cima vale quando o cartão sobe para o topo da janela (App.jsx, turnCard): o anel do foco fica inteiro, e
+   voltar à pergunta não faz a âncora de rolagem do navegador puxar a página 16 px. */
 .flashcard {
     --press: .99;
     flex-direction: column;
@@ -2176,7 +2178,14 @@ main:focus {
     border-radius: var(--r-3);
     background: var(--panel);
     font-weight: 400;
-    text-align: center
+    text-align: center;
+    scroll-margin-top: var(--sp-2)
+}
+
+/* Os filhos do cartão ficam fora da âncora de rolagem: com a resposta longa, o texto centralizado virava a âncora, e
+   voltar à pergunta puxava a página 31 px (683x312 com zoom de 200%). O topo do cartão não se mexe e fica de âncora. */
+.flashcard > * {
+    overflow-anchor: none
 }
 
 /* Sob o ponteiro, o vidro elevado: um tom acima. */
@@ -2216,6 +2225,67 @@ main:focus {
 
 .verdicts .primary .icon {
     color: var(--on-accent)
+}
+
+/* Virado o cartão, o texto inteiro do campo logo abaixo da resposta, com o lembrete embaixo. */
+.card-wrote {
+    max-width: var(--measure);
+    margin-top: var(--sp-4);
+    line-height: var(--lh-read)
+}
+
+.card-wrote .hint {
+    margin: var(--sp-1) 0 0
+}
+
+/* Campo "Sua resposta", entre o cartão e os botões de avaliação, com o rótulo em cima, como no perfil. Virado o cartão,
+   ele fica só para leitura e sem o fundo de campo; quem diz isso é o texto ("Você escreveu", ou o exemplo do campo
+   vazio). A borda continua a de campo: ele ainda recebe o foco, e com a do campo desligado ficava abaixo de 3:1. */
+.card-form {
+    display: grid;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4)
+}
+
+.card-form label {
+    width: fit-content;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650
+}
+
+.card-form input:read-only {
+    background: none
+}
+
+/* "Escrever antes de virar": a caixa do sistema, no ciano do app, centrada embaixo dos botões. O rótulo inteiro é o
+   alvo: 36 px, e 44 px no toque. */
+.write-first {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: fit-content;
+    min-height: var(--control-h-inline);
+    margin: 0 auto;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    cursor: pointer
+}
+
+.write-first input {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+    cursor: pointer
+}
+
+@media (pointer: coarse) {
+    .write-first {
+        min-height: var(--control-h)
+    }
 }
 
 .quiz-question {

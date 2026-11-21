@@ -6,7 +6,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  chatSubject, capText,
+  chatSubject, capText, readWriteFirst, spokenCard, CARD_REMINDER,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
@@ -1594,6 +1594,41 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
   }
   browser({});
   assert.equal(readUser(), null);
+});
+
+test('readWriteFirst: vale a escolha gravada; sem ela, o campo vem ligado no computador e desligado no toque', () => {
+  for (const touch of [false, true]) {
+    browser({ 'cerebro-escrever': 'true' });
+    assert.equal(readWriteFirst(touch), true);
+    browser({ 'cerebro-escrever': 'false' });
+    assert.equal(readWriteFirst(touch), false);
+    for (const raw of ['"sim"', '"false"', '1', '0', '[]', '{}', 'null', '{"on":']) {
+      browser({ 'cerebro-escrever': raw });
+      assert.equal(readWriteFirst(touch), !touch, raw);
+    }
+    browser({});
+    assert.equal(readWriteFirst(touch), !touch, 'nada gravado');
+  }
+  // Na demonstração a escolha é outra chave: a do app com IA não vale lá.
+  browser({ 'cerebro-escrever': 'false' });
+  demoStorage(true);
+  try {
+    assert.equal(readWriteFirst(false), true);
+  } finally {
+    demoStorage(false);
+  }
+});
+
+test('spokenCard: a face nova do cartão e, com o que o aluno escreveu, o lembrete junto da resposta', () => {
+  const card = { question: 'O que é um algoritmo?', answer: 'Uma sequência de passos.' };
+  assert.equal(spokenCard(card, false, true), 'Pergunta: O que é um algoritmo?');
+  assert.equal(spokenCard(card, true, false), 'Resposta: Uma sequência de passos.');
+  assert.equal(spokenCard(card, true, true), 'Resposta: Uma sequência de passos. ' + CARD_REMINDER);
+  assert.equal(CARD_REMINDER, 'Conte como acerto só se você disse o essencial.');
+  // Sem ponto no fim, a resposta ganha um antes do lembrete; com outro sinal, fica como está.
+  assert.equal(spokenCard({ ...card, answer: 'Passos em ordem ' }, true, true),
+    'Resposta: Passos em ordem. ' + CARD_REMINDER);
+  assert.equal(spokenCard({ ...card, answer: 'Sim!' }, true, true), 'Resposta: Sim! ' + CARD_REMINDER);
 });
 
 const NO_DRAFT = {
