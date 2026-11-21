@@ -2137,6 +2137,12 @@ main:focus {
     scroll-margin-top: var(--sp-2)
 }
 
+/* Os filhos do cartão ficam fora da âncora de rolagem: com a resposta longa, o texto centralizado virava a âncora, e
+   voltar à pergunta puxava a página 31 px (683x312 com zoom de 200%). O topo do cartão não se mexe e fica de âncora. */
+.flashcard > * {
+    overflow-anchor: none
+}
+
 /* Sob o ponteiro, o vidro elevado: um tom acima. */
 .flashcard:hover:not(:disabled) {
     background: var(--raised)
