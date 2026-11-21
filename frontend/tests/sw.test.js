@@ -1,10 +1,13 @@
-// Testes do service worker do modo estudo (#85): o sw.js que o build monta (vite.config.js, serviceWorker) e o que o
-// molde (sw-molde.js) faz, rodando num service worker de mentira, sem navegador.
+// Testes do service worker do modo estudo (#85): o sw.js que o build monta (vite.config.js, studyWorker e serviceWorker)
+// e o que o molde (sw-molde.js) faz, rodando num service worker de mentira, sem navegador.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { serviceWorker } from '../vite.config.js';
+import { serviceWorker, studyWorker } from '../vite.config.js';
 
 const MOLDE = readFileSync(new URL('../sw-molde.js', import.meta.url), 'utf8');
 // [nome no dist, conteúdo]: os do build (o pdf.js também) e os de public/.
@@ -95,6 +98,27 @@ test('service worker: a lista leva o index.html, os arquivos do build e os de pu
   ]);
 });
 
+test('service worker: o plugin do build junta os arquivos dele e os de public/, das subpastas também', t => {
+  const pub = mkdtempSync(path.join(tmpdir(), 'cerebro-public-'));
+  t.after(() => rmSync(pub, { recursive: true, force: true }));
+  mkdirSync(path.join(pub, 'icones'));
+  for (const name of ['config.js', 'manifest.webmanifest', 'icone-192.png', 'icones/icone-512.png']) {
+    writeFileSync(path.join(pub, name), name);
+  }
+  const plugin = studyWorker();
+  plugin.configResolved({ root: fileURLToPath(new URL('..', import.meta.url)), publicDir: pub });
+  const emitted = [];
+  plugin.generateBundle.call({ emitFile: file => emitted.push(file) }, {}, {
+    'index.html': { type: 'asset', fileName: 'index.html', source: '<html>' },
+    'assets/index-a1.js': { type: 'chunk', fileName: 'assets/index-a1.js', code: 'app' },
+    'assets/pdf.min-c3.js': { type: 'chunk', fileName: 'assets/pdf.min-c3.js', code: 'pdf' },
+  });
+  assert.deepEqual(emitted.map(file => file.fileName), ['sw.js']);
+  assert.deepEqual(listOf(emitted[0].source), [
+    'assets/index-a1.js', 'config.js', 'icone-192.png', 'icones/icone-512.png', 'index.html', 'manifest.webmanifest',
+  ]);
+});
+
 test('service worker: a versão sai do conteúdo de todos os arquivos, o pdf.js também, e não da ordem', () => {
   const version = files => versionOf(serviceWorker(MOLDE, files));
   const base = version(FILES);
@@ -126,6 +150,9 @@ test('service worker: a ativação apaga os caches velhos do Cérebro e deixa os
 
 test('service worker: só o "Atualizar" liga a versão nova', async () => {
   const sw = boot(serviceWorker(MOLDE, FILES), NET);
+  // Nem a instalação nem a ativação a ligam sozinhas: a página aberta seguiria com o código velho e o cache novo.
+  await sw.install();
+  await sw.activate();
   await sw.message('outra coisa');
   assert.equal(sw.skipped, false);
   await sw.message('atualizar');

@@ -19,7 +19,7 @@ export function serviceWorker(molde, files) {
 }
 
 // Grava o sw.js no build, depois do index.html e do CSS (enforce: 'post'). O app só o registra no modo estudo.
-function studyWorker() {
+export function studyWorker() {
   let config;
   return {
     name: 'cerebro-sw',

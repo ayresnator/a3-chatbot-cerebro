@@ -371,7 +371,7 @@ O que muda:
 
 - O cabeçalho mostra "Modo estudo · sem IA".
 - Os botões de gerar só organizam o texto por frases, como na demonstração, e a página Estudar diz isso. O Dúvidas não responde: as respostas precisam do computador com a IA.
-- Resumo, flashcards, quiz, caderno de erros, simulado, Desempenho e Biblioteca funcionam como no computador. O material que veio do app com IA continua com o aviso da IA.
+- Resumo, flashcards, quiz, caderno de erros, simulado, Desempenho e Biblioteca funcionam como no computador. O material que veio do app com IA continua com o aviso da IA. O quiz do caderno de erros, o simulado e a revisão do dia também mostram o aviso, salvo quando todas as questões ou cartões vêm de materiais organizados no celular.
 - Os dados são de verdade e ficam no navegador do celular, nas mesmas chaves do app com IA e no formato do backup.
 
 Para levar os materiais e trazer o progresso de volta:
@@ -381,7 +381,7 @@ Para levar os materiais e trazer o progresso de volta:
 3. No celular, na Biblioteca, toque em "Importar" e escolha o arquivo.
 4. Para trazer o desempenho e o caderno de erros de volta, faça o caminho contrário: "Exportar" no celular e "Importar" no computador. Importar não duplica o que já existe.
 
-Depois da primeira visita, o app abre sem internet; o leitor de PDF do "Abrir arquivo" fica guardado no primeiro PDF aberto. Para pôr o app na tela inicial: no Android, no Chrome, menu ⋮ > "Instalar app"; no iPhone, no Safari, Compartilhar > "Adicionar à Tela de Início". Instale: no iPhone, o Safari apaga os dados de um site que não está na tela inicial depois de 7 dias sem uso. O modo estudo pede ao navegador para não apagar os dados sozinho, mas quem decide é o navegador: faça backup com frequência. Quando sai uma versão nova, um aviso oferece "Atualizar"; até o clique, o app continua na versão de antes.
+Depois da primeira visita, o app abre sem internet; o leitor de PDF do "Abrir arquivo" chega pela internet no primeiro PDF aberto e depois fica guardado. Para pôr o app na tela inicial: no Android, no Chrome, menu ⋮ > "Instalar app"; no iPhone, no Safari, Compartilhar > "Adicionar à Tela de Início". Instale: no iPhone, o Safari apaga os dados de um site que não está na tela inicial depois de 7 dias sem uso. O modo estudo pede ao navegador para não apagar os dados sozinho, mas quem decide é o navegador: faça backup com frequência. Quando sai uma versão nova, um aviso oferece "Atualizar"; até o clique, ou até o app ser fechado em todas as abas, ele continua na versão de antes.
 
 Para conferir no computador, monte o mesmo build do fluxo de publicação e sirva a pasta `dist`:
 
@@ -389,10 +389,10 @@ Para conferir no computador, monte o mesmo build do fluxo de publicação e sirv
 cd frontend
 npx vite build --base ./
 Set-Content dist\config.js "window.CEREBRO_CONFIG = { demo: false, apiBaseUrl: '', semIA: true };"
-python -m http.server 4173 -d dist
+python -m http.server 4180 -d dist
 ```
 
-Abra **http://localhost:4173**, de preferência no Chrome com a largura de um celular. No Windows, o `http.server` do Python às vezes recusa conexões quando o navegador pede muitos arquivos de uma vez; se o app não abrir sem internet depois da primeira visita, recarregue a página uma vez com o servidor ligado. `npm run dev` e `?demo` não usam o modo estudo nem o service worker.
+Abra **http://localhost:4180**, de preferência no Chrome com a largura de um celular. No Windows, o `http.server` do Python às vezes recusa conexões quando o navegador pede muitos arquivos de uma vez; se o app não abrir sem internet depois da primeira visita, recarregue a página uma vez com o servidor ligado. A porta não é a 4173 do `npm run preview` porque o service worker fica registrado no endereço e continuaria a abrir o modo estudo, do cache, no lugar de outro app servido nele. Ao terminar, tire-o: F12 > Aplicativo > Service workers > "Cancelar registro". `npm run dev` não usa o modo estudo nem o service worker. `?demo` não registra o service worker, mas abre do cache dele depois que a página principal o registrou.
 
 **Publicar.** O fluxo `.github/workflows/publicar.yml` monta esse build e o publica no GitHub Pages. Ele só roda quando alguém o dispara à mão, e hoje nada está publicado. Publicar é decisão do dono do repositório, em dois passos:
 

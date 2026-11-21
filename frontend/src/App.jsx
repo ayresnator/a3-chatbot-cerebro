@@ -27,7 +27,7 @@ import {
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote, findSource, textOrigin,
+  originNote, virtualNote, findSource, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
@@ -398,6 +398,16 @@ function App() {
       document.removeEventListener('visibilitychange', back);
       sw.removeEventListener('controllerchange', reload);
     };
+  }, []);
+
+  // A demonstração do build do modo estudo não registra o service worker, mas abre do cache dele: com o "Atualizar" de
+  // outra aba, ela também recarrega na versão nova, e não pede depois um arquivo que já saiu do cache.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!DEMO || CONFIG.semIA !== true || !sw) return;
+    const reload = () => window.location.reload();
+    sw.addEventListener('controllerchange', reload);
+    return () => sw.removeEventListener('controllerchange', reload);
   }, []);
 
   // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
@@ -1781,7 +1791,9 @@ function App() {
                 <m.div className="page-head" variants={titleIn}>
                   <h1 className="page-title" tabIndex={-1}>{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
-                    <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                    <p className="lead">
+                      Cole o texto da aula{API_BASE && ' ou escreva um tema'}, escolha a área e o nível e gere o material.
+                    </p>
                   )}
                 </m.div>
               )}
@@ -1811,6 +1823,7 @@ function App() {
                       cost={cost}
                       reason={capNote ? 'aviso-ia' : undefined}
                       onFile={openFile}
+                      topic={!!API_BASE}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -2080,9 +2093,11 @@ function App() {
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
                                 O dos outros diz de onde ele veio (lib.js, originNote). No modo estudo, o material
-                                temporário leva o aviso quando algum material deste aparelho veio da IA, pelo backup. */}
+                                temporário leva o aviso, a menos que cada item venha de material feito no aparelho
+                                (lib.js, virtualNote). */}
                             {result.virtual
-                              ? aiNote || (SEM_IA && [opened, ...saved].some(s => s && s.semIA !== true) &&
+                              ? aiNote || (SEM_IA &&
+                                virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
                                 <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>

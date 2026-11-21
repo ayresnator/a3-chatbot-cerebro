@@ -192,6 +192,16 @@ export function originNote(summary) {
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
 }
 
+// O material temporário do modo estudo (o quiz do caderno de erros, o simulado, a revisão do dia) leva o aviso da IA?
+// Sim, a menos que cada questão ou cartão venha, pelo título que traz, de material do aparelho com a marca semIA. A
+// questão de material excluído, ou de um título que um material da IA também tem, leva o aviso.
+export function virtualNote(items, materials) {
+  return items.some(item => {
+    const from = materials.filter(m => m?.title === item.title);
+    return !from.length || from.some(m => m.semIA !== true);
+  });
+}
+
 // De onde veio o texto do material, na mesma ordem do aviso: 'ia' (algum trecho do exemplo escrito pela IA), 'pronto'
 // (de um exemplo pronto) ou '' (do aluno). A janela "Ver no texto" põe isso no título, e o texto levado de volta ao
 // editor continua valendo como exemplo (App.jsx, textToEditor).
