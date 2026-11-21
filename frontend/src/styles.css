@@ -1890,6 +1890,11 @@ main:focus {
     font-size: var(--fs-2)
 }
 
+/* "Ver no texto", embaixo do trecho: a palavra alinhada ao texto dele, depois do fio. */
+.source-link {
+    margin: calc(var(--sp-2) * -1) 0 0 calc(var(--sp-3) + var(--hair) - var(--sp-2))
+}
+
 /* Etiqueta do tópico que não saiu do texto do aluno. */
 .ai-tag {
     display: inline-flex;
@@ -3722,6 +3727,56 @@ main[data-instant] > .view[data-motion-pop-id] {
     margin-top: var(--sp-2)
 }
 
+/* Janela "Ver no texto": na medida de leitura e, no máximo, na altura da janela do navegador. Só o texto rola; o título,
+   a nota e o botão ficam à vista. */
+.source-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    width: min(calc(var(--measure) + var(--sp-6) * 2), calc(100vw - 2rem))
+}
+
+.source-dialog .dialog-body {
+    min-height: 0
+}
+
+.source-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.source-dialog p {
+    color: var(--ink-2)
+}
+
+/* O texto como foi enviado, com as quebras de linha e os espaços dele. */
+.source-text {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--field);
+    line-height: var(--lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+}
+
+/* O trecho do tópico: fundo ciano fraco e sublinhado, que continua dizendo "é aqui" sem a cor. */
+.source-text mark {
+    border-radius: var(--r-0);
+    background: var(--accent-off);
+    color: var(--ink-hi);
+    text-decoration: underline var(--underline) var(--accent);
+    text-underline-offset: var(--underline-gap);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone
+}
+
+.source-dialog .dialog-body > button:last-child {
+    align-self: flex-start
+}
+
 .profile-dialog .chip {
     align-self: flex-start
 }
@@ -3927,8 +3982,18 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: HighlightText
     }
 
-    /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
-    .chip[aria-checked=true]:focus-visible {
+    /* O trecho marcado da janela "Ver no texto", com o sublinhado na cor do texto. */
+    .source-text mark {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+        text-decoration-color: currentColor
+    }
+
+    /* O anel do chip marcado e o do trecho marcado ficam fora deles, sobre o Canvas: o ciano do foco sumia no tema
+       claro. */
+    .chip[aria-checked=true]:focus-visible,
+    .source-text mark:focus-visible {
         outline-color: CanvasText
     }
 

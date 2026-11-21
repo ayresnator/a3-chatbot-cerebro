@@ -10,7 +10,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
-  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
+  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, textOrigin,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
 } from '../src/lib.js';
@@ -1212,6 +1212,78 @@ test('inText: a regra da tela acha os 64 trechos que o backend manteve na rodada
   for (const [source, content] of pairs) assert.equal(inText(source, content), true, source);
 });
 
+// A parte do texto que findSource marca.
+const markedPart = (text, source) => {
+  const range = findSource(text, source);
+  return range && text.slice(...range);
+};
+
+test('findSource: acha o trecho sem ligar para maiúsculas, acentos, espaços e quebras de linha, e marca o original', () => {
+  const shy = String.fromCodePoint(0xad);
+  const text = 'A fotossíntese é o processo\npelo qual  plantas trans' + shy + 'formam energia luminosa.';
+  assert.deepEqual(findSource(text, 'FOTOSSINTESE é o processo pelo qual'), [2, 37]);
+  assert.equal(markedPart(text, 'FOTOSSINTESE é o processo pelo qual'), 'fotossíntese é o processo\npelo qual');
+  assert.equal(markedPart(text, 'pelo qual plantas transformam'), 'pelo qual  plantas trans' + shy + 'formam');
+  assert.equal(markedPart(text, ' energia luminosa.\n'), 'energia luminosa.');
+  // Acento em dois caracteres (letra e acento solto): a marca leva o acento junto com a letra.
+  const [acute, tilde] = [0x301, 0x303].map(c => String.fromCodePoint(c));
+  const loose = 'cafe' + acute + ' com pa' + tilde + 'o';
+  assert.equal(markedPart('Tomei ' + loose + '.', 'CAFÉ COM PÃO'), loose);
+  // O trecho que acaba antes do acento solto ou do hífen invisível (o backend corta em 200 pontos de código): a marca
+  // leva os dois junto com a última letra.
+  assert.equal(markedPart('Tomei ' + loose + '.', 'Tomei cafe'), 'Tomei cafe' + acute);
+  assert.equal(markedPart('A fotos' + shy + 'síntese usa luz.', 'A fotos'), 'A fotos' + shy);
+});
+
+test('findSource e inText: ligaduras de texto copiado de PDF e o ß valem as letras comuns, como no casefold do backend', () => {
+  const text = 'A deﬁnição de eﬁciência mede o ﬂuxo de trabalho da equipe em um período.';
+  const source = 'A definição de eficiência mede o fluxo de trabalho';
+  assert.equal(inText(source, text), true);
+  assert.equal(markedPart(text, source), 'A deﬁnição de eﬁciência mede o ﬂuxo de trabalho');
+  assert.equal(markedPart('Die Straße ist lang.', 'STRASSE'), 'Straße');
+  assert.equal(inText('strasse', 'DIE STRAẞE'), true);
+  assert.equal(inText('A eﬁciência', 'A eficiência da equipe'), true);
+});
+
+test('findSource: aspas e ponto que o modelo pôs nas pontas não precisam estar no texto, como no backend', () => {
+  const text = 'O IPCA mede a inflação oficial do país, e a Selic é a taxa básica de juros';
+  assert.equal(markedPart(text, '"O IPCA mede a inflação oficial do país."'), 'O IPCA mede a inflação oficial do país');
+  assert.equal(markedPart(text, '“a Selic é a taxa básica de juros.”'), 'a Selic é a taxa básica de juros');
+  assert.equal(markedPart(text, '«a Selic é a taxa básica de juros…»'), 'a Selic é a taxa básica de juros');
+  // Pontuação no meio do trecho continua tendo de bater.
+  assert.equal(findSource(text, 'O IPCA mede a inflação oficial. Do país'), null);
+});
+
+test('findSource: o trecho cortado em 200 caracteres pelo backend é achado, até com meio emoji no fim', () => {
+  const sentence = 'Na fase clara da fotossíntese, ' + 'a água é decomposta e libera oxigênio, '.repeat(6) + 'com 🌱 no fim.';
+  const text = 'Começo do texto. ' + sentence + ' Fim.';
+  assert.ok(sentence.length > 200);
+  assert.equal(markedPart(text, sentence.slice(0, 200)), sentence.slice(0, 200).trim());
+  const half = sentence.slice(0, sentence.indexOf('🌱') + 1);
+  assert.equal(markedPart(text, half), half.slice(0, -1).trim());
+});
+
+test('findSource: trecho que não está no texto, vazio ou ausente dá null', () => {
+  const text = 'A clorofila absorve a luz solar nos cloroplastos.';
+  for (const source of ['A clorofila reflete a luz verde', '', '   ', '\n', '"."', null, undefined]) {
+    assert.equal(findSource(text, source), null, JSON.stringify(source));
+  }
+  assert.equal(findSource('', 'A clorofila'), null);
+  assert.equal(findSource(null, 'A clorofila'), null);
+});
+
+test('findSource: os 64 trechos da rodada real são achados no texto de cada caso, e a marca é o próprio trecho', () => {
+  const round = JSON.parse(readFileSync(new URL('../../docs/avaliacao-2026-11-17.json', import.meta.url), 'utf8'));
+  const pairs = round.cases
+    .filter(c => c.kind === 'generate' && c.output)
+    .flatMap(c => c.output.summary.filter(s => s.source).map(s => [s.source, c.input.content]));
+  assert.equal(pairs.length, 64);
+  for (const [source, content] of pairs) {
+    const part = markedPart(content, source);
+    assert.ok(part && inText(source, part) && inText(part, source), source);
+  }
+});
+
 test('originNote: o aviso do material diz de onde ele veio', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
@@ -1225,6 +1297,15 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
   assert.equal(originNote([own, { ...own, pronto: true }, none]),
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('textOrigin: o texto do material é do exemplo da IA, de um exemplo pronto ou do aluno, na ordem do aviso', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
+  assert.equal(textOrigin([own, none]), '');
+  assert.equal(textOrigin([own, { ...own, pronto: true }, { ...own, ia: true }]), 'ia');
+  assert.equal(textOrigin([own, { ...own, pronto: true }]), 'pronto');
+  assert.equal(textOrigin(demo(EXAMPLE).summary), '', 'demonstração sem a marca do exemplo');
 });
 
 test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pronto, e o resto fica como veio', () => {
@@ -1376,6 +1457,12 @@ test('readDraft: o exemplo da IA e o pronto voltam em texto de até 20.000 carac
     const marked = broken(m => Object.assign(m.summary[0], { source: 'A clorofila absorve a luz', [mark]: true }));
     assert.deepEqual(draft({ result: marked }).result, marked, mark);
   }
+});
+
+test('readDraft: o material aberto volta com o texto de onde saiu; texto acima do limite tira o material', () => {
+  const result = { ...DRAFT.result, texto: 'Inflação é o aumento contínuo e generalizado dos preços.' };
+  assert.deepEqual(draft({ result }).result, result);
+  assert.equal(draft({ result: { ...result, texto: 'a'.repeat(20001) } }).result, null);
 });
 
 test('readDraft: área e nível só valem se forem da lista', () => {
@@ -1685,6 +1772,15 @@ test('validMaterial: área e nível, quando existem, são texto', () => {
   for (const value of [{}, [], 5, true]) {
     assert.equal(validMaterial({ ...GOOD, area: value }), false, 'area = ' + JSON.stringify(value));
     assert.equal(validMaterial({ ...GOOD, level: value }), false, 'level = ' + JSON.stringify(value));
+  }
+});
+
+test('validMaterial: o texto do material, quando existe, é texto de até 20.000 caracteres', () => {
+  assert.equal(validMaterial({ ...GOOD, texto: EXAMPLE }), true);
+  assert.equal(validMaterial({ ...GOOD, texto: 'a'.repeat(20000) }), true);
+  assert.equal(validMaterial({ ...GOOD, texto: null }), true, 'material de antes do campo continua valendo');
+  for (const value of ['a'.repeat(20001), 5, true, {}, ['texto']]) {
+    assert.equal(validMaterial({ ...GOOD, texto: value }), false, 'texto = ' + JSON.stringify(value).slice(0, 30));
   }
 });
 
@@ -2077,6 +2173,23 @@ test('readBackup: material da demonstração mantém a marca semIA, e o de um ex
     { concept: 'Calvin', text: 'Fixa o carbono.', source: 'o gás carbônico é fixado', pronto: true },
   ];
   assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [fromDemo, fromExample] })).saved, [fromDemo, fromExample]);
+});
+
+test('readBackup: o material entra com o texto de onde saiu; com texto acima do limite fica de fora e é contado', () => {
+  const withText = { ...BACKUP.saved[0], texto: EXAMPLE };
+  const tooLong = { ...withText, id: 2, texto: 'a'.repeat(20001) };
+  const got = readBackup(JSON.stringify({ ...BACKUP, saved: [withText, tooLong] }));
+  assert.deepEqual(got.saved, [withText]);
+  assert.deepEqual(got.fora, { ...NONE, saved: 1 });
+});
+
+test('readBackup: o arquivo de exemplo da janela "Ver no texto" traz um material com o texto e os trechos nele', () => {
+  const file = readFileSync(new URL('./fixtures/material-com-texto.json', import.meta.url), 'utf8');
+  const { saved, fora } = readBackup(file);
+  assert.deepEqual(fora, NONE);
+  assert.equal(saved.length, 1);
+  const { texto, summary } = saved[0];
+  assert.ok(summary.length > 0 && summary.every(s => findSource(texto, s.source)));
 });
 
 test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 1 não são backup', () => {

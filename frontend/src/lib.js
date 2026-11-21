@@ -89,11 +89,14 @@ const validQuestion = q =>
 // Confere o formato de um material antes de ele ir para a tela. O que vem do navegador (biblioteca, rascunho) pode
 // estar estragado: um material sem summary deixava a tela branca. Só o título precisa ter texto: material gravado
 // por versão antiga pode ter item em branco. source e steps são opcionais: material antigo não tem.
-// area e level também são opcionais, mas, se vierem, são texto: a tela os escreve no cabeçalho do material.
+// area e level também são opcionais, mas, se vierem, são texto: a tela os escreve no cabeçalho do material. texto, o
+// texto de onde o material saiu (a janela "Ver no texto"), também: material de antes dele não tem; se vier, é texto de
+// até 20.000 caracteres, o limite do editor.
 export function validMaterial(m) {
   const filled = (list, ok) => Array.isArray(list) && list.length > 0 && list.every(item => !!item && ok(item));
   const optional = v => v == null || isText(v);
   return !!m && isText(m.title) && m.title.trim() !== '' && optional(m.area) && optional(m.level) &&
+    (m.texto == null || (isText(m.texto) && m.texto.length <= MAX_INPUT)) &&
     filled(m.summary, s => isText(s.concept) && isText(s.text) && optional(s.source)) &&
     filled(m.flashcards, c => isText(c.question) && isText(c.answer)) &&
     filled(m.quiz, validQuestion);
@@ -119,8 +122,53 @@ export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu mate
 // backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend os tira do texto antes de
 // conferir (models.py, visible), e o exemplo guardado na tela pode tê-los.
 export function inText(source, text) {
-  const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
-  return !!plain(source) && plain(text).includes(plain(source));
+  const needle = comparable(source).form;
+  return !!needle && comparable(text).form.includes(needle);
+}
+
+// A forma de comparar do inText, montada letra a letra para guardar, de cada letra dela, onde começa e onde termina o
+// caractere do texto original que a deu. O acento solto (letra e acento em dois caracteres) e o invisível colados a uma
+// letra entram no fim dela: a marca não corta a letra do acento.
+function comparable(text) {
+  let form = '';
+  const spans = [];
+  let at = 0;
+  let gap = false;
+  for (const ch of String(text ?? '')) {
+    const end = at + ch.length;
+    // Invisível (Cf) e metade de emoji cortado (Cs) não contam; o espaço só vale entre duas letras. A volta pelas
+    // maiúsculas desfaz as ligaduras de texto copiado de PDF (ﬁ, ﬂ) e o ß, como o casefold do backend.
+    const folded = /[\p{Cf}\p{Cs}]/u.test(ch) ? '' : /\s/.test(ch) ? ' ' : fold(fold(ch).toLocaleUpperCase('pt-BR'));
+    if (folded === ' ') {
+      gap = form !== '';
+    } else if (folded) {
+      if (gap) spans.push([at, at]);
+      form += (gap ? ' ' : '') + folded;
+      for (let i = 0; i < folded.length; i++) spans.push([at, end]);
+      gap = false;
+    } else if (spans.length && !gap) {
+      spans[spans.length - 1][1] = end;
+    }
+    at = end;
+  }
+  return { form, spans };
+}
+
+// Pontas que o modelo põe no trecho sem estarem no texto (main.py, grounded).
+const EDGES = /^[\s.,;:…"'“”‘’«»]+|[\s.,;:…"'“”‘’«»]+$/g;
+
+// Onde o trecho do tópico está no texto do material, pela regra do inText e do backend (main.py, plain e grounded): sem
+// maiúsculas, sem acentos, sem os invisíveis e com os espaços em sequência e as quebras de linha reduzidos a um. Trecho
+// que não existe como veio vale sem as pontas de pontuação e aspas, como no backend. Devolve [início, fim] no texto
+// original, a parte que a janela "Ver no texto" marca (App.jsx), ou null se o trecho não está lá.
+export function findSource(text, source) {
+  const { form, spans } = comparable(text);
+  for (const piece of [source, String(source ?? '').replace(EDGES, '')]) {
+    const needle = comparable(piece).form;
+    const at = needle ? form.indexOf(needle) : -1;
+    if (at >= 0) return [spans[at][0], spans[at + needle.length - 1][1]];
+  }
+  return null;
 }
 
 // O trecho de um exemplo do "Usar um exemplo" não é do aluno: o tópico com trecho no texto que a IA escreveu (ai) leva
@@ -144,6 +192,13 @@ export function originNote(summary) {
   if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
   if (summary.some(s => s.source?.trim())) return AI_NOTE;
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+}
+
+// De onde veio o texto do material, na mesma ordem do aviso: 'ia' (algum trecho do exemplo escrito pela IA), 'pronto'
+// (de um exemplo pronto) ou '' (do aluno). A janela "Ver no texto" põe isso no título, e o texto levado de volta ao
+// editor continua valendo como exemplo (App.jsx, textToEditor).
+export function textOrigin(summary) {
+  return summary.some(s => s.ia) ? 'ia' : summary.some(s => s.pronto) ? 'pronto' : '';
 }
 
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
