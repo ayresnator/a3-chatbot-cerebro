@@ -32,6 +32,24 @@ Se o aluno informou só um tema, ou se o tópico não saiu do texto dele, source
 # pedido de novo sem os trechos.
 NO_SOURCE = "Nesta resposta, deixe source vazio em todos os tópicos."
 
+# Instrução de /api/quiz ("Questões novas deste material", no fim do quiz).
+# As regras das questões são cópia das de GENERATE, que foi validada na API real e não muda por causa desta.
+# content é o texto de onde o material saiu ou, no material de antes do texto guardado, o título e o resumo dele.
+# avoid são as perguntas que o material já tem: o backend também descarta a questão que repete uma delas.
+QUIZ = """Escreva 6 questões novas sobre o conteúdo (misture multiple, boolean e short). Formato exato:
+{"quiz":[{"type":"multiple","question":"...","options":["...","...","...","..."],
+"answer":0,"explanation":"...","steps":[]}]}
+answer é índice inteiro começando em zero para multiple e boolean.
+Para boolean, options deve ser ["Verdadeiro","Falso"].
+Para short, answer é uma única palavra ou número de correção inequívoca e options é [].
+Se outra forma também estiver certa (sinônimo, sigla, plural), junte as formas com |, por exemplo "PIB|Produto Interno Bruto".
+Não use questões discursivas como short.
+As opções de multiple são embaralhadas depois: não use "todas as anteriores" nem "nenhuma das anteriores", e não cite a letra ou a posição de uma opção.
+steps contém passos da resolução para matemática. Para outros temas pode ser [].
+content é o texto que o aluno estudou ou, quando ele não foi guardado, o título e o resumo do material, um tópico por linha.
+Faça as questões a partir de content; quando content for só um tema, pergunte sobre a matéria do tema.
+avoid traz as perguntas que o material já tem: não repita nenhuma, nem com outras palavras; pergunte sobre outras partes do conteúdo."""
+
 # Instrução de /api/chat.
 # O modelo já respondeu "com base na nossa conversa anterior" quando o histórico só tinha a explicação dele mesmo,
 # dada segundos antes. Por isso a instrução proíbe citar conversa que não existiu.

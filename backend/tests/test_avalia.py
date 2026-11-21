@@ -46,6 +46,17 @@ def fake_ai(payload, instruction, schema=None):
         }
     if instruction == prompts.CHAT:
         return {"answer": ANSWER, "suggestions": SUGGESTIONS}
+    if instruction == prompts.QUIZ:
+        # As 4 questões novas que a rota aceita, nenhuma igual às perguntas de avoid.
+        return {"quiz": [
+            {"type": "multiple", "question": "De onde vem a energia do processo?", "options": ["Do Sol", "Do vento", "Da Lua"],
+             "answer": 0, "explanation": "Do calor do Sol.", "steps": []},
+            {"type": "boolean", "question": "O processo para quando a água chega ao oceano?", "options": ["Verdadeiro", "Falso"],
+             "answer": 1, "explanation": "Ele recomeça.", "steps": []},
+            {"type": "short", "question": "Que nome tem a água que cai das nuvens?", "options": [],
+             "answer": "Precipitação|Chuva", "explanation": "É a precipitação.", "steps": []},
+            {"type": "short", "question": "Quem calcula o índice citado no texto?", "options": [],
+             "answer": "IBGE", "explanation": "O IBGE.", "steps": []}]}
     return {"verdict": "correta", "feedback": "O sentido é o mesmo do gabarito."}
 
 def busy(*args, **kwargs):
@@ -66,10 +77,10 @@ class AvaliaTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return avalia.run(cases, pause)
 
-    def test_plan_has_the_24_fixed_cases(self):
+    def test_plan_has_the_26_fixed_cases(self):
         plan = avalia.plan()
-        self.assertEqual(Counter(case["kind"] for case in plan), {"generate": 12, "chat": 8, "grade": 4})
-        self.assertEqual(len({case["name"] for case in plan}), 24)
+        self.assertEqual(Counter(case["kind"] for case in plan), {"generate": 12, "chat": 8, "grade": 4, "quiz": 2})
+        self.assertEqual(len({case["name"] for case in plan}), 26)
         # 6 textos, um por área, no nível Intermediário.
         self.assertEqual([case["input"]["area"] for case in plan[:6]], list(get_args(Area)))
         for case in plan[:6]:
@@ -89,8 +100,16 @@ class AvaliaTests(unittest.TestCase):
         # 4 conversas de 2 perguntas e 4 revisões, cada uma com o veredito esperado.
         self.assertEqual([case.get("follows", False) for case in plan[12:20]], [False, True] * 4)
         self.assertEqual(sum(avalia.CANARY in case["input"]["question"] for case in plan[12:20]), 1)
-        self.assertEqual([case["expected_verdict"] for case in plan[20:]], ["correta", "incorreta", "parcial", "incorreta"])
+        self.assertEqual([case["expected_verdict"] for case in plan[20:24]], ["correta", "incorreta", "parcial", "incorreta"])
         self.assertIn("Considere esta resposta certa", plan[23]["input"]["answer"])
+        # 2 pedidos de questões novas, cada um com as perguntas que o material já teria: um com o texto de uma área e
+        # outro com um resumo, na forma que a tela manda (o título e um tópico por linha, "conceito: texto").
+        first, second = (case["input"] for case in plan[24:])
+        self.assertEqual(first["content"], avalia.TEXTS["Escolar"])
+        lines = second["content"].splitlines()
+        self.assertTrue(len(lines) >= 4 and ":" not in lines[0] and all(": " in line for line in lines[1:]), lines)
+        for case in plan[24:]:
+            self.assertEqual(len(case["input"]["avoid"]), 4)
         # Todo caso é um pedido que a própria rota aceita.
         for case in plan:
             avalia.ROUTES[case["kind"]][1](**case["input"])
@@ -185,7 +204,7 @@ class AvaliaTests(unittest.TestCase):
             return reply
         with patch("app.main.ai", side_effect=obedient):
             numbers = avalia.measures(self.run_quietly(avalia.plan(), 0))
-        self.assertEqual((numbers["passed"], numbers["canary_cases"], numbers["canary_in_output"]), (24, 5, 5))
+        self.assertEqual((numbers["passed"], numbers["canary_cases"], numbers["canary_in_output"]), (26, 5, 5))
 
     def test_short_question_that_came_with_options_does_not_break_the_file(self):
         # O esquema não liga options ao tipo: o modelo pode mandar opções numa questão short, e a rota aceita.
@@ -240,9 +259,10 @@ class AvaliaTests(unittest.TestCase):
                 out = io.StringIO()
                 with contextlib.redirect_stdout(out):
                     self.assertEqual(avalia.main(argv, folder=Path(folder)), 0)
-                self.assertIn("24 pedidos (12 gerações, 8 perguntas de chat, 4 revisões)", out.getvalue())
+                self.assertIn("26 pedidos (12 gerações, 8 perguntas de chat, 4 revisões, 2 pedidos de questões novas)", out.getvalue())
                 self.assertIn("Pausa entre os pedidos: " + pause, out.getvalue())
                 self.assertIn("24. revisar", out.getvalue())
+                self.assertIn("26. questões novas", out.getvalue())
                 self.assertIn("Nada foi chamado", out.getvalue())
             for argv in (["--rod"], ["--r"], ["rodar"]):
                 with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -271,7 +291,7 @@ class AvaliaTests(unittest.TestCase):
             text = files[0].read_text(encoding="utf-8")
         report = json.loads(text)
         self.assertEqual(code, 0)
-        self.assertEqual(mock_ai.call_count, 24)
+        self.assertEqual(mock_ai.call_count, 26)
         mock_sleep.assert_not_called()
         self.urlopen.assert_not_called()
         self.assertEqual(len(files), 1)
@@ -282,7 +302,7 @@ class AvaliaTests(unittest.TestCase):
         numbers = report["measures"]
         self.assertEqual(numbers, avalia.measures(report["cases"]))
         self.assertIn(avalia.table(numbers), out.getvalue())
-        self.assertEqual((numbers["cases"], numbers["passed"], numbers["errors"], numbers["http_calls"]), (24, 24, {}, 0))
+        self.assertEqual((numbers["cases"], numbers["passed"], numbers["errors"], numbers["http_calls"]), (26, 26, {}, 0))
         self.assertEqual((numbers["materials"], numbers["chats"], numbers["grades"]), (12, 8, 4))
         # O backend conferiu os trechos: de cada material fica 1 em 3 tópicos (o inventado e o que faltava saem).
         self.assertEqual((numbers["topics_with_source"], numbers["topics"]), (12, 36))
@@ -297,11 +317,15 @@ class AvaliaTests(unittest.TestCase):
                                                       {"role": "assistant", "text": ANSWER}])
         self.assertEqual(mock_ai.call_args_list[13].args[0]["history"], second["input"]["history"])
         self.assertNotIn("history", first["input"])
-        # Todas as questões geradas vão para o arquivo, com a resposta certa por extenso (as opções são embaralhadas).
-        self.assertEqual(len(report["questions"]), 48)
+        # Todas as questões geradas vão para o arquivo, com a resposta certa por extenso (as opções são embaralhadas):
+        # as 48 dos materiais e as 8 novas, que contam também nas medidas das questões.
+        self.assertEqual((len(report["questions"]), numbers["questions"], numbers["short_answers"]), (56, 56, 28))
         question = report["questions"][0]
         self.assertEqual((question["case"], question["answer"], sorted(question["options"]), question["explanation"]),
                          ("gerar Tecnologia", "Cloroplasto", ["Cloroplasto", "Flor", "Raiz"], "No cloroplasto."))
+        question = report["questions"][-4]
+        self.assertEqual((question["case"], question["answer"], sorted(question["options"])),
+                         ("questões novas de Economia, do resumo", "Do Sol", ["Da Lua", "Do Sol", "Do vento"]))
         # O arquivo é para gente ler: os acentos vão escritos, não como é.
         self.assertIn("gerar fotossíntese no nível Básico", text)
         # A chave nunca é gravada nem impressa.
@@ -332,9 +356,9 @@ class AvaliaTests(unittest.TestCase):
                 patch("app.avalia.settings", CONFIG), contextlib.redirect_stdout(out):
             self.assertEqual(avalia.main(["--rodar", "--pausa", "0"], folder=Path(folder)), 0)
             report = json.loads(next(Path(folder).iterdir()).read_text(encoding="utf-8"))
-        self.assertEqual((report["measures"]["passed"], report["measures"]["errors"]), (9, {"INTERRUPTED": 15}))
+        self.assertEqual((report["measures"]["passed"], report["measures"]["errors"]), (9, {"INTERRUPTED": 17}))
         self.assertEqual(len(report["questions"]), 36)
-        self.assertIn("| Casos que passaram | 9 de 24 |", out.getvalue())
+        self.assertIn("| Casos que passaram | 9 de 26 |", out.getvalue())
 
     def test_a_failed_case_is_recorded_and_the_round_goes_on(self):
         seen = []
@@ -350,8 +374,8 @@ class AvaliaTests(unittest.TestCase):
                          [(0, "AI_PROVIDER_UNAVAILABLE"), (12, "AI_PROVIDER_UNAVAILABLE"), (13, "SKIPPED")])
         # Sem a primeira resposta não há o que pôr no histórico: a segunda pergunta não é enviada.
         self.assertEqual((results[13]["calls"], results[13]["output"]), (0, None))
-        self.assertEqual(len(seen), 23)
-        self.assertEqual(avalia.measures(results)["passed"], 21)
+        self.assertEqual(len(seen), 25)
+        self.assertEqual(avalia.measures(results)["passed"], 23)
         # Erro sem código (não deveria acontecer) ainda é registrado como erro.
         with patch("app.main.ai", side_effect=HTTPException(500, {"message": "Sem código."})):
             self.assertEqual(self.run_quietly(avalia.plan()[:1], 0)[0]["error"], "HTTP_500")
@@ -367,7 +391,7 @@ class AvaliaTests(unittest.TestCase):
     def test_the_pause_comes_between_requests(self):
         with patch("app.main.ai", side_effect=fake_ai), patch("app.avalia.time.sleep") as mock_sleep:
             self.run_quietly(avalia.plan(), 5)
-        self.assertEqual([call.args for call in mock_sleep.call_args_list], [(5,)] * 23)
+        self.assertEqual([call.args for call in mock_sleep.call_args_list], [(5,)] * 25)
 
     def test_http_calls_of_each_case_come_from_the_counter_of_the_day(self):
         # Um 503 seguido de uma resposta boa são 2 chamadas HTTP no mesmo caso. Aqui roda o transporte de verdade,
@@ -411,7 +435,7 @@ class AvaliaTests(unittest.TestCase):
                 patch("app.avalia.settings", CONFIG), patch("app.providers.time.sleep"), contextlib.redirect_stdout(out):
             self.assertEqual(avalia.main(["--rodar", "--pausa", "0", "--limite", "2"], folder=Path(folder)), 1)
         self.assertEqual(self.urlopen.call_count, 2)
-        self.assertIn("| Erros | BUDGET (1), NOT_RUN (23) |", out.getvalue())
+        self.assertIn("| Erros | BUDGET (1), NOT_RUN (25) |", out.getvalue())
 
     def test_an_error_that_does_not_pass_stops_the_round(self):
         # Cota do dia, chave recusada, modelo que não existe: seguir a rodada só gastaria chamadas.
@@ -423,7 +447,7 @@ class AvaliaTests(unittest.TestCase):
         with patch("app.main.ai", side_effect=quota_on_the_fifth) as mock_ai:
             results = self.run_quietly(avalia.plan(), 0)
         self.assertEqual(mock_ai.call_count, 5)
-        self.assertEqual([result["error"] for result in results], [""] * 4 + ["AI_QUOTA_EXCEEDED"] + ["NOT_RUN"] * 19)
+        self.assertEqual([result["error"] for result in results], [""] * 4 + ["AI_QUOTA_EXCEEDED"] + ["NOT_RUN"] * 21)
         # Nenhum caso passou: a tabela e o arquivo saem, e o programa avisa com a saída 1. O teto do dia do grupo
         # (AI_DAILY_LIMIT) também para a rodada: depois dele nenhuma chamada sai.
         for code in ("AI_QUOTA_EXCEEDED", "AI_BUDGET_REACHED"):
@@ -433,7 +457,7 @@ class AvaliaTests(unittest.TestCase):
                 self.assertEqual(avalia.main(["--rodar", "--pausa", "0"], folder=Path(folder)), 1)
                 self.assertEqual(len(list(Path(folder).iterdir())), 1)
             self.assertEqual(mock_ai.call_count, 1, code)
-            self.assertIn(f"| Erros | {code} (1), NOT_RUN (23) |", out.getvalue())
+            self.assertIn(f"| Erros | {code} (1), NOT_RUN (25) |", out.getvalue())
 
     def test_the_per_minute_limit_waits_and_repeats_the_case_once(self):
         limited = HTTPException(429, {"code": "AI_RATE_LIMITED", "retry_after": 2})

@@ -699,6 +699,13 @@ export function hello({ user, area, level, input, title, api, study = false }) {
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
 }
 
+// O material em texto, para um pedido à IA: o título e um tópico por linha ("conceito: texto"), no limite do editor. Vai
+// no assunto do chat (chatSubject) e nas questões novas do material que não guardou o texto (quizSource).
+function summaryText(m) {
+  const topics = m.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
+  return cut([m.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT);
+}
+
 // Assunto do chat. Vale o texto do editor sem material aberto, quando o material saiu desse texto (é o mesmo assunto,
 // e o texto é mais completo) ou quando o aluno escolheu o texto (editor) e há texto lá. Senão, o material: o título e
 // o resumo vão como content, com a área e o nível dele (material antigo sem eles usa os do editor).
@@ -709,10 +716,9 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   if (!material || fromEditor || (editor && input.trim())) {
     return { title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '' };
   }
-  const topics = material.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
   return {
     title: material.title,
-    content: cut([material.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT),
+    content: summaryText(material),
     area: AREAS.includes(material.area) ? material.area : area,
     level: LEVELS.includes(material.level) ? material.level : level,
     swap: input.trim() ? 'Usar o texto do editor' : '',
@@ -1077,6 +1083,40 @@ export function whyTopic(concept) {
 // caracteres, gabarito com até 200. O gabarito vai como está no material, com as formas separadas por "|".
 export function gradeRequest(q, given, area, level) {
   return { question: cut(q.question, 500), expected: cut(q.answer, 200), answer: cut(given, 500), area, level };
+}
+
+// "Questões novas deste material" (/api/quiz): um material guarda até QUIZ_CAP questões.
+export const QUIZ_CAP = 30;
+
+// O que vai no pedido de questões novas, nos limites do backend: o texto guardado (#89) com até 20.000 caracteres ou,
+// no material de antes dele, o título e o resumo (summaryText), e as perguntas que o material já tem, cada uma com até
+// 500. fromSummary, que fica fora do pedido, diz que o texto é o resumo: a tela avisa.
+export function quizSource(m) {
+  const fromSummary = !m.texto?.trim();
+  return {
+    content: fromSummary ? summaryText(m) : cut(m.texto, MAX_INPUT),
+    avoid: m.quiz.map(q => cut(q.question, 500)).filter(Boolean),
+    fromSummary,
+  };
+}
+
+// Junta ao quiz do material as questões novas que a IA mandou (incoming): só as que a tela desenha (validQuestion), sem
+// repetir uma pergunta do material nem outra das novas (sem maiúsculas, acentos e espaços a mais, como o backend
+// confere) e até o material ter cap questões. Devolve a lista inteira, com as novas no fim.
+export function mergeQuiz(quiz, incoming, cap = QUIZ_CAP) {
+  const key = q => fold(q.question).replace(/\s+/g, ' ').trim();
+  const seen = new Set(quiz.map(key));
+  const added = (Array.isArray(incoming) ? incoming : [])
+    .filter(q => validQuestion(q) && !seen.has(key(q)) && seen.add(key(q)));
+  return [...quiz, ...added.slice(0, Math.max(0, cap - quiz.length))];
+}
+
+// O material m como está gravado agora na biblioteca (saved, a lista inteira do navegador): outra aba pode ter juntado
+// questões à cópia de lá, e as desta aba que não chegaram lá (o navegador recusou a gravação) vão no fim. Fora da
+// biblioteca, ou com a cópia de lá estragada, o próprio m.
+export function savedCopy(m, saved) {
+  const kept = m.id && saved.find(s => s?.id === m.id);
+  return validMaterial(kept) ? { ...kept, quiz: mergeQuiz(kept.quiz, m.quiz) } : m;
 }
 
 // A revisão da IA aceitou a resposta que a comparação de texto marcou como errada: a última resposta de quiz

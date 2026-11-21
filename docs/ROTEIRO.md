@@ -46,7 +46,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
-1. A IA entra em quatro lugares: gerar o material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
+1. A IA entra em cinco lugares: gerar o material, escrever questões novas de um material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).
@@ -70,7 +70,7 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 ## Perguntas prováveis
 
-**Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
+**Onde está a inteligência artificial do trabalho?** Em cinco rotas do backend: gerar o material, escrever questões novas de um material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
 **Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 

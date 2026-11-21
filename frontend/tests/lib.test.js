@@ -11,6 +11,7 @@ import {
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
+  quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
@@ -2527,6 +2528,94 @@ test('gradeRequest: corta os textos nos limites do backend (500, 200 e 500) sem 
   assert.equal(sent.expected, 'g'.repeat(200));
   assert.equal(sent.answer, 'r'.repeat(499) + '😀');
   assert.equal([...sent.answer].length, 500, 'o backend conta caracteres, não unidades UTF-16');
+});
+
+test('quizSource: o texto guardado vai sem os espaços das pontas, com as perguntas que o material já tem', () => {
+  const material = { ...GOOD, texto: '  A fotossíntese acontece nas folhas.\nA clorofila absorve a luz.\n ' };
+  assert.deepEqual(quizSource(material), {
+    content: 'A fotossíntese acontece nas folhas.\nA clorofila absorve a luz.',
+    avoid: ['A água é decomposta?', 'Que pigmento absorve a luz?'],
+    fromSummary: false,
+  });
+});
+
+test('quizSource: sem o texto guardado (material de antes dele, ou texto em branco) vão o título e o resumo', () => {
+  for (const texto of [undefined, null, '', '  \n ']) {
+    assert.deepEqual(quizSource({ ...OPENED, quiz: GOOD.quiz, texto }), {
+      content: 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.',
+      avoid: ['A água é decomposta?', 'Que pigmento absorve a luz?'],
+      fromSummary: true,
+    }, 'texto = ' + JSON.stringify(texto));
+  }
+});
+
+test('quizSource: corta nos limites do backend (20.000 e 500 caracteres) sem meio emoji, e a pergunta em branco sai', () => {
+  const quiz = [{ ...Q_SHORT, question: 'q'.repeat(499) + '😀😀' }, { ...Q_MULTIPLE, question: '   ' }];
+  const fromText = quizSource({ ...GOOD, quiz, texto: 'á'.repeat(19999) + '😀😀' });
+  assert.equal(fromText.content, 'á'.repeat(19999) + '😀');
+  assert.deepEqual(fromText.avoid, ['q'.repeat(499) + '😀']);
+  const { content } = quizSource({ ...OPENED, quiz, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] });
+  assert.equal([...content].length, 20000);
+  assert.ok(content.startsWith('Revolução Francesa\nLongo: ááá'));
+});
+
+test('mergeQuiz: as novas entram no fim; sai a que repete uma pergunta do material ou outra das novas', () => {
+  // A comparação não conta maiúsculas, acentos e espaços a mais, como o backend. As listas congeladas são cópias.
+  const [selic, pib] = [{ ...Q_MULTIPLE }, { ...Q_SHORT }];
+  const incoming = frozen([
+    selic, { ...Q_SHORT, question: '  A AGUA   é decompósta? ' }, pib, { ...Q_MULTIPLE, question: 'quem FIXA a selic?' },
+  ]);
+  const got = mergeQuiz(frozen(GOOD.quiz.map(q => ({ ...q }))), incoming);
+  assert.deepEqual(got, [...GOOD.quiz, Q_MULTIPLE, Q_SHORT]);
+  assert.equal(got[2], selic, 'a questão nova entra como veio');
+  // Sem nada novo, o quiz fica como estava.
+  assert.deepEqual(mergeQuiz(GOOD.quiz, GOOD.quiz), GOOD.quiz);
+});
+
+test('mergeQuiz: só entram as questões que a tela desenha', () => {
+  const bad = [null, 'texto', { ...Q_SHORT, type: 'aberta' }, { ...Q_SHORT, options: 'x' }, { ...Q_SHORT, answer: null },
+    { ...Q_SHORT, question: 7 }, { ...Q_SHORT, explanation: undefined }, { ...Q_SHORT, steps: [1] }];
+  assert.deepEqual(mergeQuiz(GOOD.quiz, [...bad, Q_MULTIPLE]), [...GOOD.quiz, Q_MULTIPLE]);
+  for (const incoming of [undefined, null, {}, 'x', { quiz: [Q_MULTIPLE] }]) {
+    assert.deepEqual(mergeQuiz(GOOD.quiz, incoming), GOOD.quiz, JSON.stringify(incoming));
+  }
+});
+
+test('mergeQuiz: um material guarda até 30 questões', () => {
+  const make = (n, name) => Array.from({ length: n }, (_, i) => ({ ...Q_SHORT, question: name + ' ' + (i + 1) }));
+  assert.equal(QUIZ_CAP, 30);
+  const got = mergeQuiz(make(27, 'Antiga'), make(6, 'Nova'));
+  assert.equal(got.length, 30);
+  assert.deepEqual(got.slice(27).map(q => q.question), ['Nova 1', 'Nova 2', 'Nova 3']);
+  assert.equal(mergeQuiz(make(30, 'Antiga'), make(6, 'Nova')).length, 30);
+  // O material com mais de 30 (importado de um backup) fica como está, sem perder questões.
+  assert.deepEqual(mergeQuiz(make(35, 'Antiga'), make(6, 'Nova')), make(35, 'Antiga'));
+  assert.equal(mergeQuiz(GOOD.quiz, make(6, 'Nova'), 4).length, 4);
+});
+
+test('savedCopy: as questões que outra aba juntou ao material na biblioteca ficam, e as novas entram depois delas', () => {
+  // Duas abas com o mesmo material de 2 questões: a outra aba juntou 3 (B), e esta, parada na cópia antiga, pede mais 3.
+  const make = (n, name) => Array.from({ length: n }, (_, i) => ({ ...Q_SHORT, question: name + ' ' + (i + 1) }));
+  const mine = frozen([{ ...GOOD, id: 7, texto: 'Texto antigo.' }])[0];
+  const saved = frozen([{ ...GOOD, id: 3 }, { ...GOOD, id: 7, texto: 'Texto de lá.', quiz: [...GOOD.quiz, ...make(3, 'B')] }]);
+  const copy = savedCopy(mine, saved);
+  assert.deepEqual(copy, saved[1], 'a cópia gravada, com os campos dela');
+  const quiz = mergeQuiz(copy.quiz, make(3, 'A'));
+  assert.deepEqual(quiz.map(q => q.question), [...GOOD.quiz.map(q => q.question), 'B 1', 'B 2', 'B 3', 'A 1', 'A 2', 'A 3']);
+  // As desta aba que a biblioteca não tem (o navegador recusou a gravação) também ficam, sem passar de 30.
+  const unsaved = { ...mine, quiz: [...GOOD.quiz, ...make(2, 'C')] };
+  assert.deepEqual(savedCopy(unsaved, saved).quiz.map(q => q.question).slice(2), ['B 1', 'B 2', 'B 3', 'C 1', 'C 2']);
+  const full = [{ ...GOOD, id: 7, quiz: make(29, 'B') }];
+  assert.equal(savedCopy(unsaved, full).quiz.length, 30);
+});
+
+test('savedCopy: fora da biblioteca, sem id ou com a cópia de lá estragada, vale o material desta aba', () => {
+  const mine = { ...GOOD, id: 7 };
+  for (const saved of [[], [{ ...GOOD, id: 8 }], [null, 'x', { ...GOOD, id: 7, quiz: [] }], [{ id: 7 }]]) {
+    assert.equal(savedCopy(mine, saved), mine, JSON.stringify(saved));
+  }
+  // Material sem id não casa com um item da biblioteca que também não tem id.
+  assert.equal(savedCopy(GOOD, [{ ...GOOD, quiz: [...GOOD.quiz, Q_SHORT] }]), GOOD);
 });
 
 test('fixLastQuizEvent: a última resposta de quiz da questão vira acerto; as outras não mudam', () => {
