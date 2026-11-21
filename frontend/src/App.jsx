@@ -815,9 +815,10 @@ function App() {
     toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
-  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta" (from, onde o foco fica). Quem já viu a resposta
-  // não reescreve a sua: o campo fica só para leitura até o próximo cartão.
-  function turnCard(from = '.flashcard') {
+  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". from é onde o foco fica quando o cartão vira pelo
+  // teclado; pelo ponteiro (o clique e o toque), não vem. Quem já viu a resposta não reescreve a sua: o campo fica só
+  // para leitura até o próximo cartão.
+  function turnCard(from) {
     setFlip(!flip);
     setLocked(true);
     // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a face nova (flip ainda é o de
@@ -825,10 +826,12 @@ function App() {
     say(spokenCard(card, !flip, write && typed.trim() !== ''));
     cardMotion.current = 'perspective(900px) rotateX(-10deg)';
     // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às vezes para fora da janela ou para trás
-    // da barra de baixo. Se o bloco do cartão cabe na janela, a página rola até ele inteiro, e o foco fica onde estava.
-    // Senão (a janela baixa: o celular deitado, o zoom de 200%), a resposta e o "Você escreveu" têm a vez: o cartão
-    // sobe para o topo e leva o foco, e o campo e os botões ficam a um Tab, que o scroll-padding traz acima da barra.
-    if (!flip) focusAfter.current = [from, null, null, '.card-block', '.flashcard'];
+    // da barra de baixo. Pelo teclado, se o bloco do cartão cabe na janela, a página rola até ele inteiro, e o foco fica
+    // onde estava. Senão (a janela baixa: o celular deitado, o zoom de 200%), a resposta e o "Você escreveu" têm a vez:
+    // o cartão sobe para o topo e leva o foco, e o Tab segue para o campo e os botões, que o scroll-padding traz acima
+    // da barra. Pelo ponteiro, a página não rola: "Errei", "Revisar depois" ou "Acertei" subiriam para baixo dele, e o
+    // segundo clique no mesmo lugar (para rever a pergunta, ou o fim de um duplo clique) avaliaria o cartão.
+    if (!flip && from) focusAfter.current = [from, null, null, '.card-block', '.flashcard'];
   }
 
   // O cartão seguinte, ou o mesmo recomeçado, abre na pergunta e com o campo "Sua resposta" vazio e editável.
@@ -1867,12 +1870,13 @@ function App() {
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
                               <DeckMarks session={session} fresh />
-                              {/* O bloco que a página mostra inteiro ao virar o cartão, se cabe (turnCard). */}
+                              {/* O bloco que a página mostra inteiro ao virar o cartão pelo teclado, se cabe (turnCard).
+                                  O detail do clique conta os cliques: é 0 quando o cartão vira pelo Enter ou espaço. */}
                               <div className="card-block">
                                 <button
                                   type="button"
                                   className={'flashcard' + (flip ? ' flipped' : '')}
-                                  onClick={() => turnCard()}
+                                  onClick={e => turnCard(e.detail ? null : '.flashcard')}
                                 >
                                   <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
                                   {/* A dica serve ao mouse, ao toque e ao teclado. */}

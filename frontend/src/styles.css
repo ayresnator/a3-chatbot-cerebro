@@ -1954,6 +1954,8 @@ main:focus {
     color: var(--ink)
 }
 
+/* A folga em cima vale quando o cartão sobe para o topo da janela (App.jsx, turnCard): o anel do foco fica inteiro, e
+   voltar à pergunta não faz a âncora de rolagem do navegador puxar a página 16 px. */
 .flashcard {
     --press: .99;
     flex-direction: column;
@@ -1965,7 +1967,8 @@ main:focus {
     border-radius: var(--r-3);
     background: var(--panel);
     font-weight: 400;
-    text-align: center
+    text-align: center;
+    scroll-margin-top: var(--sp-2)
 }
 
 /* Sob o ponteiro, o vidro elevado: um tom acima. */

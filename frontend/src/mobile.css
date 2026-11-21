@@ -19,7 +19,7 @@
 
     /* O Tab rola a página só até o controle entrar na janela, e a barra de baixo, presa, cobria o controle (WCAG
        2.4.11). A rolagem até o foco, e a de scrollIntoView (o erro, a explicação, o menu do nível, a conversa), param
-       acima dela, com o respiro. Os blocos não têm scroll-margin próprio: somado a este, o respiro contaria duas vezes.
+       acima dela, com o respiro. Os blocos não têm scroll-margin embaixo: somado a este, o respiro contaria duas vezes.
        Com o retorno do quiz na tela, também acima do "Próxima questão" preso: depois de responder, a linha com a marca
        ✓ ou ✗ e a nota fica à vista (App.jsx, submit). */
     html {
