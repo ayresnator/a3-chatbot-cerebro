@@ -214,7 +214,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor.
 
 ---
 

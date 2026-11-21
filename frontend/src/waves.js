@@ -372,7 +372,8 @@ function compile(gl, type, source) {
 // acabou; sem ela, a ligação trava a página até acabar, como antes.
 // onActive(true) sai junto com o primeiro quadro, também quando o contexto volta; onActive(false), quando falta WebGL,
 // o shader é recusado ou o contexto se perde (ou já chega perdido).
-// animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands).
+// animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands), e o
+// buraco atrás dele fica no tom do palco.
 // animate falso (movimento reduzido ou "Fundo animado" desligado): um quadro parado da tela inteira, redesenhado quando o
 // tamanho ou a densidade de pixels mudam.
 export function startWaves(canvas, { animate = true, onActive = () => {} } = {}) {
@@ -399,6 +400,15 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
       ? bands(stage.getBoundingClientRect(), parseFloat(getComputedStyle(stage).borderTopLeftRadius) || 0,
         canvas.width, canvas.height, scale, window.scrollY, root.scrollHeight - root.clientHeight)
       : [[0, 0, canvas.width, canvas.height]];
+    // O buraco das faixas fica no tom do palco (o clearColor do setup), não no preto em que o navegador deixa o buffer
+    // depois de cada quadro mostrado (o contexto não pede preserveDrawingBuffer): num salto da rolagem, a parte do palco
+    // que o navegador ainda não desenhou deixa o canvas à vista por um quadro. O clear respeita o scissor, por isso ele
+    // sai desligado.
+    if (stage) {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.enable(gl.SCISSOR_TEST);
+    }
     gl.uniform4f(scene, canvas.width, canvas.height, seconds * SPEED, UNIFORMS.colorCount);
     for (const part of parts) {
       gl.scissor(...part);
@@ -436,6 +446,8 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     gl.uniform4fv(at('u_cursor'), UNIFORMS.cursor);
     scene = at('u_scene');
     gl.enable(gl.SCISSOR_TEST);
+    // O tom do palco com as ondas ligadas: o --glass de :root[data-waves], em styles.css. Mudou lá, mude aqui.
+    gl.clearColor(8 / 255, 8 / 255, 8 / 255, 1);
   }
 
   // Compila e liga sem perguntar o estado: a pergunta trava até o driver acabar. A extensão é pedida de novo a cada

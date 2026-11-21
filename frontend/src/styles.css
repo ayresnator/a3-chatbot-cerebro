@@ -352,6 +352,7 @@ body::before {
     pointer-events: none
 }
 
+/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá. */
 :root[data-waves] {
     --glass: #080808;
     --quiet: #040404

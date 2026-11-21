@@ -1,8 +1,9 @@
 // Testes do fundo em ondas (src/waves.js): o tamanho do canvas, o relógio e o corte a 30 quadros por segundo, a espera
-// do laço no temporizador, as faixas do scissor em volta do palco, os valores da receita do Shader Builder e o começo
-// num canvas novo e num que já tem contexto. npm test
+// do laço no temporizador, as faixas do scissor em volta do palco, os valores da receita do Shader Builder, o começo
+// num canvas novo e num que já tem contexto e a limpeza do canvas no tom do palco antes das faixas. npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   canvasSize, tick, bands, startWaves, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, FRAME_WAIT_MS, MAX_STEP_MS, FRAG,
 } from '../src/waves.js';
@@ -268,4 +269,49 @@ test('startWaves: desligado com o shader ainda ligando, só apaga o programa qua
   linked = true;
   env.frames.shift()();
   assert.deepEqual([deleted, reports, env.frames.length], [['programa'], [], 0], 'ligado, sai sem desenhar nem avisar');
+});
+
+test('startWaves: cada quadro animado limpa o canvas inteiro no tom do palco antes das faixas; o parado não limpa', t => {
+  const env = fakeBrowser(t);
+  // O palco e a rolagem da página de 1366 × 768 dos testes do bands.
+  window.scrollY = 0;
+  globalThis.document = {
+    ...env.quiet,
+    querySelector: () => ({ getBoundingClientRect: () => scrolled(0) }),
+    documentElement: { scrollHeight: 768 + END, clientHeight: 768 },
+  };
+  globalThis.getComputedStyle = () => ({ borderTopLeftRadius: '32px' });
+  t.after(() => delete globalThis.getComputedStyle);
+  // Um WebGL que aceita tudo, liga o shader na hora e anota as chamadas que mexem no desenho.
+  const [SCISSOR_TEST, COLOR_BUFFER_BIT, TRIANGLES] = [0x0C11, 0x4000, 4];
+  let calls = [];
+  const gl = new Proxy({ SCISSOR_TEST, COLOR_BUFFER_BIT, TRIANGLES, isContextLost: () => false, getProgramParameter: () => true }, {
+    get: (real, name) => real[name] ?? ((...args) => {
+      if (['enable', 'disable', 'clearColor', 'clear', 'scissor', 'drawArrays'].includes(name)) calls.push([name, ...args]);
+      return null;
+    }),
+  });
+  const canvas = { ...env.quiet, getContext: () => gl, clientWidth: 1351, clientHeight: 768 };
+  // A cor da limpeza é o --glass do palco com as ondas ligadas (styles.css).
+  const glass = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    .match(/:root\[data-waves\] \{\s*--glass: #(\w\w)(\w\w)(\w\w);/).slice(1).map(hex => parseInt(hex, 16) / 255);
+  const setup = [['enable', SCISSOR_TEST], ['clearColor', ...glass, 1]];
+  // A limpeza sai com o scissor desligado (o canvas inteiro), e o scissor volta antes da primeira faixa.
+  const frame = [
+    ['disable', SCISSOR_TEST], ['clear', COLOR_BUFFER_BIT], ['enable', SCISSOR_TEST],
+    ...bands(scrolled(0), 32, 1351, 768, 1, 0, END).flatMap(part => [['scissor', ...part], ['drawArrays', TRIANGLES, 0, 3]]),
+  ];
+
+  const stop = startWaves(canvas);
+  t.mock.timers.tick(1500);
+  env.idle();
+  assert.deepEqual(calls, [...setup, ...frame], 'o primeiro quadro');
+  calls = [];
+  env.frames.shift()(1000);
+  assert.deepEqual(calls, frame, 'o navegador apaga o buffer depois de cada quadro: o seguinte limpa de novo');
+  stop();
+
+  calls = [];
+  startWaves(canvas, { animate: false })();
+  assert.deepEqual(calls, [...setup, ['scissor', 0, 0, 1351, 768], ['drawArrays', TRIANGLES, 0, 3]], 'parado: a tela inteira');
 });
