@@ -130,7 +130,7 @@ Com um material aberto, a pergunta é sobre ele: a caixa do chat mostra "Sobre:"
 
 O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero e pode ser desfeita até a próxima pergunta.
 
-O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
+O chat abre com uma saudação do Cérebro. Com a IA ativa, acima da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
 
 ### 6. Caderno de erros
 
