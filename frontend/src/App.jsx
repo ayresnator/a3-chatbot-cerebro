@@ -19,7 +19,7 @@ import {
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
-  shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
+  shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
@@ -776,10 +776,11 @@ function App() {
     toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
-  // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados.
+  // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
+  // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia.
   // Os dois botões ficam desabilitados no cartão novo (ainda não virado): o foco passa para o cartão.
   function cardNext(ok) {
-    event('flashcard', ok, result.area);
+    event('flashcard', ok, result.area, fold(card.question));
     setFlip(false);
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
@@ -822,7 +823,8 @@ function App() {
 
   // "Refazer meus erros": o quiz abre num material temporário com as questões do caderno, cada uma com o material
   // e a área de onde veio. O material que estava aberto fica guardado e volta quando o aluno sai do quiz.
-  function redoMistakes() {
+  // Com title, só as questões desse material ("Refazer os erros de", no Desempenho).
+  function redoMistakes(title) {
     setParked(opened);
     setResult({
       virtual: true,
@@ -831,7 +833,7 @@ function App() {
       level: '',
       summary: [],
       flashcards: [],
-      quiz: mistakes.map(m => ({ ...m.item, title: m.title, area: m.area })),
+      quiz: mistakes.filter(m => !title || m.title === title).map(m => ({ ...m.item, title: m.title, area: m.area })),
     });
     openPage('Quizzes', QUESTION_FOCUS);
     restart();
@@ -1093,7 +1095,7 @@ function App() {
       quizzes: quizRate(events),
       cards: cardRate(events),
       streakDays: streak(events, now),
-      studied: lastDays(events, 5, now),
+      studied: lastDays(events, 7, now),
       weakest: weakSpot(events, now),
     };
   }, [events, today]);
@@ -1122,6 +1124,9 @@ function App() {
     [page, saved, events, lastBackup, today]
   );
   const busiest = Math.max(1, ...days.map(d => d.total));
+  // O material do ponto fraco, para o "Abrir" do Desempenho: o aberto ou, na biblioteca, o mais novo com o mesmo título
+  // (a demonstração dá o mesmo título ao mesmo texto). O ponto fraco de evento antigo, sem título, não acha nenhum.
+  const weakMaterial = weakest && [opened, ...saved].find(s => s?.title === weakest.name);
   // O chat pergunta sobre o material aberto ou sobre o texto do editor (lib.js): o pedido, as sugestões, a saudação e a
   // caixa usam o mesmo assunto.
   const subject = chatSubject({ material: opened, made: made.current.key, editor: editorChat, input, area, level });
@@ -1539,20 +1544,26 @@ function App() {
                       </button>
                     </div>
                     <div className="stats">
-                      <Stat value={streakDays + (streakDays === 1 ? ' dia' : ' dias')} label="de constância" />
-                      <Stat value={cards.total} label="flashcards revisados" />
-                      <Stat value={quizzes.total} label="questões respondidas" />
+                      <Stat
+                        value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
+                        label={plural(streakDays, 'seguido de estudo', 'seguidos de estudo')}
+                      />
+                      <Stat value={cards.total} label={plural(cards.total, 'cartão revisado', 'cartões revisados')} />
+                      <Stat
+                        value={quizzes.total}
+                        label={plural(quizzes.total, 'questão respondida', 'questões respondidas')}
+                      />
                       <Stat value={percent(quizzes)} label="de acerto no quiz" />
                       {/* Os dias de estudo da semana, com a mesma caneta: ✓ dia com estudo, ○ dia sem. */}
                       <div
                         className="stat days"
                         role="img"
-                        aria-label={'Dias com estudo nos últimos 5: ' + studied.filter(Boolean).length}
+                        aria-label={'Dias com estudo nos últimos 7: ' + studied.filter(Boolean).length}
                       >
                         <span className="day-marks">
                           {studied.map((day, i) => <Pen key={i} kind={day ? 'certo' : 'novo'} />)}
                         </span>
-                        <span>últimos 5 dias</span>
+                        <span>últimos 7 dias</span>
                       </div>
                     </div>
                   </m.section>
@@ -1794,7 +1805,7 @@ function App() {
                             // Fim do quiz (Jhey): o painel sobe com um balanço curto e a caneta marca cada erro, em fila.
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
-                              <p>{right} de {answers.length} respostas corretas.</p>
+                              <p>Você acertou {right} de {answers.length}.</p>
                               {wrong.length > 0 ? (
                                 <ol className="review" role="list">
                                   {wrong.map((q, i) => (
@@ -2177,7 +2188,7 @@ function App() {
                         <li><Pen kind="refazer" /> refazer</li>
                         <li><Pen kind="certo" /> certo em outro dia</li>
                       </ol>
-                      <button type="button" className="primary" onClick={redoMistakes}>
+                      <button type="button" className="primary" onClick={() => redoMistakes()}>
                         <Icon name="refazer" />
                         Refazer meus erros ({mistakes.length})
                       </button>
@@ -2259,6 +2270,17 @@ function App() {
                     days={days}
                     busiest={busiest}
                     weakest={weakest}
+                    openWeak={weakMaterial && (() => {
+                      if (weakMaterial !== opened) return openSaved(weakMaterial);
+                      // O material já está aberto: nada vai para a biblioteca, e o quiz e o baralho ficam onde estavam.
+                      // Como no openSaved, o chat volta ao material, e o foco vai ao título dele (o botão sai da tela com
+                      // o Desempenho).
+                      setEditorChat(false);
+                      go('Resumos');
+                      focusAfter.current = ['#material-titulo'];
+                    })}
+                    hasMaterial={!!result}
+                    onStart={() => openPage(result ? 'Quizzes' : 'Estudar')}
                     mistakes={mistakes}
                     redoMistakes={redoMistakes}
                     events={events}

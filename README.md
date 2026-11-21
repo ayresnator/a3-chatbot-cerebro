@@ -150,14 +150,20 @@ Apresenta indicadores relacionados à evolução dos estudos.
 
 Entre as informações disponíveis estão:
 
-- Sequência de dias com atividade;
+- Dias seguidos de estudo;
 - Quantidade de questões respondidas e percentual de acerto no quiz;
 - Autoavaliação nos flashcards, separada do quiz;
-- Respostas e acertos dos últimos 7 dias;
+- Respostas e acertos dos últimos 7 dias: a altura da barra é o número de respostas do dia, e o rótulo diz quantas foram e o percentual de acerto;
 - Acerto por área;
-- Sugestão de revisão: o material com a maior taxa de erro nos últimos 7 dias.
+- Seu próximo passo, conforme o que o estudante já fez.
 
-O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número.
+O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número. Nos cartões vale a mesma regra: conta a primeira avaliação de cada cartão no dia, e revisar o baralho de novo no mesmo dia não muda o número de cartões revisados nem a autoavaliação.
+
+"Seu próximo passo" tem três casos:
+
+- Sem resposta no quiz: um botão para fazer o quiz do material aberto ou, sem material aberto, para gerar um;
+- Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões, fica o "Refazer meus erros";
+- Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca.
 
 ### 8. Biblioteca
 

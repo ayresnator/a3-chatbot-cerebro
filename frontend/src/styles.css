@@ -1645,13 +1645,17 @@ main:focus {
     color: var(--on-accent)
 }
 
+/* As 7 marcas numa linha só, com até 20 px cada: no cartão estreito todas encolhem por igual (15 px no cartão de
+   138 px, em 900 px), em vez de vazar dele. Quebrando a linha, a última marca, a de hoje, ficava sozinha embaixo. */
 .day-marks {
-    display: flex
+    display: grid;
+    grid-auto-columns: minmax(0, 1.25rem);
+    grid-auto-flow: column
 }
 
 .day-marks .pen svg {
-    width: 1.25rem;
-    height: 1.25rem
+    width: 100%;
+    height: auto
 }
 
 /* ---------- Material: Resumos, Flashcards, Quizzes ---------- */
@@ -3092,6 +3096,16 @@ main:focus {
     text-align: center
 }
 
+/* O rótulo que diz o que mede, em duas linhas: em 13 px "20 respostas" e "100% certas" cabem inteiros na coluna de
+   5 rem (em 14 px quebravam em quatro). O curto ("50% · 6") fica para o celular (mobile.css). */
+.chart .full {
+    font-size: var(--fs-1)
+}
+
+.chart .short {
+    display: none
+}
+
 /* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. A barra cresce do chão
    quando o gráfico aparece (só ela, por transform); a do esqueleto fica parada. */
 .chart-bar {
@@ -3115,6 +3129,16 @@ main:focus {
     margin-top: var(--sp-3);
     color: var(--ink-2);
     font-size: var(--fs-2)
+}
+
+/* Os botões do próximo passo levam o título do material. Palavra longa quebra dentro do botão: sem isso a largura
+   mínima do botão, item flex da .row, é a palavra inteira, e a página rolava de lado em 320 px. No celular o nome
+   quebra em várias linhas: o respiro de 8 px e o canto da metade da altura de uma linha tiram o texto da borda (com
+   uma linha o botão continua a pílula de 44 px). */
+.next-step button {
+    padding-block: var(--sp-2);
+    border-radius: calc(var(--control-h) / 2);
+    overflow-wrap: anywhere
 }
 
 .subjects {

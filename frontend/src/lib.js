@@ -372,6 +372,10 @@ export function demo(text) {
   };
 }
 
+// A palavra no singular quando o número é 1 e no plural nos outros, o zero também ("0 cartões"). Devolve só a palavra:
+// no Stat o número vai à parte, em destaque.
+export const plural = (n, um, varios) => (n === 1 ? um : varios);
+
 // Total, acertos e percentual inteiro de uma lista de respostas. Sem respostas o percentual é zero.
 function tally(answers) {
   const correct = answers.filter(e => e.ok).length;
@@ -387,13 +391,14 @@ function recentDays(n, now) {
   });
 }
 
-// Respostas do quiz que contam no desempenho: de cada questão (mesmo dia, mesmo material, mesmo enunciado), só a
-// primeira. Refazer a mesma questão fazia o percentual subir sem o aluno saber mais.
+// Respostas do quiz (ou, com kind 'flashcard', avaliações dos cartões) que contam no desempenho: de cada questão ou
+// cartão (mesmo dia, mesmo material, mesmo enunciado), só a primeira. Refazer a mesma questão, ou rever o mesmo
+// baralho, fazia o número subir sem o aluno saber mais.
 // A lista está na ordem em que foi gravada. Evento anterior a esta regra não tem q e conta como está.
-export function firstAttempts(events) {
+export function firstAttempts(events, kind = 'quiz') {
   const seen = new Set();
   return events.filter(e => {
-    if (e.kind !== 'quiz') return false;
+    if (e.kind !== kind) return false;
     if (!e.q) return true;
     const key = JSON.stringify([localDay(e.date), e.title, e.q]);
     if (seen.has(key)) return false;
@@ -407,9 +412,9 @@ export function quizRate(events) {
   return tally(firstAttempts(events));
 }
 
-// Autoavaliação nos cartões: quantos o aluno marcou "Acertei".
+// Autoavaliação nos cartões: quantos o aluno marcou "Acertei", na primeira avaliação de cada cartão no dia.
 export function cardRate(events) {
-  return tally(events.filter(e => e.kind === 'flashcard'));
+  return tally(firstAttempts(events, 'flashcard'));
 }
 
 // Sem estudo hoje a sequência ainda vale até ontem: o dia não acabou.
@@ -467,11 +472,11 @@ export function lastDays(events, n, now) {
   return recentDays(n, now).map(day => studied.has(day));
 }
 
-// Linha de uma área na página Desempenho, com quiz e cartões separados.
+// Linha de uma área na página Desempenho, com quiz e cartões separados, os dois pela primeira resposta do dia.
 // Sem resposta de quiz não há percentual: "0% de acerto" diria que o aluno errou tudo.
 export function areaLine(events, area) {
   const quiz = tally(firstAttempts(events).filter(e => e.area === area));
-  const cards = events.filter(e => e.kind === 'flashcard' && e.area === area).length;
+  const cards = firstAttempts(events, 'flashcard').filter(e => e.area === area).length;
   if (!quiz.total && !cards) return 'Sem registros ainda';
   return (quiz.total
     ? quiz.rate + '% de acerto no quiz · ' + quiz.total + (quiz.total === 1 ? ' questão' : ' questões')
