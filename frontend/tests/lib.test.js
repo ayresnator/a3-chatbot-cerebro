@@ -16,6 +16,7 @@ import {
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   examPool, mockExam, examScore, examLine,
+  CONF, noteAnswer, calibration, sureText, guessLine,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -353,6 +354,80 @@ test('areaLine: o cartão avaliado de novo no mesmo dia conta uma vez', () => {
   assert.equal(areaLine(twice, 'Economia'), 'Quiz sem respostas · 1 cartão');
 });
 
+// Resposta do quiz com a certeza marcada antes da correção (#80).
+const sureAt = (day, n, ok, conf, extra) => quizAt(day, n, ok, { conf, ...extra });
+
+test('calibration: o acerto de cada marca, pela primeira resposta de cada questão no dia', () => {
+  const events = [
+    sureAt(16, 1, true, 'certeza'), sureAt(16, 2, false, 'certeza'), sureAt(16, 3, true, 'certeza'),
+    sureAt(16, 4, true, 'acho'), sureAt(16, 5, false, 'chute'),
+    sureAt(16, 2, true, 'certeza', { date: at(16, 13) }), // refeita no mesmo dia: não conta
+    sureAt(15, 2, true, 'acho'), // a mesma questão em outro dia: conta
+  ];
+  assert.deepEqual(calibration(events, today()), {
+    certeza: { total: 3, correct: 2, rate: 67 },
+    acho: { total: 2, correct: 2, rate: 100 },
+    chute: { total: 1, correct: 0, rate: 0 },
+  });
+});
+
+test('calibration: só os últimos 30 dias, contando hoje', () => {
+  const october = d => new Date(2026, 9, d, 12).toISOString();
+  const events = [
+    sureAt(16, 1, true, 'certeza'),
+    sureAt(16, 2, true, 'certeza', { date: october(18) }), // 18/10: o 30º dia
+    sureAt(16, 3, true, 'certeza', { date: october(17) }), // 17/10: fora
+    sureAt(17, 4, true, 'certeza'), // amanhã: fora
+  ];
+  assert.equal(calibration(events, today()).certeza.total, 2);
+  assert.equal(calibration(events, today(), 1).certeza.total, 1);
+});
+
+test('calibration: resposta sem marca, com marca fora da lista ou de cartão fica de fora', () => {
+  const events = [
+    quizAt(16, 1, true), // caixa "Marcar certeza" desligada
+    sureAt(16, 1, false, 'certeza', { date: at(16, 13) }), // a mesma questão refeita com marca: não é a primeira do dia
+    sureAt(16, 2, true, 'talvez'), sureAt(16, 3, true, 5), sureAt(16, 4, true, null),
+    cardAt(16, true, { conf: 'certeza', q: 'cartao 1' }),
+    sureAt(16, 5, true, 'chute'),
+  ];
+  const none = { total: 0, correct: 0, rate: 0 };
+  assert.deepEqual(calibration(events, today()), { certeza: none, acho: none, chute: { total: 1, correct: 1, rate: 100 } });
+  assert.deepEqual(calibration([], today()), { certeza: none, acho: none, chute: none });
+});
+
+test('quizRate e firstAttempts: a marca de certeza não muda as contas', () => {
+  const marked = SIX_ANSWERS.map((e, i) => ({ ...e, conf: CONF[i % 3] }));
+  const redone = [...marked, ...redo(16).map(e => ({ ...e, conf: 'chute' }))];
+  assert.deepEqual(quizRate(redone), quizRate([...SIX_ANSWERS, ...redo(16)]));
+  assert.deepEqual(firstAttempts(redone), marked);
+});
+
+test('sureText: o percentual só com 10 respostas da marca; antes, quantas faltam', () => {
+  assert.equal(sureText({ total: 21, correct: 17, rate: 81 }), 'acertou 81% (17 de 21)');
+  assert.equal(sureText({ total: 10, correct: 4, rate: 40 }), 'acertou 40% (4 de 10)');
+  assert.equal(sureText({ total: 9, correct: 9, rate: 100 }), '9 respostas · falta 1 para o percentual');
+  assert.equal(sureText({ total: 1, correct: 0, rate: 0 }), '1 resposta · faltam 9 para o percentual');
+  assert.equal(sureText({ total: 0, correct: 0, rate: 0 }), 'nenhuma resposta · faltam 10 para o percentual');
+});
+
+test('calibration e sureText: 10 respostas de uma marca mostram o percentual, 9 não', () => {
+  const ten = Array.from({ length: 10 }, (_, n) => sureAt(16, n, n < 6, 'acho'));
+  assert.equal(sureText(calibration(ten, today()).acho), 'acertou 60% (6 de 10)');
+  assert.equal(sureText(calibration(ten.slice(1), today()).acho), '9 respostas · falta 1 para o percentual');
+});
+
+test('guessLine: quantos acertos foram chute, no singular e no plural; sem nenhum, nada', () => {
+  const a = (ok, conf) => ({ ok, conf });
+  assert.equal(
+    guessLine([a(true, 'chute'), a(true, 'chute'), a(false, 'chute'), a(true, 'certeza')]),
+    '2 dos seus acertos foram chute.'
+  );
+  assert.equal(guessLine([a(true, 'chute'), a(true, 'acho')]), '1 dos seus acertos foi chute.');
+  assert.equal(guessLine([a(false, 'chute'), a(true), a(true, 'certeza')]), '');
+  assert.equal(guessLine([]), '');
+});
+
 // Histórico com repetições, como o App grava, com "hoje" em 16/11 às 22h. OLD é a resposta antiga, sem o enunciado.
 const OLD = (({ q, ...e }) => e)(quizAt(14, 9, false));
 const BROKEN = { kind: 'quiz', ok: 'sim', date: 'ontem' };
@@ -406,6 +481,12 @@ test('compactEvents: importar um backup com as repetições de dias passados nã
   );
   assert.ok(merged.events.length > stored.length, 'o backup traz as repetições de volta');
   assert.equal(compactEvents(merged.events, today()).length, stored.length);
+});
+
+test('compactEvents: o painel "Sua certeza" não muda com o histórico enxuto', () => {
+  const marked = HISTORY.map((e, i) => (e.kind === 'quiz' ? { ...e, conf: CONF[i % 3] } : e));
+  assert.deepEqual(calibration(compactEvents(marked, today()), today()), calibration(marked, today()));
+  assert.ok(calibration(marked, today()).certeza.total > 0);
 });
 
 test('expectedText: o gabarito em texto, a opção certa ou as formas da resposta curta', () => {
@@ -2171,6 +2252,49 @@ test('caderno: a escada inteira são 3 acertos em dias diferentes, e um erro no 
   assert.deepEqual(list, [], 'dias 9, 12 e 19: 3 acertos, cada um no dia marcado');
 });
 
+test('noteAnswer: erro com "Tenho certeza" entra no caderno com a marca; com outra marca ou sem marca, sem ela', () => {
+  const [entry] = noteAnswer(frozen([]), Q_SHORT, 'Inflação', 'Economia', false, 'certeza', today());
+  assert.deepEqual(entry, { ...addMistake([], Q_SHORT, 'Inflação', 'Economia', today())[0], sure: true });
+  for (const conf of ['acho', 'chute', undefined]) {
+    const [plain] = noteAnswer(frozen([]), Q_SHORT, 'Inflação', 'Economia', false, conf, today());
+    assert.equal('sure' in plain, false, String(conf));
+  }
+});
+
+test('noteAnswer: errar de novo sem certeza tira a marca; com certeza, ela fica', () => {
+  const marked = frozen(noteAnswer([], Q_SHORT, 'Inflação', 'Economia', false, 'certeza', new Date(2026, 10, 10, 9)));
+  assert.equal('sure' in noteAnswer(marked, Q_SHORT, 'Inflação', 'Economia', false, 'acho', today())[0], false);
+  assert.equal(noteAnswer(marked, Q_SHORT, 'Inflação', 'Economia', false, 'certeza', today())[0].sure, true);
+});
+
+test('noteAnswer: acerto no chute não muda o caderno; acerto com outra marca, ou sem marca, segue a escada', () => {
+  const list = frozen([
+    { ...mistake(Q_SHORT, 'Inflação', 10), step: 1, due: '2026-11-16', sure: true }, mistake(Q_MULTIPLE, 'Inflação', 15),
+  ]);
+  assert.equal(noteAnswer(list, Q_SHORT, 'Inflação', 'Economia', true, 'chute', today()), list, 'no dia marcado');
+  for (const conf of ['certeza', 'acho', undefined]) {
+    assert.deepEqual(
+      noteAnswer(list, Q_SHORT, 'Inflação', 'Economia', true, conf, today()),
+      [{ ...list[0], step: 2, due: '2026-11-23' }, list[1]],
+      'sobe um degrau e mantém a marca: ' + conf
+    );
+  }
+  const last = frozen([{ ...list[0], step: 2 }]);
+  assert.equal(noteAnswer(last, Q_SHORT, 'Inflação', 'Economia', true, 'chute', today()), last, 'no último degrau');
+  assert.deepEqual(noteAnswer(last, Q_SHORT, 'Inflação', 'Economia', true, 'acho', today()), []);
+  assert.deepEqual(noteAnswer(frozen([]), Q_SHORT, 'Juros', 'Economia', true, 'chute', today()), [], 'fora do caderno');
+});
+
+test('noteAnswer: errar com certeza, acertar no chute no dia marcado e depois com "Acho que sei"', () => {
+  let list = noteAnswer([], Q_SHORT, 'Inflação', 'Economia', false, 'certeza', new Date(2026, 10, 15, 21));
+  assert.deepEqual(list.map(e => [e.step, e.due, e.sure]), [[0, '2026-11-16', true]]);
+  const before = list;
+  list = noteAnswer(list, Q_SHORT, 'Inflação', 'Economia', true, 'chute', today());
+  assert.equal(list, before, 'o chute certo deixa a questão como estava');
+  list = noteAnswer(list, Q_SHORT, 'Inflação', 'Economia', true, 'acho', today());
+  assert.deepEqual(list.map(e => [e.step, e.due, e.sure]), [[1, '2026-11-19', true]]);
+});
+
 test('stepOf e dueOf: erro de antes da escada, ou com degrau ou dia estragado, está no degrau 0 e volta no dia seguinte', () => {
   const old = mistake(Q_SHORT, 'Inflação', 14, 22);
   assert.deepEqual([stepOf(old), dueOf(old)], [0, '2026-11-15']);
@@ -2266,6 +2390,14 @@ test('validMistake: recusa o que a tela não tem como desenhar nem tirar do cade
     { ...good, key: undefined },
   ];
   for (const entry of bad) assert.equal(validMistake(entry), false, JSON.stringify(entry));
+});
+
+test('validMistake: o erro com a marca de certeza vale; a marca estragada não derruba o erro', () => {
+  const [entry] = addMistake([], Q_SHORT, 'Inflação', 'Economia', today(), true);
+  assert.equal(entry.sure, true);
+  assert.equal(validMistake(entry), true);
+  assert.equal(validMistake(JSON.parse(JSON.stringify(entry))), true, 'gravado e lido');
+  assert.equal(validMistake({ ...entry, sure: 'sim' }), true);
 });
 
 test('byMaterial: os erros agrupados por material, na ordem em que cada material apareceu', () => {
@@ -2580,6 +2712,16 @@ test('mergeBackup: cartão com a mesma chave fica com a mudança mais recente', 
   assert.deepEqual(merge([here], [file, other]), [file, other]);
   assert.deepEqual(merge([file], [here]), [file], 'a mudança daqui é mais nova');
   assert.deepEqual(merge([here], [here]), [here]);
+});
+
+test('backup: a certeza das respostas e a marca dos erros vão e voltam; certeza estragada só fica fora do painel', () => {
+  const events = [sureAt(16, 1, false, 'certeza'), sureAt(16, 2, true, 'talvez'), quizAt(16, 3, true)];
+  const erros = addMistake([], Q_SHORT, 'Inflação', 'Economia', today(), true);
+  const read = readBackup(JSON.stringify({ versao: 1, saved: [], events, erros, cartoes: [] }));
+  assert.deepEqual([read.events, read.erros, read.fora.events], [events, erros, 0]);
+  const merged = mergeBackup(EMPTY, read);
+  assert.deepEqual(calibration(merged.events, today()).certeza, { total: 1, correct: 0, rate: 0 });
+  assert.equal(merged.erros[0].sure, true);
 });
 
 test('mergeBackup: o que a tela ignora continua gravado, e nada do que entra na função é alterado', () => {

@@ -235,13 +235,17 @@ export function CardSkeleton() {
 
 const OPTION_W = ['70%', '55%', '62%', '48%'];
 
-// Quiz a caminho: o cabeçalho, as marcas das questões, o enunciado e quatro opções.
+// Quiz a caminho: o cabeçalho, as marcas das questões, o enunciado e quatro opções. No cabeçalho, a etiqueta do tipo
+// e a vaga da caixa "Marcar certeza" ficam juntas, como no quiz pronto.
 export function QuizSkeleton() {
   return (
     <div aria-hidden="true">
       <div className="study-head">
         <Sk w="7.5rem" />
-        <Sk w="8rem" className="sk-tag" />
+        <div className="quiz-tools">
+          <Sk w="8rem" className="sk-tag" />
+          <Sk w="7.75rem" className="sk-check" />
+        </div>
       </div>
       <div className="marks">
         {OPTION_W.concat(OPTION_W.slice(0, 2)).map((_, i) => <Sk key={i} className="sk-mark" />)}
@@ -290,6 +294,11 @@ export function DesempenhoSkeleton({ rise }) {
       </m.section>
       <m.section className="panel" variants={rise} aria-hidden="true">
         <Sk w="10rem" className="sk-h2" />
+        <Sk w="60%" className="sk-note" />
+      </m.section>
+      {/* O painel "Sua certeza" (#80). */}
+      <m.section className="panel" variants={rise} aria-hidden="true">
+        <Sk w="7rem" className="sk-h2" />
         <Sk w="60%" className="sk-note" />
       </m.section>
     </>

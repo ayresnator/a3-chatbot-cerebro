@@ -2,7 +2,10 @@ import React from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { Stat, BackupNote } from './ui.jsx';
-import { AREAS, spokenDay, areaLine, plural, dayMistakes } from './lib.js';
+import { AREAS, spokenDay, areaLine, plural, dayMistakes, CONF, calibration, sureText } from './lib.js';
+
+// Cada marca de certeza do quiz no painel "Sua certeza" (#80), na ordem dos botões.
+const SURE_WHEN = { certeza: 'Quando marcou certeza', acho: 'Quando achou que sabia', chute: 'Quando chutou' };
 
 // Página Desempenho, carregada à parte (App.jsx, lazyView): o código dela só vem quando o aluno chega nela ou quando
 // o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho. backup é a linha do pé (ui.jsx,
@@ -13,6 +16,8 @@ export default function Desempenho({
 }) {
   // Questões do ponto fraco no caderno de erros: as que o "Refazer os erros de" abre.
   const own = weakest ? mistakes.filter(e => e.title === weakest.name) : [];
+  // O acerto de cada marca de certeza nos últimos 30 dias (lib.js, calibration).
+  const sure = calibration(events, new Date());
   // As questões do caderno para hoje (due, lib.js: dueMistakes), no máximo 10 por vez, como no caderno.
   const redoToday = due.length > 0 && (
     <button type="button" className="primary" onClick={() => redoMistakes(dayMistakes(due))}>
@@ -115,6 +120,26 @@ export default function Desempenho({
             </li>
           ))}
         </ul>
+      </m.section>
+      {/* A certeza marcada no quiz contra o acerto: quem se acha seguro demais para de estudar cedo. */}
+      <m.section className="panel" variants={rise}>
+        <h2>Sua certeza</h2>
+        <p>Quanto você acertou com cada marca, nos últimos 30 dias. Conta a primeira resposta de cada questão no dia.</p>
+        {CONF.some(conf => sure[conf].total) ? (
+          <ul className="subjects" role="list">
+            {CONF.map(conf => (
+              <li className="subject" key={conf}>
+                <strong>{SURE_WHEN[conf]}</strong>
+                <span>{sureText(sure[conf])}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint">
+            Ainda não há respostas com a certeza marcada. No quiz, com a caixa "Marcar certeza" ligada, você marca "Tenho
+            certeza", "Acho que sei" ou "Chutei" antes da correção.
+          </p>
+        )}
       </m.section>
       {backup && <BackupNote status={backup} onExport={onExport} variants={rise} />}
     </>

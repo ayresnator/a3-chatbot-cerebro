@@ -533,6 +533,34 @@ export function areaLine(events, area) {
     : 'Quiz sem respostas') + ' · ' + cards + (cards === 1 ? ' cartão' : ' cartões');
 }
 
+// A certeza que o aluno marca no quiz antes da correção (#80), na ordem dos botões: "Tenho certeza", "Acho que sei" e
+// "Chutei". A resposta gravada a leva em conf; a resposta antiga, ou dada com a caixa "Marcar certeza" desligada, não.
+export const CONF = ['certeza', 'acho', 'chute'];
+
+// Painel "Sua certeza" do Desempenho: o acerto de cada marca nos últimos days dias, pela primeira resposta de cada
+// questão no dia, como os outros números. Resposta sem marca, ou com marca fora de CONF (de um backup), fica de fora.
+export function calibration(events, now, days = 30) {
+  const span = new Set(recentDays(days, now));
+  const recent = firstAttempts(events).filter(e => span.has(localDay(e.date)));
+  return Object.fromEntries(CONF.map(conf => [conf, tally(recent.filter(e => e.conf === conf))]));
+}
+
+// O que vai ao lado de cada marca no painel. O percentual só aparece com SURE_MIN respostas da marca: com menos ele
+// engana. Antes disso a linha diz quantas faltam. O número de respostas fica sempre escrito.
+const SURE_MIN = 10;
+export function sureText({ total, correct, rate }) {
+  if (total >= SURE_MIN) return 'acertou ' + rate + '% (' + correct + ' de ' + total + ')';
+  const left = SURE_MIN - total;
+  return (total ? total + ' ' + plural(total, 'resposta', 'respostas') : 'nenhuma resposta') + ' · ' +
+    plural(left, 'falta ', 'faltam ') + left + ' para o percentual';
+}
+
+// Fim do quiz: quantos acertos foram chute. Sem nenhum, nada.
+export function guessLine(answers) {
+  const n = answers.filter(a => a.ok && a.conf === 'chute').length;
+  return n ? n + ' dos seus acertos ' + plural(n, 'foi chute.', 'foram chute.') : '';
+}
+
 // Busca só no texto do material: JSON.stringify também casava nomes de campo ("quiz", "answer") e datas.
 // O texto de cada material é dobrado uma vez só (SEARCH): a busca roda a cada tecla, e dobrar de novo o texto inteiro de
 // todos os materiais pesava com a Biblioteca cheia.
@@ -917,14 +945,25 @@ export function mistakeKey(title, question) {
 // Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova. Nos dois casos ela começa a
 // escada: degrau 0, e volta amanhã.
 // item leva só os campos da questão: a que vem da tela traz junto a resposta dada na sessão.
-export function addMistake(list, item, title, area, now) {
+// sure: o aluno marcou "Tenho certeza" antes da correção (#80). A entrada ganha sure: true, a marca "você tinha certeza"
+// do caderno; errar de novo sem a certeza troca a entrada, e a marca sai.
+export function addMistake(list, item, title, area, now, sure = false) {
   const { type, question, options, answer, explanation, steps } = item;
   const key = mistakeKey(title, question);
   const entry = {
     key, item: { type, question, options, answer, explanation, steps }, title, area, date: new Date(now).toISOString(),
     step: 0, due: addDays(localDay(now), 1),
   };
+  if (sure) entry.sure = true;
   return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
+}
+
+// O caderno depois de uma resposta do quiz. conf é a certeza marcada antes da correção (CONF), ou nada com a caixa
+// "Marcar certeza" desligada. Errou: addMistake, com a marca quando foi com "Tenho certeza". Acertou: clearMistake. O
+// acerto no chute não muda nada: não tira a questão nem a faz subir um degrau, porque não mostra que ela ficou.
+export function noteAnswer(list, item, title, area, ok, conf, now) {
+  if (!ok) return addMistake(list, item, title, area, now, conf === 'certeza');
+  return conf === 'chute' ? list : clearMistake(list, mistakeKey(title, item.question), now);
 }
 
 // Acertou: no dia marcado ou depois, a questão sobe um degrau e volta mais tarde; no último degrau ela sai do caderno.
