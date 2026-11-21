@@ -1,7 +1,7 @@
 import React from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
-import { Stat, BackupNote } from './ui.jsx';
+import { Stat, BackupNote, StudyPlan } from './ui.jsx';
 import { AREAS, spokenDay, areaLine, plural, dayMistakes, CONF, calibration, sureText } from './lib.js';
 
 // Cada marca de certeza do quiz no painel "Sua certeza" (#80), na ordem dos botões.
@@ -9,10 +9,10 @@ const SURE_WHEN = { certeza: 'Quando marcou certeza', acho: 'Quando achou que sa
 
 // Página Desempenho, carregada à parte (App.jsx, lazyView): o código dela só vem quando o aluno chega nela ou quando
 // o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho. backup é a linha do pé (ui.jsx,
-// BackupNote).
+// BackupNote); plan, o plano até a prova (ui.jsx, StudyPlan), e onPlan abre a tarefa dele.
 export default function Desempenho({
   rise, fade, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, openWeak,
-  hasMaterial, onStart, mistakes, due, redoMistakes, events, backup, onExport,
+  hasMaterial, onStart, mistakes, due, redoMistakes, plan, onPlan, events, backup, onExport,
 }) {
   // Questões do ponto fraco no caderno de erros: as que o "Refazer os erros de" abre.
   const own = weakest ? mistakes.filter(e => e.title === weakest.name) : [];
@@ -70,6 +70,8 @@ export default function Desempenho({
       </m.section>
       <m.section className="panel" variants={rise}>
         <h2>Seu próximo passo</h2>
+        {/* A prova mais próxima vem antes dos três casos. */}
+        {plan.length > 0 && <StudyPlan rows={plan} onOpen={onPlan} />}
         {/* Três casos: nenhuma resposta no quiz, nenhum material com erro e o material que mais errou (weakSpot). */}
         {!quizzes.total ? (
           <>

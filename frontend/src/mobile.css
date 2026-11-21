@@ -331,6 +331,20 @@
     }
 }
 
+/* A data da prova e o "Salvar material" (styles.css, .header-actions) ficam embaixo do título até 745 px, onde não
+   cabem ao lado dele, e no tablet em pé até 850 px, onde ao lado o título longo quebrava mais uma linha. O esqueleto da
+   geração guarda a linha deles (o campo de 44 px e o respiro), e as abas não pulam quando o material chega. No celular
+   deitado, de 746 a 850 px, eles continuam ao lado: lá falta altura. */
+@media (min-width: 551px) and (max-width: 745px), (min-width: 551px) and (max-width: 850px) and (orientation: portrait) {
+    .result-header > .header-actions {
+        flex-basis: 100%
+    }
+
+    .material-wait .result-header {
+        min-height: calc(5rem + var(--control-h) + var(--sp-3))
+    }
+}
+
 /* Celular. O editor fica mais baixo: tudo até os botões de gerar cabe na primeira tela, acima da barra, de 360 × 780
    para cima. */
 @media (max-width: 550px) {
@@ -811,6 +825,12 @@
 
     .mistakes .drop .short {
         display: inline
+    }
+
+    /* Aqui a data da prova e o "Salvar material" ficam em duas linhas (styles.css, .header-actions): o esqueleto da
+       geração guarda os 56 px da linha a mais, e o material não empurra as abas. */
+    .material-wait .result-header {
+        min-height: 14.375rem
     }
 
     /* O botão do nível mostra só o nível ("Nível:" continua no nome dele): sobra lugar para um chip e meio da área. */

@@ -2,9 +2,11 @@ import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, use
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
+import { addDays, planLine } from './lib.js';
 
 // Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, a linha do
-// backup, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
+// backup, o plano até a prova e a data dela, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce
+// com o texto.
 
 // Campo de várias linhas (field é o ref dele) que cresce com o texto entre o mínimo e o máximo do CSS e volta ao mínimo
 // quando esvazia: a caixa do Dúvidas e o editor do Estudar. Medir encolhe o campo por um instante: a rolagem da página
@@ -54,6 +56,104 @@ export function BackupNote({ status, onExport, variants }) {
         Fazer backup
       </button>
     </m.div>
+  );
+}
+
+// Plano até a prova (#86; lib.js, studyPlan): uma linha por material com a prova mais próxima e o botão que abre a
+// tarefa de hoje, na faixa "Seu progresso" do Estudar e no começo de "Seu próximo passo", no Desempenho. A tarefa feita
+// e os cartões em dia ficam sem botão. O nome do botão leva o material: com dois na lista, eles não se confundem.
+const TASK_BUTTONS = {
+  quiz: ['Fazer o quiz', 'quizzes'],
+  cartoes: ['Revisar os cartões', 'flashcards'],
+  erros: ['Refazer os erros', 'refazer'],
+  prova: ['Abrir o resumo', 'resumos'],
+};
+export function StudyPlan({ rows, onOpen }) {
+  return (
+    <div className="plan">
+      <ul role="list">
+        {rows.map(row => {
+          const [label, icon] = TASK_BUTTONS[row.task];
+          return (
+            <li key={row.material.title}>
+              <p>{planLine(row)}</p>
+              {(row.task === 'prova' || row.left.length > 0) && (
+                <button type="button" aria-label={label + ' de "' + row.material.title + '"'} onClick={() => onOpen(row)}>
+                  <Icon name={icon} />
+                  {label}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="hint">Plano sugerido pelo app, sem IA. Não é promessa de nota.</p>
+    </div>
+  );
+}
+
+// "Data da prova", no cabeçalho do material (#86). A data vale completa e dentro do prazo, de hoje a um ano, e o campo
+// vazio apaga a data. Ela é gravada 0,4 s depois da última mudança, como o rascunho (cada seta gravava a biblioteca
+// inteira e trocava o aviso), e na hora com o Enter, ao sair do campo ou ao sair da página. O que não vale (fora do
+// prazo ou só um pedaço da data, badInput) fica no campo, sem gravar; ao sair dele, ganha a nota, que o leitor de tela
+// ouve (say). Durante a digitação não: o ano passa por 0002 e 0202. Ao apagar as três partes, o Chrome só avisa a
+// primeira: o campo é lido também ao soltar o Backspace e o Delete. Na tela o rótulo é "Prova": com ele, o campo e o
+// "Salvar material" cabem numa linha em 390 px. O nome inteiro fica no campo.
+export function ExamDate({ value, today, onSave, say }) {
+  const [edit, setEdit] = useState(null);
+  const timer = useRef(0);
+  const pending = useRef(null);
+  useEffect(() => {
+    const flush = () => pending.current?.();
+    const hide = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', hide);
+      clearTimeout(timer.current);
+    };
+  }, []);
+  function read({ value: day, validity }, now) {
+    clearTimeout(timer.current);
+    pending.current = null;
+    if (!validity.valid) {
+      const note = validity.badInput ? 'Complete a data ou apague as três partes.'
+        : 'Escolha uma data entre hoje e daqui a um ano.';
+      setEdit({ day, note: now ? note : '' });
+      if (now) say(note);
+    } else if (day === value) setEdit(null);
+    else {
+      setEdit({ day });
+      pending.current = () => {
+        clearTimeout(timer.current);
+        pending.current = null;
+        onSave(day);
+      };
+      if (now) pending.current();
+      else timer.current = setTimeout(pending.current, 400);
+    }
+  }
+  return (
+    <div className="exam-date">
+      <label className="inline-field">
+        Prova
+        <input
+          type="date"
+          aria-label="Data da prova"
+          min={today}
+          max={addDays(today, 365)}
+          value={edit ? edit.day : value}
+          aria-invalid={!!edit?.note || undefined}
+          aria-describedby={edit?.note ? 'prova-nota' : undefined}
+          onChange={e => read(e.target)}
+          onKeyUp={e => (e.key === 'Backspace' || e.key === 'Delete') && read(e.target)}
+          onKeyDown={e => e.key === 'Enter' && read(e.target, true)}
+          onBlur={e => read(e.target, true)}
+        />
+      </label>
+      {edit?.note && <p className="hint" id="prova-nota">{edit.note}</p>}
+    </div>
   );
 }
 
