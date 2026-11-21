@@ -2804,6 +2804,17 @@ main:focus {
     }
 }
 
+/* No teto do dia (data-teto, App.jsx) o envio fica desligado até a contagem recomeçar, e o motivo entra embaixo da
+   caixa: presa, ela cobria no celular a maior parte da conversa que o aluno ainda pode reler. Ela fica no fim da
+   conversa, como na janela baixa. */
+.chat-stage[data-state=conversa][data-teto] .chat-dock {
+    position: static
+}
+
+.chat-stage[data-state=conversa][data-teto] .chat-dock::before {
+    display: none
+}
+
 .chat-dock .error {
     margin: var(--sp-3) 0 0
 }
