@@ -306,6 +306,15 @@ export function BibliotecaSkeleton({ rise }) {
         <Sk w="7rem" className="sk-control" />
       </div>
       <Sk w="80%" className="sk-note" />
+      {/* A linha do simulado: o nome, a frase, o tamanho e o botão. */}
+      <div className="exam-row">
+        <div>
+          <Sk w="5.5rem" className="sk-h3" />
+          <Sk w="70%" />
+        </div>
+        <Sk w="8.5rem" className="sk-control" />
+        <Sk w="11rem" className="sk-control" />
+      </div>
       <ul className="library" role="list">
         {['55%', '40%', '62%'].map((w, i) => (
           <li key={i} className="library-item">

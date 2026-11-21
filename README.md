@@ -107,7 +107,7 @@ Cada cartão avaliado também ganha uma caixa de 1 a 4 e um dia de volta, como n
 
 Os cartões que voltam hoje, do material aberto e de todos os materiais da biblioteca, formam a revisão do dia: no máximo 20 por vez, os mais atrasados primeiro, cada um com o material de onde veio. Ela abre pelo link "N cartões para hoje" em "Seu progresso", no Estudar, e pelo botão "Revisão do dia (N)" da página Flashcards, também sem material aberto. Sair da página Flashcards fecha a revisão e devolve o material que estava aberto. Cartão de material excluído da biblioteca sai da revisão. Quem diz se lembrou é o próprio estudante, e a tela pede: "A caixa sobe pelo seu Acertei. Marque só o que você lembrou de verdade." O baralho de um material continua com todos os cartões, na ordem do material.
 
-Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros ou da revisão do dia. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
+Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros, do simulado ou da revisão do dia. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
 ### 4. Quiz
 
@@ -119,7 +119,7 @@ O sistema disponibiliza questões de:
 - Verdadeiro ou falso;
 - Resposta curta.
 
-Após cada resposta aparecem a explicação e a opção certa, marcada também com texto ("✓ certa", "✗ sua resposta"), não só com cor. Na resposta curta aparece o gabarito e, quando o estudante erra, também o que ele digitou. Ao finalizar o quiz, o estudante vê o aproveitamento e a lista das questões que errou, com a resposta dada, a resposta certa e a explicação, e pode refazer somente essas.
+Após cada resposta aparecem a explicação e a opção certa, marcada também com texto ("✓ certa", "✗ sua resposta"), não só com cor. Na resposta curta aparece o gabarito e, quando o estudante erra, também o que ele digitou. Ao finalizar o quiz, o estudante vê o aproveitamento e a lista das questões que errou, com a resposta dada, a resposta certa e a explicação, e pode refazer somente essas. No simulado da Biblioteca a correção fica para o fim (veja a seção 8).
 
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
@@ -192,10 +192,13 @@ O estudante pode:
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
 - Excluir materiais, com a opção de desfazer;
+- Fazer um simulado com questões de vários materiais, com a correção só no fim;
 - Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
 
 Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
+
+O simulado usa os materiais que estão na lista, depois da busca e do filtro de área. O estudante escolhe 10, 20 ou 30 questões, e a linha diz quantas entram e de quantos materiais ("20 questões de 4 materiais"); se a lista tem menos questões que o pedido, entram todas. O sorteio pega uma questão de cada material antes de repetir algum e depois embaralha a ordem; as alternativas ficam como estão no material. Durante o simulado a tela não corrige: depois de cada resposta só aparece "Próxima questão", e cada questão diz de que material veio. O fim mostra o aproveitamento, o acerto por material e as questões erradas com a resposta certa e a explicação. "Refazer as que errei" volta com a correção na hora, e "Voltar à Biblioteca" fecha o simulado e devolve o material que estava aberto, como ir para outra página no meio dele. Cada resposta conta no desempenho e no caderno de erros com o material de onde veio. O simulado não chama a IA, funciona na demonstração e não fica guardado: recarregar a página no meio dele também o fecha.
 
 No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só neste navegador e diz quando foi o último backup. O botão "Fazer backup" baixa o mesmo arquivo do Exportar e ganha destaque quando há 5 materiais novos desde o último backup, ou 7 dias ou mais sem backup com algum material ou resposta nova.
 
@@ -311,7 +314,7 @@ a3-chatbot-cerebro/
 | `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
-| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
+| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
 | `frontend/tests/` | Testes das regras de `lib.js`, `exemplos.js` e `waves.js` |

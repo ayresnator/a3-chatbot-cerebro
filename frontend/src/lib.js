@@ -559,6 +559,59 @@ export function libraryCount(n) {
   return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
 }
 
+// Embaralha a lista no lugar (Fisher-Yates) e a devolve. random devolve de 0 a 1, como Math.random.
+function shuffle(list, random) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+
+// Questões de onde sai o simulado da Biblioteca: as do quiz de cada material, com o título e a área dele, para a
+// resposta contar no desempenho e no caderno de erros com o material de origem. A mesma questão (mesmo material e
+// enunciado, a chave do caderno) entra uma vez só. As opções e a resposta ficam como estão no material.
+// As questões de cada material ficam prontas, com a chave, na primeira vez (POOL): a frase do simulado na Biblioteca
+// refaz a conta a cada tecla da busca, e dobrar de novo a chave de todas as questões pesava com a Biblioteca cheia.
+// shortcut: vale enquanto ninguém muda o material no lugar, como o SEARCH do matches; se isso mudar, apagar junto.
+const POOL = new WeakMap();
+export function examPool(materials) {
+  const seen = new Set();
+  return materials.flatMap(m => {
+    if (!POOL.has(m)) {
+      POOL.set(m, m.quiz.map(q => [mistakeKey(m.title, q.question), { ...q, title: m.title, area: m.area }]));
+    }
+    return POOL.get(m);
+  }).filter(([key]) => {
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(([, q]) => q);
+}
+
+// Simulado: size questões de examPool, sorteadas por rodada (uma de cada material, em ordem sorteada, antes da segunda
+// de qualquer um) e embaralhadas no fim. Assim cada material entra enquanto houver vaga, e o acerto por material do fim
+// não deixa nenhum de fora. Com menos questões que o pedido, entram todas. random: o mesmo do shuffle.
+export function mockExam(materials, size, random = Math.random) {
+  const ranked = byMaterial(examPool(materials))
+    .flatMap(([, list]) => shuffle([...list], random).map((q, round) => [round + random(), q]));
+  return shuffle(ranked.sort((a, b) => a[0] - b[0]).slice(0, size).map(([, q]) => q), random);
+}
+
+// Acerto por material no fim do simulado: [título, certas, total], na ordem em que cada material apareceu.
+export function examScore(answers) {
+  return byMaterial(answers).map(([title, list]) => [title, list.filter(a => a.ok).length, list.length]);
+}
+
+// O simulado em frase: "20 questões de 4 materiais". list são as questões de onde ele sai (examPool) ou as do simulado
+// aberto, e size, o pedido. Pelo sorteio por rodada (mockExam), entra um material por questão até todos entrarem.
+export function examLine(list, size = list.length) {
+  const questions = Math.min(size, list.length);
+  const materials = Math.min(questions, new Set(list.map(q => q.title)).size);
+  return questions + ' ' + plural(questions, 'questão', 'questões') + ' de ' + materials + ' ' +
+    plural(materials, 'material', 'materiais');
+}
+
 // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (o texto do assunto ou a área) até a primeira
 // resposta; depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
 // input é o texto do assunto (chatSubject): o do editor ou o do material aberto. As da IA só valem enquanto esse texto e

@@ -7,10 +7,10 @@ import { AREAS, plural } from './lib.js';
 
 // Página Biblioteca, carregada à parte (App.jsx, lazyView). A lista, a busca e o desfazer continuam no App; aqui só o
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave). backup é a linha do pé (ui.jsx,
-// BackupNote).
+// BackupNote). O simulado também fica no App (startExam): exam é a frase dele, com o tamanho pedido (examSize).
 export default function Biblioteca({
   fade, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, backup, onExport, onImport, onOpen,
-  onRemove, onStart,
+  onRemove, onStart, exam, examSize, onExamSize, onExam,
 }) {
   const picker = useRef(null);
   // Com a lista de áreas na barra, o painel só esmaece (anim.js, fade).
@@ -51,6 +51,27 @@ export default function Biblioteca({
         navegador. Importar junta esse arquivo ao que já está neste navegador, sem duplicar, e só traz o perfil se este
         navegador ainda não tem um.
       </p>
+      {/* O simulado sai dos materiais da lista: a busca e o filtro de área escolhem o conjunto. Sem nenhum na lista, a
+          linha sai junto com ela. */}
+      {shown.length > 0 && (
+        <div className="exam-row">
+          <div>
+            <h2>Simulado</h2>
+            <p id="simulado-conta">{exam} desta lista, misturadas. A correção fica para o fim.</p>
+          </div>
+          <label className="inline-field">
+            Questões
+            <select value={examSize} onChange={e => onExamSize(Number(e.target.value))}>
+              {[10, 20, 30].map(n => <option key={n}>{n}</option>)}
+            </select>
+          </label>
+          {/* O segundo clique de um clique duplo em "Voltar à Biblioteca" cai aqui: ele não começa outro simulado. */}
+          <button type="button" aria-describedby="simulado-conta" onClick={e => e.detail < 2 && onExam()}>
+            <Icon name="quizzes" />
+            Começar simulado
+          </button>
+        </div>
+      )}
       {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (App.jsx, undoNow; anim.js, flipList). */}
       <AnimatePresence mode="popLayout" custom={byKeyboard()}>
         {undo?.kind === 'material' && <UndoRow key="desfazer" undo={undo} onUndo={onUndo} pop={pop} />}
