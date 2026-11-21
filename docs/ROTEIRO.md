@@ -23,7 +23,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 1. Diga em uma frase o que é o Cérebro: transforma um texto em resumo, flashcards e quiz, e mostra onde o aluno erra.
 2. Na página Estudar, escolha a área e o nível e clique em "Usar um exemplo". A IA escreve um texto curto sobre um tema sorteado da área, e o aviso no pé da tela diz o tema. Se ele disser que a IA não respondeu, entrou um exemplo pronto da área: siga com ele. Mostre o aviso embaixo do editor: o texto vai para o Google Gemini.
-3. Clique em "Gerar resumo, flashcards e quiz". Uma chamada traz as três partes, e o material abre no Resumo.
+3. Clique em "Gerar resumo, flashcards e quiz". Uma chamada traz as três partes, e o material abre no Resumo. No topo fica o bloco "Tente responder antes de ler", que não chama a IA: clique em "Pular" para ir direto aos tópicos.
 4. No resumo, mostre um tópico com o trecho que o sustenta. Como o texto veio da IA, o trecho aparece como "No exemplo escrito pela IA: ...", com a etiqueta "Explicação da IA: confira", e o aviso sob o título diz que o material foi feito de um exemplo escrito pela IA: a IA citando o próprio texto não confere nada. Com o exemplo pronto, o trecho aparece como "No texto de exemplo: ...", e com um texto do aluno, como "No seu texto: ..."; nos dois casos, só o tópico sem trecho leva a etiqueta. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)

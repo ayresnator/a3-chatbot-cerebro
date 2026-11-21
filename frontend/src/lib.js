@@ -144,6 +144,32 @@ export function originNote(summary) {
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
 }
 
+// Resumo ativo (#81): tentar lembrar antes de ler e esconder o texto dos tópicos. O bloco "Tente responder antes de
+// ler" usa as 2 primeiras perguntas dos flashcards do material; com menos de 2 cartões ele não aparece.
+export const pretestCards = flashcards => (flashcards.length >= 2 ? flashcards.slice(0, 2) : []);
+
+// Quantas vezes seguidas o aluno pulou o bloco: a única coisa do resumo ativo gravada no navegador. "Ler o resumo"
+// zera a conta. Valor estragado vale zero.
+export function readSkips() {
+  const skips = read('antes-de-ler', 0);
+  return Number.isSafeInteger(skips) && skips > 0 ? skips : 0;
+}
+
+// O resumo ativo de um material aberto (of), do zero: nada escrito (tries), mostrado (shown) nem marcado (marks, pelo
+// índice do tópico: true em "Lembrei", false em "Não lembrei"). O bloco abre sozinho (pre 'aberto') até o aluno pulá-lo
+// 2 vezes seguidas; depois fica fechado (null), no botão "Tentar antes de ler". 'lido' é o bloco respondido.
+export function recallStart(of) {
+  return { of, tries: ['', ''], pre: readSkips() < 2 ? 'aberto' : null, shown: {}, marks: {} };
+}
+
+// Placar do modo lembrar: marks são os tópicos já marcados, true em "Lembrei" e false em "Não lembrei". Sem tópico
+// marcado não há placar.
+export function recallLine(marks) {
+  if (!marks.length) return '';
+  return 'Você lembrou ' + marks.filter(Boolean).length + ' de ' + marks.length + ' ' +
+    plural(marks.length, 'tópico', 'tópicos') + '.';
+}
+
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
 export function validEvent(e) {
   return !!e && isText(e.kind) && e.kind !== '' && typeof e.ok === 'boolean' && isDate(e.date);

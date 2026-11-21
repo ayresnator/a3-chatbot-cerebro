@@ -1913,6 +1913,131 @@ main:focus {
     margin: var(--sp-1) 0 0
 }
 
+/* Resumo ativo (#81). "Esconder o texto": a caixa do sistema no ciano do app, e o rótulo inteiro é o alvo do clique. */
+.check {
+    min-height: var(--control-h-inline);
+    cursor: pointer
+}
+
+.check input {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+    cursor: pointer
+}
+
+/* "Tente responder antes de ler", no começo do resumo, e "Confira o que você pensou", no fim: a mesma caixa. */
+.pretest {
+    margin: 0 0 var(--sp-5);
+    padding: var(--sp-4) var(--sp-5);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--raised)
+}
+
+/* O título do bloco recebe o foco no "Tentar antes de ler" (no toque): o anel abraça a frase. */
+.pretest h3 {
+    width: fit-content;
+    font-size: var(--fs-4)
+}
+
+.pretest .row {
+    margin-bottom: 0
+}
+
+.pretest-item {
+    display: grid;
+    gap: var(--sp-2);
+    max-width: var(--measure);
+    margin-top: var(--sp-4)
+}
+
+.pretest-item label {
+    font-weight: 650;
+    overflow-wrap: anywhere;
+    text-wrap: pretty
+}
+
+.pretest-item textarea {
+    padding: var(--sp-2) var(--sp-3);
+    line-height: var(--lh-ui);
+    resize: vertical
+}
+
+.pretest-review {
+    margin: var(--sp-3) 0 0;
+    padding: 0;
+    list-style: none
+}
+
+/* O fio entre as perguntas vai de uma borda à outra da caixa, como na lista de tópicos; o texto fica na medida. */
+.pretest-review li {
+    display: grid;
+    gap: var(--sp-1);
+    padding: var(--sp-3) 0;
+    border-top: var(--hair) solid var(--line);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
+}
+
+.pretest-review li > * {
+    max-width: var(--measure)
+}
+
+/* O que o aluno escreveu mantém as quebras de linha dele. */
+.pretest-review span {
+    color: var(--ink-2);
+    white-space: pre-wrap
+}
+
+/* Tópico escondido: só o título, o "Mostrar" e, se o aluno pediu antes de esconder, a resposta do "Não entendi". */
+.summary li[data-escondido] > div > :not(h3, .reveal, .why, .why-error) {
+    display: none
+}
+
+/* "Mostrar", como o "Ver resposta" do caderno de erros: a seta aponta para o lado com o texto escondido e para baixo com
+   ele à vista. A margem negativa alinha a seta ao título. */
+.reveal {
+    margin-left: calc(-1 * var(--sp-2))
+}
+
+.reveal .icon {
+    rotate: -90deg;
+    transition: rotate var(--t-fast) var(--ease)
+}
+
+.reveal[aria-expanded=true] .icon {
+    rotate: 0deg
+}
+
+/* "Lembrei" e "Não lembrei": o marcado leva a borda ciano, o fundo ciano fraco, o texto branco e o ✓, não só a cor. */
+.recall-marks [aria-pressed=true],
+.recall-marks [aria-pressed=true]:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--accent-off);
+    color: var(--ink-hi)
+}
+
+/* Placar do modo lembrar, no fim da lista. */
+.recall-score {
+    margin-bottom: var(--sp-5)
+}
+
+.recall-score > p:first-child {
+    color: var(--ink-hi);
+    font-size: var(--fs-4);
+    font-weight: 700
+}
+
+.recall-score ul {
+    margin: 0;
+    padding-left: var(--sp-5);
+    overflow-wrap: anywhere
+}
+
 .study-head {
     display: flex;
     flex-wrap: wrap;
@@ -3687,7 +3812,8 @@ main[data-instant] > .view[data-motion-pop-id] {
    ao Cérebro" do editor, os botões de texto ("Ver meu desempenho"), os pedidos à IA ("Não entendi"), o Cancelar das
    esperas, "Ver resposta" e "Tirar do caderno" no caderno de erros e o botão do aviso ("Desfazer"). Fica depois das
    regras deles: com a mesma força, vale a última. A faixa de espera cresce com o Cancelar e continua centrada na barra
-   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). */
+   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). A
+   caixa "Esconder o texto" do resumo também ganha os 44 px. */
 @media (pointer: coarse) {
     :root {
         --busy-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
@@ -3700,7 +3826,8 @@ main[data-instant] > .view[data-motion-pop-id] {
     .wait .link,
     .mistakes summary,
     .mistakes .drop,
-    .toast button {
+    .toast button,
+    .check {
         min-height: var(--control-h)
     }
 
@@ -3718,6 +3845,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 :root[data-input=teclado] .rail .nav-item,
 :root[data-input=teclado] .meter > span,
 :root[data-input=teclado] .mistakes summary .icon,
+:root[data-input=teclado] .reveal .icon,
 :root[data-input=teclado] .level-button .icon,
 :root[data-input=teclado] dialog::backdrop,
 :root[data-input=teclado] .ai-status {
@@ -3741,6 +3869,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 @media (prefers-reduced-motion: reduce) {
     button,
     .mistakes summary .icon,
+    .reveal .icon,
     .level-button .icon,
     .rail::before,
     .rail .nav-item,
@@ -3820,19 +3949,26 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: CanvasText
     }
 
-    /* O item marcado da lista de atalhos, o chip da área escolhida e o nível escolhido no menu: sem isto o fundo deles
-       virava Canvas, igual aos outros. */
+    /* O item marcado da lista de atalhos, o chip da área escolhida, o nível escolhido no menu e o "Lembrei" ou "Não
+       lembrei" marcado: sem isto o fundo deles virava Canvas, igual aos outros. */
     .palette [role=option][aria-selected=true],
     .chip[aria-checked=true],
-    .level-menu [aria-checked=true] {
+    .level-menu [aria-checked=true],
+    .recall-marks [aria-pressed=true] {
         forced-color-adjust: none;
         background: Highlight;
         color: HighlightText
     }
 
     /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
-    .chip[aria-checked=true]:focus-visible {
+    .chip[aria-checked=true]:focus-visible,
+    .recall-marks [aria-pressed=true]:focus-visible {
         outline-color: CanvasText
+    }
+
+    /* O ✓ da marca no texto dela: no CanvasText, como os outros ícones, ele sumia no Highlight. */
+    .recall-marks [aria-pressed=true] .icon {
+        stroke: HighlightText
     }
 
     /* A frase de exemplo do campo vazio no cinza do sistema, como a frase fixa de um campo: na cor do texto ela parecia

@@ -11,6 +11,7 @@ import {
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
+  pretestCards, readSkips, recallStart, recallLine,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
@@ -1104,6 +1105,49 @@ test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
   assert.equal(sourceLabel(s), 'No seu texto: "o índice oficial de inflação é o IPCA"');
   assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
   assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+});
+
+test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
+  const cards = [1, 2, 3].map(n => ({ question: 'Pergunta ' + n, answer: 'Resposta ' + n }));
+  assert.deepEqual(pretestCards(cards), cards.slice(0, 2));
+  assert.deepEqual(pretestCards(cards.slice(0, 2)), cards.slice(0, 2));
+  assert.deepEqual(pretestCards(cards.slice(0, 1)), [], 'material de uma frase só');
+  assert.deepEqual(pretestCards([]), [], 'o material temporário do caderno de erros');
+});
+
+test('readSkips: a conta de pulos seguidos gravada; valor estragado, bloqueado ou ausente vale zero', () => {
+  browser({ 'cerebro-antes-de-ler': '2' });
+  assert.equal(readSkips(), 2);
+  for (const raw of ['-1', '1.5', '"2"', 'null', '[]', '{', '']) {
+    browser({ 'cerebro-antes-de-ler': raw });
+    assert.equal(readSkips(), 0, raw);
+  }
+  delete globalThis.localStorage;
+  assert.equal(readSkips(), 0, 'sem localStorage');
+});
+
+test('recallStart: nada escrito nem marcado; o bloco abre sozinho até o 2º pulo seguido', () => {
+  const material = { ...GOOD };
+  browser({});
+  assert.deepEqual(recallStart(material), { of: material, tries: ['', ''], pre: 'aberto', shown: {}, marks: {} });
+  browser({ 'cerebro-antes-de-ler': '1' });
+  assert.equal(recallStart(material).pre, 'aberto', 'um pulo só');
+  browser({ 'cerebro-antes-de-ler': '2' });
+  assert.equal(recallStart(material).pre, null, 'dois pulos seguidos: o bloco fica no botão');
+  try {
+    demoStorage(true);
+    assert.equal(recallStart(material).pre, 'aberto', 'a demonstração conta os pulos dela');
+  } finally {
+    demoStorage(false);
+  }
+});
+
+test('recallLine: o placar do modo lembrar, no singular e no plural; sem tópico marcado não há placar', () => {
+  assert.equal(recallLine([true]), 'Você lembrou 1 de 1 tópico.');
+  assert.equal(recallLine([false]), 'Você lembrou 0 de 1 tópico.');
+  assert.equal(recallLine([true, false, true, true, false, true]), 'Você lembrou 4 de 6 tópicos.');
+  assert.equal(recallLine([false, false]), 'Você lembrou 0 de 2 tópicos.');
+  assert.equal(recallLine([]), '');
 });
 
 const EVENT = { kind: 'quiz', ok: true, area: 'Economia', title: 'Inflação', date: at(16) };

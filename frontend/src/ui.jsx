@@ -167,6 +167,7 @@ export function SummarySkeleton() {
       <div className="row summary-tools">
         <Sk w="11rem" className="sk-control" />
         <Sk w="9rem" />
+        <Sk w="8.5rem" />
         <Sk w="6.5rem" className="sk-control" />
       </div>
       <ol className="summary" role="list">

@@ -25,6 +25,7 @@ import {
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
+  pretestCards, readSkips, recallStart, recallLine,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -173,6 +174,12 @@ function App() {
   const [pausedUntil, setPausedUntil] = useState(0);
   // Quantos tópicos do resumo aparecem: 'todos', '6' ou '3' (a lista "Mostrar"). O texto de cada tópico não muda.
   const [size, setSize] = useState('todos');
+  // "Esconder o texto" (modo lembrar, #81): cada tópico fica só com o título até o "Mostrar". Vale para todos os
+  // materiais, como a lista "Mostrar", e não é gravado.
+  const [hide, setHide] = useState(false);
+  // Resumo ativo (#81) do material aberto: o "Tente responder antes de ler" e o que o aluno mostrou e marcou no modo
+  // lembrar (lib.js, recallStart). Fica só na tela: nada vai para o desempenho, o caderno de erros nem o rascunho.
+  const [recall, setRecall] = useState(() => recallStart(DRAFT.result));
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
   const [events, setEvents] = useState(() => readList('events').filter(validEvent));
@@ -435,6 +442,13 @@ function App() {
   if (result?.virtual && page !== 'Quizzes') {
     setResult(parked);
     restart();
+  }
+
+  // Outro material aberto: o resumo ativo começa do zero, também durante o desenho, como acima. O mesmo material em
+  // outra cópia (o salvo agora, o mesmo da biblioteca, a volta do quiz do caderno de erros) continua onde estava, como o
+  // quiz e o baralho.
+  if (opened && recall.of !== opened) {
+    setRecall(recall.of && sameMaterial(recall.of, opened) ? { ...recall, of: opened } : recallStart(opened));
   }
 
   // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
@@ -906,6 +920,28 @@ function App() {
     }
   }
 
+  // "Ler o resumo" (answered) ou "Pular": o bloco "Tente responder antes de ler" sai, e o foco vai ao primeiro tópico,
+  // onde a leitura começa. O que o aluno escreveu fica para o "Confira o que você pensou", no fim do resumo. A resposta
+  // zera a conta de pulos seguidos (lib.js, readSkips), e o pulo a aumenta; no 2º pulo seguido o aviso diz onde o bloco
+  // vai ficar.
+  function closePretest(answered) {
+    const before = readSkips();
+    const skips = answered ? 0 : before + 1;
+    if (skips !== before && persist('antes-de-ler', skips) && skips === 2) {
+      toast('Nos próximos resumos o bloco fica fechado, no botão "Tentar antes de ler"');
+    }
+    setRecall({ ...recall, pre: answered ? 'lido' : null });
+    focusAfter.current = ['.summary li:first-child h3', 'main h1'];
+  }
+
+  // "Lembrei" ou "Não lembrei" num tópico do modo lembrar: o placar muda no fim da lista, longe do botão, e o leitor de
+  // tela o ouve na hora. Nada disso conta no desempenho.
+  function markTopic(i, ok) {
+    const marks = { ...recall.marks, [i]: ok };
+    setRecall({ ...recall, marks });
+    say(recallLine(markedOf(marks)));
+  }
+
   // "Pedir revisão da IA": a comparação de texto marca errado quem escreve o certo com outras palavras.
   // Se a IA aceita a resposta, ela passa a valer como certa na tela (answer e answers), no evento já gravado e no
   // caderno de erros. "parcial" e "incorreta" só são mostrados. A revisão fica guardada na própria resposta.
@@ -1146,6 +1182,11 @@ function App() {
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
   const topics = size === 'todos' ? summary : summary.slice(0, Number(size));
+  // As perguntas do "Tente responder antes de ler" e as marcas do modo lembrar dos tópicos que estão na lista: os que a
+  // lista "Mostrar" deixa de fora não contam no placar.
+  const pretest = pretestCards(result?.flashcards || []);
+  const markedOf = marks => topics.map((_, i) => marks[i]).filter(ok => ok !== undefined);
+  const marked = markedOf(recall.marks);
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1703,6 +1744,34 @@ function App() {
                                   {'Mostrando ' + topics.length + ' de ' + summary.length +
                                     (summary.length === 1 ? ' tópico' : ' tópicos')}
                                 </span>
+                                {/* Ligar ou desligar começa outra rodada: todos os tópicos escondidos, sem marcas. */}
+                                <label className="inline-field check">
+                                  <input
+                                    type="checkbox"
+                                    checked={hide}
+                                    onChange={e => {
+                                      setHide(e.target.checked);
+                                      setRecall({ ...recall, shown: {}, marks: {} });
+                                      say(e.target.checked
+                                        ? 'Só os títulos na tela. Tente lembrar cada tópico antes de mostrar.'
+                                        : 'O texto de todos os tópicos está na tela.');
+                                    }}
+                                  />
+                                  Esconder o texto
+                                </label>
+                                {/* O bloco pulado, ou o que já abre fechado depois de 2 pulos seguidos, volta por aqui. */}
+                                {recall.pre === null && pretest.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRecall({ ...recall, pre: 'aberto' });
+                                      // Como na questão nova do quiz: no toque o título, para o teclado da tela não abrir.
+                                      focusAfter.current = TOUCH ? ['#antes-titulo'] : ['#antes-0', '#antes-titulo'];
+                                    }}
+                                  >
+                                    Tentar antes de ler
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={async () => {
@@ -1721,18 +1790,79 @@ function App() {
                                   Copiar
                                 </button>
                               </div>
+                              {/* Tentar responder antes de ler ajuda a fixar mesmo quando a resposta sai errada: ninguém
+                                  corrige aqui, e o aluno compara no fim do resumo. */}
+                              {recall.pre === 'aberto' && pretest.length > 0 && (
+                                <section className="pretest" aria-labelledby="antes-titulo">
+                                  <h3 id="antes-titulo" tabIndex={-1}>Tente responder antes de ler</h3>
+                                  <p className="hint">
+                                    Escreva o que você lembra, mesmo sem certeza. Ninguém corrige agora: no fim do resumo
+                                    você compara com a resposta do material.
+                                  </p>
+                                  {pretest.map((card, n) => (
+                                    <div key={n} className="pretest-item">
+                                      <label htmlFor={'antes-' + n}>{card.question}</label>
+                                      <textarea
+                                        id={'antes-' + n}
+                                        rows={2}
+                                        maxLength={500}
+                                        value={recall.tries[n]}
+                                        onChange={e => {
+                                          const text = e.target.value;
+                                          setRecall(r => ({ ...r, tries: r.tries.map((t, k) => (k === n ? text : t)) }));
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                  <div className="row">
+                                    <button type="button" className="primary" onClick={() => closePretest(true)}>
+                                      Ler o resumo
+                                    </button>
+                                    <button type="button" onClick={() => closePretest(false)}>Pular</button>
+                                  </div>
+                                </section>
+                              )}
                               <ol className="summary" role="list">
                                 {topics.map((s, i) => (
-                                  <li key={i}>
+                                  // Escondido, o tópico fica só com o título e o "Mostrar" (styles.css, data-escondido).
+                                  <li key={i} data-escondido={(hide && !recall.shown[i]) || undefined}>
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
                                       <h3 tabIndex={-1}>{s.concept}</h3>
+                                      {/* O botão fica no lugar e diz se o texto está à vista: o foco não se perde. */}
+                                      {hide && (
+                                        <button
+                                          type="button"
+                                          className="link reveal"
+                                          aria-expanded={!!recall.shown[i]}
+                                          onClick={() => setRecall({ ...recall, shown: { ...recall.shown, [i]: !recall.shown[i] } })}
+                                        >
+                                          <Icon name="abaixo" />
+                                          Mostrar
+                                        </button>
+                                      )}
                                       <p>{s.text}</p>
                                       {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
                                       {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
                                           exemplo pronto não é da IA: o trecho dele confere, como o do aluno. */}
                                       {result.semIA !== true && (s.ia || !s.source?.trim()) && (
                                         <span className="ai-tag">Explicação da IA: confira</span>
+                                      )}
+                                      {/* A marca é do aluno sobre ele mesmo: fica só no placar do fim da lista. */}
+                                      {hide && (
+                                        <div className="row recall-marks" role="group" aria-label="Você lembrou deste tópico?">
+                                          {[[true, 'Lembrei'], [false, 'Não lembrei']].map(([ok, label]) => (
+                                            <button
+                                              key={label}
+                                              type="button"
+                                              aria-pressed={recall.marks[i] === ok}
+                                              onClick={() => markTopic(i, ok)}
+                                            >
+                                              {recall.marks[i] === ok && <Icon name="check" />}
+                                              {label}
+                                            </button>
+                                          ))}
+                                        </div>
                                       )}
                                       {API_BASE && (
                                         <div className="ai-ask">
@@ -1751,6 +1881,19 @@ function App() {
                                   </li>
                                 ))}
                               </ol>
+                              {hide && marked.length > 0 && (
+                                <div className="recall-score">
+                                  <p>{recallLine(marked)}</p>
+                                  {marked.includes(false) && (
+                                    <>
+                                      <p className="hint" id="para-rever">Para rever:</p>
+                                      <ul aria-labelledby="para-rever">
+                                        {topics.map((s, i) => recall.marks[i] === false && <li key={i}>{s.concept}</li>)}
+                                      </ul>
+                                    </>
+                                  )}
+                                </div>
+                              )}
                               {/* Os flashcards e o quiz cobram também os tópicos escondidos: o fim da lista leva a eles.
                                   O botão some com o clique, e o foco vai ao primeiro tópico que apareceu. */}
                               {topics.length < summary.length && (
@@ -1767,6 +1910,24 @@ function App() {
                                       : 'Ver os outros ' + (summary.length - topics.length) + ' tópicos'}
                                   </button>
                                 </div>
+                              )}
+                              {recall.pre === 'lido' && (
+                                <section className="pretest" aria-labelledby="confira-titulo">
+                                  <h3 id="confira-titulo">Confira o que você pensou</h3>
+                                  <ol className="pretest-review" role="list">
+                                    {pretest.map((card, n) => (
+                                      <li key={n}>
+                                        <strong>{card.question}</strong>
+                                        <span>
+                                          {recall.tries[n].trim()
+                                            ? 'Você escreveu: ' + recall.tries[n].trim()
+                                            : 'Você não escreveu nada.'}
+                                        </span>
+                                        <span>No material: {card.answer}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </section>
                               )}
                               <button
                                 type="button"

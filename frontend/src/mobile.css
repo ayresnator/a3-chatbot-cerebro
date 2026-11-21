@@ -610,7 +610,8 @@
         padding-left: calc(var(--letter) + var(--sp-3))
     }
 
-    .feedback {
+    .feedback,
+    .pretest {
         padding: var(--sp-4)
     }
 
