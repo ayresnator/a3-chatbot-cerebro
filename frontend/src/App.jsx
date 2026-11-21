@@ -24,8 +24,8 @@ import {
   validCardReview, scheduleCard, dueCards, dayCards,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
-  localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  stepOf, dueOf, dueMistakes, dayMistakes, backOn,
+  localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
+  stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote, virtualNote, findSource, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
@@ -121,11 +121,16 @@ const NAMES = { Resumos: 'Resumo', Quizzes: 'Quiz', Erros: 'Caderno de erros' };
 const SHORT = { Erros: 'Caderno' };
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 // O que o veredito da revisão da IA muda (review): "parcial" soa como meio ponto, e só "correta" muda a resposta.
+// chute: "correta" numa resposta marcada como chute (#80) de uma questão que já estava no caderno. Ela conta como acerto
+// e volta ao ponto do caderno de antes da resposta; a que não estava sai, como na "correta".
 const VERDICT_EFFECT = {
   correta: 'Agora conta como acerto, e a questão saiu do caderno de erros.',
+  chute: 'Agora conta como acerto. Como foi chute, a questão continua no caderno de erros, no ponto em que estava.',
   parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
+// Os botões da certeza (#80), na ordem de CONF (lib.js).
+const SURE_LABELS = { certeza: 'Tenho certeza', acho: 'Acho que sei', chute: 'Chutei' };
 
 // Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e os materiais temporários (o
 // caderno de erros, o simulado, a revisão do dia). A demonstração não usa IA e não mostra. O aviso do material segue o
@@ -225,6 +230,10 @@ function App() {
   const [write, setWrite] = useState(() => readWriteFirst(TOUCH));
   const [answer, setAnswer] = useState(null);
   const [answers, setAnswers] = useState([]);
+  // Marcar certeza (#80): com a caixa ligada, a opção escolhida (choice, o índice dela) espera a certeza para ir à
+  // correção. A caixa (sure) fica no navegador e começa ligada; valor estragado vale ligada.
+  const [choice, setChoice] = useState(null);
+  const [sure, setSure] = useState(() => read('certeza', true) !== false);
   const [done, setDone] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('Todas');
@@ -478,6 +487,10 @@ function App() {
       return;
     }
     window.scrollTo(0, 0);
+    // No toque, o quiz chega com o enunciado à vista: nos telefones baixos, a faixa presa da certeza (#80) o cobria. A
+    // rolagem para acima dela, ou do "Próxima questão", e da barra de baixo (mobile.css, scroll-padding da raiz). O foco
+    // fica onde o aluno tocou.
+    if (TOUCH && page === 'Quizzes') document.querySelector('.quiz-question')?.scrollIntoView({ block: 'nearest' });
   }, [page]);
 
   useLayoutEffect(() => {
@@ -585,6 +598,7 @@ function App() {
     setIdx(0);
     setDone(false);
     setAnswer(null);
+    setChoice(null);
     setAnswers([]);
     setRetry(list);
     setWhy(null);
@@ -692,8 +706,9 @@ function App() {
   // Outra aba pode ter gravado depois que esta abriu: a lista nova parte do que está no navegador, não da cópia
   // desta aba, que apagaria o que a outra gravou. Se o navegador recusar a gravação, o evento fica só nesta tela.
   // q é o enunciado da questão do quiz: com ele o desempenho conta só a primeira resposta de cada questão no dia.
-  function event(kind, ok, topic = area, q, title = result?.title) {
-    const entry = { kind, ok, area: topic, title, q, date: new Date().toISOString() };
+  // extra leva campos a mais da resposta, como a certeza marcada no quiz (conf, #80).
+  function event(kind, ok, topic = area, q, title = result?.title, extra) {
+    const entry = { kind, ok, area: topic, title, q, ...extra, date: new Date().toISOString() };
     const next = [...readList('events'), entry];
     setEvents(persist('events', next) ? next.filter(validEvent) : [...events, entry]);
   }
@@ -1014,21 +1029,22 @@ function App() {
     focusAfter.current = ['.flashcard', '.deck-done h2'];
   }
 
-  // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa.
-  // A questão errada entra no caderno de erros; a certa, no dia marcado, sobe um degrau dele (lib.js, clearMistake).
-  // As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
-  function submit(value) {
+  // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa. conf é a certeza que ele marcou
+  // antes da correção (#80), ou nada com a caixa "Marcar certeza" desligada.
+  // A questão errada entra no caderno de erros; a certa, no dia marcado, sobe um degrau dele, menos no chute (lib.js,
+  // noteAnswer). As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
+  function submit(value, conf) {
     if (answer !== null) return;
     const q = quizList[idx];
     const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
     const from = origin(q);
     const now = new Date();
-    setAnswer({ value, ok });
-    setAnswers([...answers, { ...q, ok, given: value }]);
-    event('quiz', ok, from.area, fold(q.question), from.title);
-    notebook(list => (ok
-      ? clearMistake(list, mistakeKey(from.title, q.question), now)
-      : addMistake(list, q, from.title, from.area, now)));
+    // before é o erro do caderno de antes da resposta: a revisão da IA que aceita um chute o devolve (review).
+    const before = readList('erros').find(e => e?.key === mistakeKey(from.title, q.question));
+    setAnswer({ value, ok, conf, before });
+    setAnswers([...answers, { ...q, ok, given: value, conf }]);
+    event('quiz', ok, from.area, fold(q.question), from.title, { conf });
+    notebook(list => noteAnswer(list, q, from.title, from.area, ok, conf, now));
     // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
     if (blind) {
       say('Resposta registrada.');
@@ -1038,6 +1054,15 @@ function App() {
     // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
     // última linha com marca da caneta (ou o próprio retorno).
     focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
+  }
+
+  // Resposta curta: só espaços vale como campo vazio. Limpo, o campo mostra o aviso do required; enviado, virava erro
+  // gravado no desempenho e no caderno de erros.
+  function filled(field) {
+    if (field.value.trim()) return true;
+    field.value = '';
+    field.reportValidity();
+    return false;
   }
 
   // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
@@ -1050,6 +1075,7 @@ function App() {
     } else {
       setIdx(idx + 1);
       setAnswer(null);
+      setChoice(null);
       focusAfter.current = QUESTION_FOCUS;
     }
   }
@@ -1197,7 +1223,11 @@ function App() {
         const fix = list => fixLastQuizEvent(list, from.title, fold(q.question), asked);
         const next = fix(readList('events'));
         setEvents(persist('events', next) ? next.filter(validEvent) : fix);
-        notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
+        // O chute aceito é um acerto no chute, que não muda o caderno (noteAnswer): ele volta ao que era antes da resposta.
+        const key = mistakeKey(from.title, q.question);
+        notebook(list => (mine.conf === 'chute'
+          ? restoreMistake(list, key, mine.before, asked)
+          : removeMistake(list, key, asked)));
       }
     } catch (e) {
       if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
@@ -2589,6 +2619,7 @@ function App() {
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
                               <p>Você acertou {right} de {answers.length}.</p>
+                              {guessLine(answers) && <p>{guessLine(answers)}</p>}
                               {/* O fim do simulado diz também o acerto por material, nas linhas do acerto por área do
                                   Desempenho. */}
                               {blind && (
@@ -2608,7 +2639,11 @@ function App() {
                                       <div>
                                         <strong>{q.question}</strong>
                                         {result.exam && <span>Do material: {q.title}</span>}
-                                        <span>Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}</span>
+                                        {/* No simulado, que não tem retorno, é aqui que o erro com certeza aparece. */}
+                                        <span>
+                                          Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}
+                                          {q.conf === 'certeza' && ' (você tinha certeza)'}
+                                        </span>
                                         <span>Resposta certa: {expectedText(q)}</span>
                                         {q.explanation && <span>{q.explanation}</span>}
                                       </div>
@@ -2693,11 +2728,29 @@ function App() {
                                 >
                                   Recomeçar
                                 </button>
-                                <span className="tag">
-                                  {quiz.type === 'short' ? 'Resposta curta'
-                                    : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
-                                    : 'Múltipla escolha'}
-                                </span>
+                                {/* A etiqueta do tipo e a caixa "Marcar certeza" (#80) andam juntas: no celular, na linha
+                                    de baixo do cabeçalho (mobile.css). */}
+                                <div className="quiz-tools">
+                                  <span className="tag">
+                                    {quiz.type === 'short' ? 'Resposta curta'
+                                      : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
+                                      : 'Múltipla escolha'}
+                                  </span>
+                                  <label className="inline-field check">
+                                    <input
+                                      type="checkbox"
+                                      checked={sure}
+                                      onChange={e => {
+                                        setSure(e.target.checked);
+                                        setChoice(null);
+                                        persist('certeza', e.target.checked);
+                                        say(e.target.checked ? 'Antes da correção, marque quanta certeza você tem.'
+                                          : 'A resposta vai direto para a correção.');
+                                      }}
+                                    />
+                                    Marcar certeza
+                                  </label>
+                                </div>
                               </div>
                               <Meter value={answers.length} max={quizList.length} label="Questões respondidas" />
                               {/* As marcas ✓ e ✗ seriam correção: no simulado ficam só o fio e o "Questão X de Y". */}
@@ -2711,18 +2764,16 @@ function App() {
                                 // escreveu, também na volta de outra aba ou página.
                                 <form
                                   key={idx + '-' + answers.length}
+                                  id="resposta"
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
                                     const field = e.target.elements.response;
-                                    // Só espaços vale como campo vazio: limpo, o campo mostra o aviso do required.
-                                    // Enviado, virava erro gravado no desempenho e no caderno de erros.
-                                    if (!field.value.trim()) {
-                                      field.value = '';
-                                      field.reportValidity();
-                                      return;
-                                    }
-                                    submit(field.value);
+                                    if (!filled(field)) return;
+                                    // Com as marcas, o Enter não escolhe a certeza pelo aluno: o foco vai ao grupo dos
+                                    // botões, e não ao primeiro, que o Enter seguinte (ou a tecla segurada) apertaria.
+                                    if (sure) document.querySelector('.sure-row').focus();
+                                    else submit(field.value);
                                   }}
                                 >
                                   <input
@@ -2735,7 +2786,8 @@ function App() {
                                     defaultValue={answer?.value}
                                     disabled={answer !== null}
                                   />
-                                  <button disabled={answer !== null} className="primary">Responder</button>
+                                  {/* Com as marcas, os botões da certeza, embaixo, ficam no lugar do "Responder". */}
+                                  {!sure && <button disabled={answer !== null} className="primary">Responder</button>}
                                 </form>
                               ) : (
                                 <div className="options" role="group" aria-labelledby={'questao-' + idx}>
@@ -2744,31 +2796,53 @@ function App() {
                                       key={i}
                                       type="button"
                                       disabled={answer !== null}
-                                      className={'option' + (blind ? (answer?.value === i ? ' chosen' : '')
+                                      // Com as marcas, a opção só é escolhida: quem a manda à correção é a certeza.
+                                      aria-pressed={sure && !answer ? choice === i : undefined}
+                                      className={'option' + (!answer && choice === i ? ' chosen'
+                                        : blind ? (answer?.value === i ? ' chosen' : '')
                                         : answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
                                       // O segundo clique de um clique duplo no botão que estava aqui ("Próxima
                                       // questão", "Começar simulado") não responde: detail conta os cliques.
-                                      onClick={e => e.detail < 2 && submit(i)}
+                                      onClick={e => e.detail < 2 && (sure ? setChoice(i) : submit(i))}
                                     >
                                       <span className="letter">{String.fromCharCode(65 + i)}</span>
                                       <span className="option-text">{o}</span>
                                       {/* Certo e errado também em texto: a cor sozinha não serve a quem não a distingue. */}
                                       {!blind && answer && i === quiz.answer && <Pen kind="certo" note="certa" draw />}
                                       {!blind && answer?.value === i && i !== quiz.answer && <Pen kind="errei" note="sua resposta" draw />}
-                                      {/* No simulado a escolhida fica marcada, em texto também, sem dizer se acertou. */}
-                                      {blind && answer?.value === i && (
+                                      {/* No simulado a escolhida fica marcada, em texto também, sem dizer se acertou. Com as
+                                          marcas, também a que espera a certeza. */}
+                                      {((blind && answer?.value === i) || (!answer && choice === i)) && (
                                         <span className="pen pen--escolha"><span className="pen-note">sua resposta</span></span>
                                       )}
                                     </button>
                                   ))}
                                 </div>
                               )}
+                              {/* Com as marcas, a certeza manda a resposta à correção. Os botões ficam fora do formulário
+                                  da resposta curta, para o celular os prender acima da barra de baixo (mobile.css), e
+                                  chegam ao campo pelo atributo form. */}
+                              {sure && !answer && (
+                                <Sureness
+                                  ready={quiz.type === 'short' || choice !== null}
+                                  form={quiz.type === 'short' ? 'resposta' : undefined}
+                                  onPick={(conf, button) => {
+                                    if (quiz.type === 'short') {
+                                      const field = button.form.elements.response;
+                                      if (filled(field)) submit(field.value, conf);
+                                    } else if (choice === null) say('Escolha uma opção antes de marcar a certeza.');
+                                    else submit(choice, conf);
+                                  }}
+                                />
+                              )}
                               {/* No simulado não há retorno: depois da resposta, só o botão de seguir (submit leva o foco
                                   a ele). A correção, a explicação e os pedidos à IA ficam para o fim e para o "Refazer as
                                   que errei". */}
+                              {/* Os dois "Próxima questão" ignoram o segundo clique de um clique duplo: no celular o botão
+                                  da certeza que mandou a resposta estava no mesmo lugar. */}
                               {answer && blind && (
                                 <div className="row exam-next">
-                                  <button type="button" className="primary" onClick={nextQuestion}>
+                                  <button type="button" className="primary" onClick={e => e.detail < 2 && nextQuestion()}>
                                     {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
                                     <Icon name="seta" />
                                   </button>
@@ -2785,7 +2859,21 @@ function App() {
                                   initial={appear()}
                                   animate="show"
                                 >
-                                  <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  <strong
+                                    id="retorno"
+                                    tabIndex={-1}
+                                    aria-describedby={!answer.ok && answer.conf === 'certeza' ? 'certeza-errada' : undefined}
+                                  >
+                                    {answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}
+                                  </strong>
+                                  {/* Errou com "Tenho certeza" (#80): o aviso vem antes de tudo, e o leitor de tela o ouve
+                                      junto com o título, que recebe o foco. */}
+                                  {!answer.ok && answer.conf === 'certeza' && (
+                                    <p id="certeza-errada" className="sure-miss">
+                                      <Icon name="alerta" />
+                                      Você tinha certeza. Leia a explicação com atenção.
+                                    </p>
+                                  )}
                                   {/* Errou a opção: a marcada e a certa também em texto, como no fim do quiz. No celular
                                       deitado as marcas delas, nas opções, podiam ficar fora da vista. */}
                                   {quiz.type !== 'short' && !answer.ok && (
@@ -2818,7 +2906,10 @@ function App() {
                                     <m.div variants={focusIn} initial={appear()} animate="show">
                                       <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
                                       <p>{answer.review.feedback}</p>
-                                      <p>{VERDICT_EFFECT[answer.review.verdict]}</p>
+                                      <p>
+                                        {VERDICT_EFFECT[answer.review.verdict === 'correta' && answer.conf === 'chute' &&
+                                          answer.before ? 'chute' : answer.review.verdict]}
+                                      </p>
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
@@ -2850,7 +2941,7 @@ function App() {
                                   )}
                                   {/* No celular o botão fica preso acima da barra de baixo: o retorno pode ser longo. */}
                                   <div className="next-row">
-                                    <button type="button" className="primary" onClick={nextQuestion}>
+                                    <button type="button" className="primary" onClick={e => e.detail < 2 && nextQuestion()}>
                                       {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
                                       <Icon name="seta" />
                                     </button>
@@ -3045,7 +3136,7 @@ function App() {
                       <div className="erros-rule">
                         <p className="hint">
                           A questão sai daqui depois de 3 acertos em dias diferentes, cada um no dia marcado. Se errar,
-                          ela volta ao começo.
+                          ela volta ao começo. O acerto marcado como chute não conta.
                         </p>
                         {!mistakesDue.length && (
                           <p className="erros-next">
@@ -3120,6 +3211,8 @@ function App() {
                                       delay={0.3 + Math.min(i, 6) * 0.06}
                                     />
                                     <small>{stepOf(m)} de 3 acertos</small>
+                                    {/* O último erro foi com "Tenho certeza" (#80). Só true vale: a marca vem do navegador. */}
+                                    {m.sure === true && <small className="sure-note">você tinha certeza</small>}
                                   </span>
                                   <strong>{m.item.question}</strong>
                                   <details>
@@ -3578,6 +3671,29 @@ function QuizMarks({ total, answers, idx }) {
           kind={!answers[i] ? 'novo' : answers[i].ok ? 'certo' : 'errei'}
           className={i === idx ? 'current' : ''}
         />
+      ))}
+    </div>
+  );
+}
+
+// "Quanta certeza você tem?" (#80): os três botões que mandam a resposta à correção com a certeza. Sem a opção escolhida
+// (ready false) eles ficam com aria-disabled, e não disabled: o Tab chega a eles e o leitor de tela ouve que estão
+// desligados. Como as opções, ignoram o segundo clique de um clique duplo. onPick recebe a certeza e o botão; form é o
+// id do formulário da resposta curta, que o botão alcança sem enviá-lo. O grupo recebe o foco do Enter no campo.
+function Sureness({ ready, form, onPick }) {
+  return (
+    <div className="sure-row" role="group" aria-labelledby="certeza-titulo" tabIndex={-1}>
+      <span id="certeza-titulo">Quanta certeza você tem?</span>
+      {CONF.map(conf => (
+        <button
+          key={conf}
+          type="button"
+          form={form}
+          aria-disabled={!ready || undefined}
+          onClick={e => e.detail < 2 && onPick(conf, e.currentTarget)}
+        >
+          {SURE_LABELS[conf]}
+        </button>
       ))}
     </div>
   );

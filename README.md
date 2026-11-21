@@ -126,9 +126,11 @@ O sistema disponibiliza questões de:
 
 Após cada resposta aparecem a explicação e a opção certa, marcada também com texto ("✓ certa", "✗ sua resposta"), não só com cor. Na resposta curta aparece o gabarito e, quando o estudante erra, também o que ele digitou. Ao finalizar o quiz, o estudante vê o aproveitamento e a lista das questões que errou, com a resposta dada, a resposta certa e a explicação, e pode refazer somente essas. No simulado da Biblioteca a correção fica para o fim (veja a seção 8).
 
+Antes da correção, o estudante marca quanta certeza tem: "Tenho certeza", "Acho que sei" ou "Chutei". Na múltipla escolha e no verdadeiro ou falso, tocar na opção só a escolhe, e um dos três botões manda a resposta. Na resposta curta, os três botões ficam no lugar de "Responder", e o Enter no campo leva o foco a eles sem escolher. No celular eles ficam presos acima da barra de baixo. O erro com "Tenho certeza" ganha destaque no retorno ("Você tinha certeza. Leia a explicação com atenção.") e a marca "você tinha certeza" no caderno de erros. O acerto no chute conta no aproveitamento, mas não tira a questão do caderno nem a faz subir um degrau, e o fim do quiz diz quantos acertos foram chute. A caixa "Marcar certeza", no cabeçalho do quiz, liga e desliga as marcas: desligada, tocar na opção já envia a resposta. A escolha fica no navegador e começa ligada. Nada disso chama a IA, e vale também na demonstração e no simulado.
+
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
-Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
+Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido; se a resposta foi marcada como chute, ela passa a acerto, e o caderno de erros fica como estava antes da resposta, como no acerto no chute. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
 
@@ -160,9 +162,9 @@ O estudante pode:
 - Treinar todas as questões do caderno de uma vez;
 - Tirar uma questão da lista.
 
-Cada questão volta num dia marcado. Errou: ela volta amanhã. Cada acerto no dia marcado ou depois sobe um degrau: depois do primeiro a questão volta em 3 dias, depois do segundo em 7, e o terceiro a tira do caderno. São 3 acertos em dias diferentes, cada um no dia marcado. Acertar antes do dia, como logo depois de ler a explicação ou no "Treinar todas", não muda nada, e errar em qualquer degrau volta a questão ao começo. A página mostra quando cada questão volta ("para hoje", "volta amanhã" ou "volta em 23/11") e quantos acertos ela já tem ("1 de 3 acertos"); sem nenhuma para hoje, diz quando volta a próxima. Em "Seu progresso", no Estudar, o link mostra quantas questões são para hoje.
+Cada questão volta num dia marcado. Errou: ela volta amanhã. Cada acerto no dia marcado ou depois sobe um degrau: depois do primeiro a questão volta em 3 dias, depois do segundo em 7, e o terceiro a tira do caderno. São 3 acertos em dias diferentes, cada um no dia marcado. Acertar antes do dia, como logo depois de ler a explicação ou no "Treinar todas", não muda nada, nem o acerto marcado como chute, e errar em qualquer degrau volta a questão ao começo. A página mostra quando cada questão volta ("para hoje", "volta amanhã" ou "volta em 23/11") e quantos acertos ela já tem ("1 de 3 acertos"); sem nenhuma para hoje, diz quando volta a próxima. A questão cujo último erro foi com "Tenho certeza" leva a marca "você tinha certeza"; errar de novo sem essa certeza tira a marca. Em "Seu progresso", no Estudar, o link mostra quantas questões são para hoje.
 
-A questão também sai na hora quando a revisão da IA aceita a resposta ou quando o estudante a tira. Erro gravado antes dessa regra, ou vindo de um backup antigo, começa no primeiro degrau e volta no dia seguinte ao do erro.
+A questão também sai na hora quando a revisão da IA aceita a resposta ou quando o estudante a tira. Na resposta marcada como chute, a revisão aceita devolve a questão ao ponto em que estava antes dela: a que já estava no caderno continua lá, com os mesmos acertos. Erro gravado antes dessa regra, ou vindo de um backup antigo, começa no primeiro degrau e volta no dia seguinte ao do erro.
 
 ### 7. Desempenho
 
@@ -175,7 +177,8 @@ Entre as informações disponíveis estão:
 - Autoavaliação nos flashcards, separada do quiz;
 - Respostas e acertos dos últimos 7 dias: a altura da barra é o número de respostas do dia, e o rótulo diz quantas foram e o percentual de acerto;
 - Acerto por área;
-- Seu próximo passo, conforme o que o estudante já fez.
+- Seu próximo passo, conforme o que o estudante já fez;
+- Sua certeza: nos últimos 30 dias, quanto o estudante acertou com cada marca do quiz ("Quando marcou certeza, acertou 81% (17 de 21)"). O percentual de cada marca só aparece com 10 respostas ou mais; antes disso, a linha diz quantas faltam. A resposta sem marca, antiga ou dada com a caixa "Marcar certeza" desligada, fica de fora.
 
 O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número. Nos cartões vale a mesma regra: conta a primeira avaliação de cada cartão no dia, e revisar o baralho de novo no mesmo dia não muda o número de cartões revisados nem a autoavaliação.
 
@@ -242,7 +245,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards, a escolha da caixa "Marcar certeza" do quiz e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 

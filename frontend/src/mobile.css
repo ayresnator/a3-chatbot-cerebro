@@ -10,6 +10,8 @@
         --tabbar-h: calc(3rem + var(--dock-pad) * 2 + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px));
         /* Altura da faixa presa de "Próxima questão" (.next-row): o botão, o respiro e o fio de cima. */
         --next-h: calc(var(--control-h) + var(--sp-3) * 2 + var(--hair));
+        /* A da faixa presa da certeza (.sure-row, #80), com a pergunta numa linha e os botões na de baixo: a mais alta. */
+        --sure-h: calc(var(--fs-2) * var(--lh-ui) + var(--sp-2) + var(--next-h));
         --gutter: var(--sp-2);
         --top-y: var(--sp-2);
         --top-h: 3.25rem;
@@ -28,6 +30,11 @@
 
     html:has(.next-row) {
         scroll-padding-bottom: calc(var(--tabbar-h) + var(--next-h) + var(--sp-3))
+    }
+
+    /* Antes da correção, também acima da faixa da certeza (#80): a opção com o foco fica à vista. */
+    html:has(.sure-row) {
+        scroll-padding-bottom: calc(var(--tabbar-h) + var(--sure-h) + var(--sp-3))
     }
 
     .app {
@@ -251,6 +258,21 @@
 
     .next-row .primary {
         flex: 1
+    }
+
+    /* "Quanta certeza você tem?" e os três botões (#80) ficam presos acima da barra, no lugar do "Próxima questão" depois
+       da resposta: o enunciado e as opções podem ser longos. A faixa vai de uma borda à outra do painel (24 px de
+       respiro; no celular, 16). */
+    .sure-row {
+        position: sticky;
+        bottom: var(--tabbar-h);
+        margin: var(--sp-4) calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+        padding: var(--sp-3) var(--sp-5);
+        border-top: var(--hair) solid var(--line);
+        border-radius: 0 0 calc(var(--r-3) - var(--hair)) calc(var(--r-3) - var(--hair));
+        background: var(--glass-float);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur)
     }
 
     /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
@@ -591,6 +613,19 @@
         justify-self: start
     }
 
+    /* No quiz, a etiqueta e a caixa "Marcar certeza" (#80) dividem a linha de baixo, uma em cada ponta, e a caixa fica
+       com o alvo inteiro na linha dela. A coluna que sobra recebe a largura da linha de baixo: sem ela, a linha alargava
+       a coluna do "Questão X de Y", e o "Recomeçar" se afastava dele. */
+    .study-head:has(.quiz-tools) {
+        grid-template-columns: auto auto minmax(0, 1fr)
+    }
+
+    .quiz-tools {
+        grid-column: 1 / -1;
+        justify-content: space-between;
+        margin-block: 0
+    }
+
     .flashcard {
         min-height: 13rem;
         padding: var(--sp-5) var(--sp-4)
@@ -635,6 +670,23 @@
     .next-row {
         margin-inline: calc(-1 * var(--sp-4));
         padding-inline: var(--sp-4)
+    }
+
+    /* A faixa da certeza (#80): a pergunta numa linha e os três botões embaixo, do mesmo tamanho, como os do baralho. */
+    .sure-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-inline: calc(-1 * var(--sp-4));
+        margin-bottom: calc(-1 * var(--sp-4));
+        padding-inline: var(--sp-4)
+    }
+
+    .sure-row > span {
+        grid-column: 1 / -1
+    }
+
+    .sure-row button {
+        padding: 0 var(--sp-2)
     }
 
     .message {
@@ -803,6 +855,16 @@
     /* A pílula de espera quebra a linha em vez de cortar em "Cérebro está escr…" e esconder os segundos. */
     .chat-wait .wait-text {
         white-space: normal
+    }
+}
+
+/* Telefone de menos de 360 px: a etiqueta mais longa ("Verdadeiro ou falso") e a caixa "Marcar certeza" (#80) não cabem
+   na mesma linha. A caixa vai sempre para a linha de baixo: o cabeçalho do quiz não muda de altura de uma questão para
+   a outra. */
+@media (max-width: 359px) {
+    .quiz-tools {
+        flex-direction: column;
+        align-items: flex-start
     }
 }
 

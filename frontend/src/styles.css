@@ -2143,6 +2143,21 @@ main:focus {
     margin-inline: 0 auto
 }
 
+/* A etiqueta do tipo e a caixa "Marcar certeza" do quiz (#80), juntas na ponta do cabeçalho. A margem negativa deixa o
+   alvo da caixa na altura da etiqueta, como a do "Recomeçar". No celular elas vão para a linha de baixo (mobile.css). */
+.quiz-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-4);
+    margin-block: calc((1.5rem - var(--control-h-inline)) / 2)
+}
+
+/* A vaga da caixa no esqueleto da geração: a barra do rótulo na linha da caixa. */
+.quiz-tools .sk-check {
+    margin-block: calc((var(--control-h-inline) - .75rem) / 2)
+}
+
 /* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
 .marks {
     display: flex;
@@ -2365,11 +2380,46 @@ main:focus {
     color: var(--ink)
 }
 
-/* No simulado a escolhida fica marcada sem dizer se acertou (App.jsx, blind): a borda ciano e a nota "sua resposta". */
-.option.chosen {
+/* No simulado a escolhida fica marcada sem dizer se acertou (App.jsx, blind): a borda ciano e a nota "sua resposta".
+   Com "Marcar certeza" (#80), também a opção escolhida que espera a certeza, ainda ligada: sob o ponteiro (e no toque,
+   que deixa o ponteiro nela) a borda ciano continua. */
+.option.chosen,
+.option.chosen:hover:not(:disabled) {
     border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--ink)
+}
+
+/* "Quanta certeza você tem?" e os três botões (#80), embaixo das opções ou do campo da resposta curta (fora do
+   formulário dela). Os botões ficam iguais: nenhum é o principal, para não puxar a escolha. */
+.sure-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    margin-top: var(--sp-4)
+}
+
+.sure-row > span {
+    margin-right: var(--sp-1);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650;
+    line-height: var(--lh-ui)
+}
+
+/* Errou com "Tenho certeza" (#80): a frase em destaque logo abaixo do título do retorno, com o ⚠. */
+.sure-miss {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    color: var(--ink-hi);
+    font-weight: 700
+}
+
+.sure-miss .icon {
+    margin-top: .2em;
+    color: var(--pen-text)
 }
 
 .feedback {
@@ -3506,6 +3556,12 @@ main:focus {
     line-height: var(--lh-ui)
 }
 
+/* A marca "você tinha certeza" (#80), embaixo dos acertos, no vermelho do texto da caneta. */
+.mistake-when .sure-note {
+    color: var(--pen-text);
+    font-weight: 700
+}
+
 .mistakes li strong {
     max-width: var(--measure);
     overflow-wrap: anywhere
@@ -4201,14 +4257,16 @@ main[data-instant] > .view[data-motion-pop-id] {
         min-height: var(--control-h)
     }
 
-    /* "Recomeçar" do quiz e do baralho: com o alvo de 44 px, o cabeçalho continua na altura da etiqueta (24 px), a do
-       esqueleto da geração. */
-    .study-head .link {
+    /* "Recomeçar" do quiz e do baralho e a caixa "Marcar certeza": com o alvo de 44 px, o cabeçalho continua na altura
+       da etiqueta (24 px), a do esqueleto da geração. */
+    .study-head .link,
+    .quiz-tools {
         margin-block: calc((1.5rem - var(--control-h)) / 2)
     }
 
-    /* A vaga da caixa "Esconder o texto" no esqueleto do resumo: a barra do rótulo na linha de 44 px dela. */
-    .sk-check {
+    /* A vaga das caixas "Esconder o texto" e "Marcar certeza" nos esqueletos: a barra do rótulo na linha de 44 px dela. */
+    .sk-check,
+    .quiz-tools .sk-check {
         margin-block: calc((var(--control-h) - .75rem) / 2)
     }
 }
@@ -4354,6 +4412,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     /* O ✓ da marca no texto dela: no CanvasText, como os outros ícones, ele sumia no Highlight. */
     .recall-marks [aria-pressed=true] .icon {
         stroke: HighlightText
+    }
+
+    /* Os botões da certeza antes da opção escolhida (aria-disabled): sem isto, no alto contraste eles pareciam ligados. */
+    .sure-row [aria-disabled=true] {
+        border-color: GrayText;
+        color: GrayText
     }
 
     /* A frase de exemplo do campo vazio no cinza do sistema, como a frase fixa de um campo: na cor do texto ela parecia
