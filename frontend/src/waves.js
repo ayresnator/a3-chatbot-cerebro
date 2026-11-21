@@ -18,15 +18,6 @@ export const FRAME_WAIT_MS = FRAME_MS - FRAME_SLACK_MS - 4;
 export const MAX_STEP_MS = 100;
 // Depois de uma hora o tempo volta a zero quando a aba reaparece: em float, um número grande perde precisão.
 export const RESTART_S = 3600;
-// O contexto não sai antes de 1,5 s da abertura da página, nem de 1 s depois de pedido (o JS do app pode chegar tarde):
-// até lá a GPU ainda cuida dos primeiros quadros, e o getContext esperava por ela de 0,1 a 0,7 s na thread principal
-// (Chromium com GPU de verdade, sem cache); depois, ~3 ms.
-const SETTLE_MS = 1500;
-// Canvas que já têm contexto: neles o getContext só devolve o que existe, sem esperar a GPU (menos de 1 ms), e o
-// começo novo (a troca do "Fundo animado", a janela alargada de novo) sai na própria chamada. Pelo requestIdleCallback
-// ele às vezes ficava para o prazo de 2 s, com a janela do perfil fechando logo depois do clique.
-const warm = new WeakSet();
-
 export const UNIFORMS = {
   // Cores do mais escuro ao mais claro: #031C26, #1B6CA8, #5AD2F4 e #EAF9FF. O shader tem 8 vagas; só 4 são usadas.
   colors: [
@@ -364,9 +355,9 @@ function compile(gl, type, source) {
 }
 
 // Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando (só o shader
-// que ainda está ligando espera a ligação acabar para ser apagado). A primeira vez num canvas, o trabalho começa quando
-// a página fica livre (requestIdleCallback; sem ele, na hora marcada), não antes de SETTLE_MS da abertura nem de 1 s
-// depois da chamada; no canvas que já tem contexto (warm), começa na própria chamada. Só roda com WebGL na GPU: com
+// que ainda está ligando espera a ligação acabar para ser apagado). O trabalho começa com a primeira pintura da
+// página, para as ondas entrarem junto com ela (issue #136): com a espera de 1,5 s e da folga da página que havia aqui,
+// as margens ficavam escuras por 1,3 a 2 s depois dessa pintura. Só roda com WebGL na GPU: com
 // failIfMajorPerformanceCaveat, o renderizador por software não dá contexto, e fica o fundo de CSS. Com
 // KHR_parallel_shader_compile o driver compila e liga o shader fora da thread principal, e cada quadro só pergunta se
 // acabou; sem ela, a ligação trava a página até acabar, como antes.
@@ -563,7 +554,6 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
       onActive(false);
       return;
     }
-    warm.add(canvas);
     window.addEventListener('resize', render);
     document.addEventListener('visibilitychange', onVisibility);
     canvas.addEventListener('webglcontextlost', onLost);
@@ -573,20 +563,24 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     link();
   }
 
-  let idle = 0;
-  let timer = 0;
-  if (warm.has(canvas)) begin();
+  // O contexto espera a primeira pintura da página chegar à tela: com o navegador recém-aberto o getContext esperou a
+  // GPU por até 1,7 s, e pedido antes ele atrasava essa pintura em 0,4 a 0,6 s. Até lá as margens mostram o fundo
+  // parado (styles.css, --waves-rest). Com a página já pintada (a troca do "Fundo animado", a janela alargada de novo)
+  // ou num navegador que não avisa da pintura, sai na chamada.
+  let painted = null;
+  if (performance.getEntriesByName('first-contentful-paint').length
+    || !PerformanceObserver.supportedEntryTypes?.includes('paint')) begin();
   else {
-    timer = setTimeout(() => {
-      if ('requestIdleCallback' in window) idle = requestIdleCallback(begin, { timeout: 2000 });
-      else begin();
-    }, Math.max(SETTLE_MS - performance.now(), 1000));
+    painted = new PerformanceObserver(() => {
+      painted.disconnect();
+      begin();
+    });
+    painted.observe({ type: 'paint', buffered: true });
   }
 
   return () => {
     stopped = true;
-    clearTimeout(timer);
-    if (idle) cancelIdleCallback(idle);
+    painted?.disconnect();
     pause();
     window.removeEventListener('resize', render);
     document.removeEventListener('visibilitychange', onVisibility);
