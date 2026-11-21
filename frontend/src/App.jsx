@@ -21,8 +21,10 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
+  validCardReview, scheduleCard, dueCards, DAY_CARDS,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
+  stepOf, dueOf, dueMistakes, backOn, DAY_MISTAKES,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
 } from './lib.js';
@@ -211,8 +213,11 @@ function App() {
   // Caderno de erros: as questões erradas de todos os materiais (lib.js). Como a biblioteca, o que está estragado
   // fica fora da tela e continua gravado.
   const [mistakes, setMistakes] = useState(() => readList('erros').filter(validMistake));
-  // Material que estava aberto quando o quiz do caderno de erros tomou o lugar dele. Só vale enquanto result é o
-  // material temporário do caderno (result.virtual).
+  // Revisão espaçada dos cartões: a caixa e o dia de volta de cada cartão avaliado (lib.js, scheduleCard). Como o
+  // caderno, o que está estragado fica fora da tela e continua gravado.
+  const [boxes, setBoxes] = useState(() => readList('cartoes').filter(validCardReview));
+  // Material que estava aberto quando o quiz do caderno de erros ou a revisão do dia dos cartões tomou o lugar dele.
+  // Só vale enquanto result é um material temporário (result.virtual).
   const [parked, setParked] = useState(null);
   // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
   // Só com item, a resposta ainda não chegou.
@@ -222,7 +227,7 @@ function App() {
   // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
   // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
-  // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
+  // Material de verdade que está aberto: durante o quiz do caderno de erros e a revisão do dia é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
   // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
@@ -296,15 +301,16 @@ function App() {
     };
   }, []);
 
-  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, o perfil ou a data do backup: esta mostra a
-  // mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O rascunho fica de fora:
-  // cada aba fica com o seu. key null: outra aba apagou tudo.
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil ou a data do
+  // backup: esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O
+  // rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
   useEffect(() => {
     const sync = e => {
       const changed = k => e.key === null || e.key === storageKey(k);
       if (changed('saved')) setSaved(readList('saved').filter(validMaterial));
       if (changed('events')) setEvents(readList('events').filter(validEvent));
       if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
+      if (changed('cartoes')) setBoxes(readList('cartoes').filter(validCardReview));
       if (changed('backup')) setLastBackup(read('backup', null));
       if (changed('user')) {
         const profile = readUser();
@@ -428,11 +434,12 @@ function App() {
     if (error) errorBox.current?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
   }, [error]);
 
-  // O material temporário do caderno de erros só vale na página do quiz: sair dela por qualquer caminho (menu,
-  // logotipo, botão de um aviso) traz de volta o material que estava aberto, com o quiz no início.
+  // O material temporário (o quiz do caderno de erros ou a revisão do dia dos cartões) só vale na página dele, a que
+  // fica em virtual: sair dela por qualquer caminho (menu, logotipo, botão de um aviso) traz de volta o material que
+  // estava aberto, com o quiz e o baralho no início.
   // Mudar o estado durante o desenho faz o React refazer o desenho na hora: a página nova nunca aparece com o
   // material temporário.
-  if (result?.virtual && page !== 'Quizzes') {
+  if (result?.virtual && page !== result.virtual) {
     setResult(parked);
     restart();
   }
@@ -461,7 +468,8 @@ function App() {
   }
 
   // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
-  // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
+  // caderno de erros ou a revisão do dia entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta
+  // onde estava.
   function restart() {
     restartQuiz();
     setFlip(false);
@@ -573,6 +581,12 @@ function App() {
     return stored;
   }
 
+  // Muda as caixas dos cartões a partir da lista do navegador, como notebook().
+  function schedule(change) {
+    const next = change(readList('cartoes'));
+    setBoxes(persist('cartoes', next) ? next.filter(validCardReview) : change);
+  }
+
   // De onde vem a questão ou o tópico: o material aberto ou, no quiz do caderno de erros, o material e a área que
   // a questão traz. Área e nível vão nos pedidos à IA, que só aceita os das listas: material antigo ou importado
   // pode não ter (e o do caderno não tem nível), e aí valem a área do editor e o nível Básico.
@@ -585,8 +599,9 @@ function App() {
     };
   }
 
-  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página: volta o material que
-  // estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
+  // O menu sempre sai do material temporário, até o botão da página dele (Quizzes no caderno de erros, Flashcards na
+  // revisão do dia), que não troca de página: volta o material que estava aberto, com o quiz e o baralho no início.
+  // Fora disso o menu não recomeça o quiz nem o baralho.
   function go(next) {
     if (result?.virtual) {
       setResult(parked);
@@ -750,15 +765,16 @@ function App() {
   }
 
   // Exportar (e o "Fazer backup" do pé da Biblioteca e do Desempenho): um arquivo com tudo o que este navegador guarda
-  // (biblioteca, desempenho, caderno de erros e perfil), para levar a outro computador. Parte do que está gravado, não
-  // das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes, como quando outro toma
-  // o lugar dele, e assim vai no arquivo.
+  // (biblioteca, desempenho, caderno de erros, caixas dos cartões e perfil), para levar a outro computador. Parte do
+  // que está gravado, não das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes,
+  // como quando outro toma o lugar dele, e assim vai no arquivo.
   function exportBackup() {
     const unsaved = !!opened && !opened.id;
     const entry = unsaved ? store(opened) : null;
     if (entry) setResult(entry);
     const backup = {
-      versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
+      versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'),
+      cartoes: readList('cartoes'), user: readUser(),
     };
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
@@ -789,7 +805,10 @@ function App() {
     // O histórico entra e sai sem as repetições de dias passados (lib.js, compactEvents): o backup não as traz de volta,
     // e o aviso no fim compara duas listas compactadas.
     const now = new Date();
-    const before = { saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros') };
+    const before = {
+      saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros'),
+      cartoes: readList('cartoes'),
+    };
     const after = mergeBackup(before, backup);
     after.events = compactEvents(after.events, now);
     if (!persist('saved', after.saved)) return;
@@ -798,6 +817,8 @@ function App() {
     setEvents(after.events.filter(validEvent));
     if (!persist('erros', after.erros)) return;
     setMistakes(after.erros.filter(validMistake));
+    if (!persist('cartoes', after.cartoes)) return;
+    setBoxes(after.cartoes.filter(validCardReview));
     // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
     // A área do editor não muda.
     const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
@@ -809,10 +830,13 @@ function App() {
   }
 
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
-  // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia.
+  // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia. Os dois mudam
+  // também a caixa do cartão (lib.js, scheduleCard). Na revisão do dia, o cartão traz o material e a área de onde veio.
   // Os dois botões ficam desabilitados no cartão novo (ainda não virado): o foco passa para o cartão.
   function cardNext(ok) {
-    event('flashcard', ok, result.area, fold(card.question));
+    const from = result.virtual ? card : result;
+    event('flashcard', ok, from.area, fold(card.question), from.title);
+    schedule(list => scheduleCard(list, from.title, card.question, ok, new Date()));
     setFlip(false);
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
@@ -820,7 +844,7 @@ function App() {
   }
 
   // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa.
-  // A questão errada entra no caderno de erros; a certa sai dele, se o erro guardado é de outro dia (lib.js).
+  // A questão errada entra no caderno de erros; a certa, no dia marcado, sobe um degrau dele (lib.js, clearMistake).
   // As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
   function submit(value) {
     if (answer !== null) return;
@@ -853,24 +877,45 @@ function App() {
     }
   }
 
-  // "Refazer meus erros": o quiz abre num material temporário com as questões do caderno, cada uma com o material
-  // e a área de onde veio. O material que estava aberto fica guardado e volta quando o aluno sai do quiz.
-  // Com title, só as questões desse material ("Refazer os erros de", no Desempenho).
-  function redoMistakes(title) {
+  // Quiz do caderno de erros ("Refazer os de hoje", "Treinar todas" e, no Desempenho, "Refazer os erros de"): o quiz
+  // abre num material temporário com as questões da lista, cada uma com o material e a área de onde veio. O material
+  // que estava aberto fica guardado e volta quando o aluno sai do quiz. virtual é a página do material temporário.
+  function redoMistakes(list) {
     setParked(opened);
     setResult({
-      virtual: true,
+      virtual: 'Quizzes',
       title: 'Caderno de erros',
       area: '',
       level: '',
       summary: [],
       flashcards: [],
-      quiz: mistakes.filter(m => !title || m.title === title).map(m => ({ ...m.item, title: m.title, area: m.area })),
+      quiz: list.map(m => ({ ...m.item, title: m.title, area: m.area })),
     });
     openPage('Quizzes', QUESTION_FOCUS);
     restart();
     // Um aviso ainda na tela com o botão "Abrir" (material pronto) reiniciaria este quiz em vez de abrir o material.
     setNotice(null);
+  }
+
+  // "Revisão do dia": os cartões que voltam hoje, de todos os materiais, num baralho temporário, como o quiz do caderno:
+  // no máximo 20 por vez, os mais atrasados primeiro. O material que estava aberto fica guardado e volta quando o aluno
+  // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está.
+  function dayDeck() {
+    const cards = cardsDue.slice(0, DAY_CARDS);
+    setParked(opened);
+    setResult({
+      virtual: 'Flashcards',
+      title: 'Revisão do dia',
+      area: '',
+      level: '',
+      summary: [],
+      flashcards: cards,
+      quiz: [],
+    });
+    openPage('Flashcards', ['.flashcard', 'main h1']);
+    restart();
+    setNotice(null);
+    say('Revisão do dia: ' + cards.length + ' ' + plural(cards.length, 'cartão', 'cartões') + '.');
   }
 
   // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
@@ -1142,6 +1187,13 @@ function App() {
     };
   }, [events, today]);
   const days = useMemo(() => chartDays(events, chartArea, new Date()), [events, chartArea, today]);
+  // Revisão espaçada (lib.js): os cartões e as questões do caderno que voltam hoje. Os cartões saem do material aberto
+  // e da biblioteca; o material temporário não conta (opened é o que ficou guardado).
+  const cardsDue = useMemo(
+    () => dueCards(boxes, [opened, ...saved].filter(Boolean), new Date()),
+    [boxes, opened, saved, today]
+  );
+  const mistakesDue = useMemo(() => dueMistakes(mistakes, new Date()), [mistakes, today]);
   // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
@@ -1580,9 +1632,17 @@ function App() {
                   <m.section className="progress" aria-labelledby="progresso" variants={rise}>
                     <div className="progress-head">
                       <h2 id="progresso">Seu progresso</h2>
+                      {/* A revisão espaçada: o link dos cartões abre a revisão do dia; o das questões, o caderno. */}
+                      {cardsDue.length > 0 && (
+                        <button type="button" className="link" onClick={() => dayDeck()}>
+                          {cardsDue.length + ' ' + plural(cardsDue.length, 'cartão', 'cartões') + ' para hoje'}
+                        </button>
+                      )}
                       {mistakes.length > 0 && (
                         <button type="button" className="link" onClick={() => openPage('Erros')}>
-                          {mistakes.length + (mistakes.length === 1 ? ' questão para rever' : ' questões para rever')}
+                          {mistakesDue.length
+                            ? mistakesDue.length + ' ' + plural(mistakesDue.length, 'questão', 'questões') + ' para hoje'
+                            : mistakes.length + ' ' + plural(mistakes.length, 'questão', 'questões') + ' no caderno'}
                         </button>
                       )}
                       <button type="button" className="link" onClick={() => openPage('Desempenho')}>
@@ -1658,16 +1718,24 @@ function App() {
                               Abrir da biblioteca ({saved.length})
                             </button>
                           )}
+                          {page === 'Flashcards' && cardsDue.length > 0 && (
+                            <button type="button" onClick={() => dayDeck()}>
+                              Revisão do dia ({cardsDue.length})
+                            </button>
+                          )}
                         </div>
                       </m.section>
                     ) : (
                       <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
-                        {/* O material temporário do caderno de erros só tem quiz: sem o botão de salvar e sem as abas. */}
+                        {/* O material temporário só tem uma parte (o quiz do caderno de erros, os cartões da revisão do
+                            dia): sem o botão de salvar e sem as abas. */}
                         <div className="result-header">
                           <div>
                             <h2 id="material-titulo" tabIndex={-1}>{result.title}</h2>
                             <p className="meta">
-                              {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
+                              {result.virtual === 'Quizzes' ? 'Questões que você errou'
+                                : result.virtual ? 'Cartões de vários materiais'
+                                : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
                                 O dos outros diz de onde ele veio (lib.js, originNote). */}
@@ -1778,17 +1846,33 @@ function App() {
                               </button>
                             </>
                           )}
+                          {/* Acima do baralho do material, a revisão do dia: os cartões que voltam hoje, de todos os
+                              materiais (lib.js, dueCards). */}
+                          {page === 'Flashcards' && !result.virtual && cardsDue.length > 0 && (
+                            <div className="row day-review">
+                              <button type="button" onClick={() => dayDeck()}>
+                                <Icon name="flashcards" />
+                                Revisão do dia ({cardsDue.length})
+                              </button>
+                            </div>
+                          )}
                           {page === 'Flashcards' && (session.pos >= session.queue.length ? (
                             // Fim do baralho (Jhey): o painel sobe com um balanço curto e a caneta passa por cada cartão.
                             <m.div className="empty deck-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>Baralho concluído</h2>
                               <p>{deckSummary(session)}</p>
                               <DeckMarks session={session} finale />
-                              {/* Recomeçar tira esta tela, com o botão: o foco vai para o primeiro cartão. */}
+                              {/* Recomeçar tira esta tela, com o botão: o foco vai para o primeiro cartão. Na revisão do
+                                  dia com mais de 20 cartões para hoje, o principal é seguir para os próximos. */}
                               <div className="row center">
+                                {result.virtual && cardsDue.length > 0 && (
+                                  <button type="button" className="primary" onClick={() => dayDeck()}>
+                                    Revisão do dia ({cardsDue.length})
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  className="primary"
+                                  className={result.virtual && cardsDue.length > 0 ? undefined : 'primary'}
                                   onClick={() => {
                                     setDeck(null);
                                     focusAfter.current = ['.flashcard'];
@@ -1812,6 +1896,12 @@ function App() {
                             </m.div>
                           ) : card && (
                             <>
+                              {/* Na revisão do dia o "Acertei" sobe a caixa do cartão: só o aluno sabe se lembrou. */}
+                              {result.virtual && (
+                                <p className="hint day-note">
+                                  A caixa sobe pelo seu Acertei. Marque só o que você lembrou de verdade.
+                                </p>
+                              )}
                               <div className="study-head">
                                 <span>Cartão {session.pos + 1} de {session.queue.length}</span>
                                 {/* Trocar de aba ou de página não recomeça o baralho: este botão recomeça. Antes do primeiro
@@ -1834,9 +1924,12 @@ function App() {
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
                               <DeckMarks session={session} fresh />
+                              {/* Como no quiz do caderno; o leitor de tela ouve o material junto com o cartão. */}
+                              {result.virtual && <p className="hint" id="do-material">Do material: {card.title}</p>}
                               <button
                                 type="button"
                                 className={'flashcard' + (flip ? ' flipped' : '')}
+                                aria-describedby={result.virtual ? 'do-material' : undefined}
                                 onClick={() => {
                                   setFlip(!flip);
                                   // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a
@@ -2277,20 +2370,47 @@ function App() {
                 <m.section className="panel" variants={rise}>
                   {mistakes.length > 0 && (
                     <div className="erros-head">
-                      <p className="hint">
-                        Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
-                      </p>
+                      {/* A regra numa linha só dela, e a escada e os botões na de baixo. As de hoje vêm no máximo 10
+                          por vez, as mais atrasadas primeiro (lib.js, dueMistakes). Sem nenhuma para hoje, a frase diz
+                          quando volta a próxima, e treinar todas vira o principal: o acerto antes do dia marcado não
+                          sobe degrau. */}
+                      <div className="erros-rule">
+                        <p className="hint">
+                          A questão sai daqui depois de 3 acertos em dias diferentes, cada um no dia marcado. Se errar,
+                          ela volta ao começo.
+                        </p>
+                        {!mistakesDue.length && (
+                          <p className="erros-next">
+                            {'Nenhuma para hoje. A próxima ' + backOn(mistakes.map(dueOf).sort()[0], today) + '.'}
+                          </p>
+                        )}
+                      </div>
                       {/* As marcas são as da lista abaixo. A seta, como elas, fica fora do leitor de tela: ele lê os
                           passos da lista em ordem. */}
                       <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
                         <li><Pen kind="errei" /> errei</li>
-                        <li><Icon name="seta" /><Pen kind="refazer" /> refazer em outro dia</li>
-                        <li><Icon name="seta" /><Pen kind="certo" /> certo em outro dia: sai do caderno</li>
+                        <li><Icon name="seta" /><Pen kind="refazer" /> volta em 1, 3 e 7 dias</li>
+                        <li><Icon name="seta" /><Pen kind="certo" /> 3 acertos: sai do caderno</li>
                       </ol>
-                      <button type="button" className="primary" onClick={() => redoMistakes()}>
-                        <Icon name="refazer" />
-                        Refazer meus erros ({mistakes.length})
-                      </button>
+                      <div className="erros-actions">
+                        {mistakesDue.length > 0 && (
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => redoMistakes(mistakesDue.slice(0, DAY_MISTAKES))}
+                          >
+                            <Icon name="refazer" />
+                            Refazer os de hoje ({mistakesDue.length})
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={mistakesDue.length ? undefined : 'primary'}
+                          onClick={() => redoMistakes(mistakes)}
+                        >
+                          Treinar todas ({mistakes.length})
+                        </button>
+                      </div>
                     </div>
                   )}
                   {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (undoNow, flipList). Fora da
@@ -2315,18 +2435,23 @@ function App() {
                           {/* role="list": sem ele, uma lista sem marcadores deixa de ser lida como lista no Safari. */}
                           <ul role="list">
                             {list.map((m, i) => {
-                              // Errada hoje: ✗. De outro dia: ↻, já dá para refazer e tirar do caderno acertando.
-                              const fresh = localDay(m.date) === today;
+                              // Para hoje (ou atrasada): ↻, já dá para refazer e subir um degrau. Esperando o dia
+                              // marcado: ✗ no degrau 0 (errou e volta amanhã), ○ depois de um acerto. A nota diz quando
+                              // ela volta, e embaixo vão os acertos.
+                              const due = dueOf(m);
                               return (
                                 <li key={m.key} data-key={m.key} data-flip>
-                                  {/* Só a marca de um erro novo desde a última visita se desenha (penned), depois que a
-                                      página assenta (~0,35 s); as outras o aluno já viu e aparecem prontas. */}
-                                  <Pen
-                                    kind={fresh ? 'errei' : 'refazer'}
-                                    note={fresh ? 'errei hoje' : 'refazer'}
-                                    draw={!penned.has(m.key + m.date)}
-                                    delay={0.3 + Math.min(i, 6) * 0.06}
-                                  />
+                                  <span className="mistake-when">
+                                    {/* Só a marca de um erro novo desde a última visita se desenha (penned), depois
+                                        que a página assenta (~0,35 s); as outras o aluno já viu e aparecem prontas. */}
+                                    <Pen
+                                      kind={due <= today ? 'refazer' : stepOf(m) ? 'novo' : 'errei'}
+                                      note={backOn(due, today)}
+                                      draw={!penned.has(m.key + m.date)}
+                                      delay={0.3 + Math.min(i, 6) * 0.06}
+                                    />
+                                    <small>{stepOf(m)} de 3 acertos</small>
+                                  </span>
                                   <strong>{m.item.question}</strong>
                                   <details>
                                     <summary>
@@ -2342,7 +2467,10 @@ function App() {
                                     aria-label={'Tirar do caderno: ' + m.item.question}
                                     onClick={e => leave(e.currentTarget.closest('li'), () => drop(m))}
                                   >
-                                    Tirar do caderno
+                                    {/* Em 380 px ou menos fica a palavra curta: a nota "volta em 23/11" não cabia ao
+                                        lado do nome inteiro, que continua no aria-label (mobile.css). */}
+                                    <span className="full">Tirar do caderno</span>
+                                    <span className="short" aria-hidden="true">Tirar</span>
                                   </button>
                                 </li>
                               );
@@ -2382,6 +2510,7 @@ function App() {
                     hasMaterial={!!result}
                     onStart={() => openPage(result ? 'Quizzes' : 'Estudar')}
                     mistakes={mistakes}
+                    due={mistakesDue}
                     redoMistakes={redoMistakes}
                     events={events}
                     backup={backupLine}

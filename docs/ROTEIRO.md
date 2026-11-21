@@ -5,8 +5,8 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 ## Na véspera
 
 1. Rode o projeto do zero em um computador do grupo, seguindo o [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
-2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito) e salve os materiais.
-3. Na Biblioteca, clique em "Exportar". O arquivo `cerebro-backup-AAAA-MM-DD.json` é o plano B: leva a biblioteca, o desempenho e o caderno de erros para qualquer navegador.
+2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito), avalie os flashcards e salve os materiais.
+3. Na Biblioteca, clique em "Exportar". O arquivo `cerebro-backup-AAAA-MM-DD.json` é o plano B: leva a biblioteca, o desempenho, o caderno de erros e as caixas dos cartões para qualquer navegador.
 4. Copie o arquivo para o computador da apresentação e para um pen drive.
 5. Não rode a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`) no dia da apresentação nem na véspera à noite: ela usa a mesma cota da chave.
 
@@ -15,7 +15,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 1. Abra os dois terminais (backend e frontend) e o endereço http://localhost:5173. Use sempre `localhost`: os dados ficam guardados por endereço.
 2. Confira o cabeçalho: tem de aparecer "IA ativa", o nome do modelo e as chamadas deste computador. "IA não configurada" é chave faltando no `.env`. "Cérebro desligado" é o terminal do Python parado. "Cota de hoje esgotada" é a cota do Google que acabou. O número conta só as chamadas deste computador: a cota é do projeto inteiro, e o saldo real fica no painel de uso do Google AI Studio.
 3. Em um terceiro terminal, na pasta `backend`, rode `.\.venv\Scripts\python.exe -m app.check` uma vez. Ele faz uma chamada real e mostra se a chave e a cota respondem.
-4. Na Biblioteca, clique em "Importar" e escolha o arquivo da véspera. O Desempenho e o caderno de erros já aparecem com dados.
+4. Na Biblioteca, clique em "Importar" e escolha o arquivo da véspera. O Desempenho e o caderno de erros já aparecem com dados, e os cartões e as questões de ontem voltam hoje.
 5. Aumente o zoom do navegador para 125% (Ctrl e +) se for usar projetor. Se o menu da esquerda virar uma barra embaixo, a janela ficou estreita para esse zoom: diminua o zoom até o menu voltar.
 6. Deixe abertos em outras abas o [docs/IA.md](IA.md), o [VALIDACAO.md](VALIDACAO.md) na tabela da rodada de 17/11 e a página Actions do repositório no GitHub, com os testes passando.
 
@@ -28,12 +28,12 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
 
-1. Flashcards: vire um cartão e clique em "Errei". Mostre que a fila cresceu: o cartão volta até ser acertado.
+1. Flashcards: vire um cartão e clique em "Errei". Mostre que a fila cresceu: o cartão volta até ser acertado. Com o arquivo da véspera importado, os cartões avaliados ontem voltam hoje: abra o link "N cartões para hoje", em "Seu progresso" no Estudar, e mostre a revisão do dia, com o material de cada cartão. Diga a regra: cada "Acertei" no dia marcado leva o cartão para uma caixa que volta mais tarde (1, 3, 7 e 16 dias), e "Errei" o traz de volta para amanhã.
 2. Quiz: erre a primeira questão de propósito. Mostre a opção certa marcada com "✓ certa", a sua com "✗ sua resposta" e a explicação.
 3. Clique em "Não entendi, me explique". A resposta aparece ali mesmo, sem trocar de página.
 4. Na questão de resposta curta, digite a resposta certa com um erro pequeno de digitação, como uma letra trocada. A comparação de texto marca como errada. Clique em "Pedir revisão da IA" e mostre o veredito. Não use a sigla, o plural ou um sinônimo: o modelo costuma pôr essas formas no gabarito, a tela aceita a resposta e o botão de revisão não aparece.
 5. Termine o quiz e mostre a lista das questões erradas.
-6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá. Diga a regra: a questão sai sozinha quando é acertada em outro dia. O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
+6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá, com "volta amanhã". Diga a regra: a questão volta no dia marcado (amanhã, depois em 3 e em 7 dias) e só sai depois de 3 acertos em dias diferentes, cada um no dia marcado; errar volta ao começo. As questões do arquivo da véspera aparecem "para hoje", no "Refazer os de hoje". O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
 
 ## Bloco 3: dúvidas e desempenho (2 minutos, 1 pedido à IA)
 

@@ -266,7 +266,7 @@
         grid-template-columns: minmax(0, 1fr) auto
     }
 
-    .mistakes li > .pen {
+    .mistakes li > .mistake-when {
         grid-row: auto;
         grid-column: 1
     }
@@ -623,9 +623,13 @@
         max-width: 92%
     }
 
-    .erros-head .primary {
-        width: 100%;
+    .erros-actions {
+        flex: 1 1 100%;
         margin-left: 0
+    }
+
+    .erros-actions button {
+        flex: 1 1 auto
     }
 
     /* Biblioteca: a busca e o filtro ganham a linha inteira; Exportar e Importar dividem a de baixo. */
@@ -721,6 +725,16 @@
     }
 
     .ask .short {
+        display: inline
+    }
+
+    /* Caderno de erros: "Tirar" no lugar de "Tirar do caderno" (o nome inteiro continua no aria-label), e a nota
+       "volta em 23/11" cabe ao lado do botão. */
+    .mistakes .drop .full {
+        display: none
+    }
+
+    .mistakes .drop .short {
         display: inline
     }
 

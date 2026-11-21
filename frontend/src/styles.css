@@ -1924,6 +1924,11 @@ main:focus {
     font-variant-numeric: tabular-nums
 }
 
+/* A frase do "Acertei" na revisão do dia: sem as abas, é ela que separa o cabeçalho do baralho, como as abas fazem. */
+.material .day-note {
+    margin: var(--sp-3) 0 var(--sp-5)
+}
+
 /* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
    negativa deixa o alvo de 36 px na altura da etiqueta (24 px): o cabeçalho fica do tamanho do esqueleto da geração.
    No toque o alvo tem 44 px, e a margem acompanha (pointer: coarse, no fim do arquivo). */
@@ -2232,6 +2237,11 @@ main:focus {
 .pen--errei .pen-note,
 .pen--refazer .pen-note {
     color: var(--pen-text)
+}
+
+/* A nota ao lado do ○ (a questão do caderno que espera o dia marcado) é texto: o cinza secundário, e não o dos ícones. */
+.pen--novo .pen-note {
+    color: var(--ink-2)
 }
 
 /* ---------- Dúvidas ---------- */
@@ -3092,17 +3102,31 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
+/* A regra (e, sem questão para hoje, quando volta a próxima) ocupa a linha inteira: a escada e os botões ficam
+   juntos na de baixo, qualquer que seja o tamanho dos textos. */
+.erros-rule {
+    flex-basis: 100%
+}
+
 .erros-head .hint {
-    flex-basis: 100%;
     margin: 0
 }
 
-.erros-head .primary {
+.erros-next {
+    margin: var(--sp-2) 0 0;
+    font-weight: 650
+}
+
+/* "Refazer os de hoje" e "Treinar todas" ficam juntos, na ponta da linha da escada. */
+.erros-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
     margin-left: auto
 }
 
-/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ refazer em outro dia, ✓ certo em outro
-   dia: sai do caderno. */
+/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ volta em 1, 3 e 7 dias, ✓ 3 acertos:
+   sai do caderno. */
 .ladder {
     display: flex;
     flex-wrap: wrap;
@@ -3136,10 +3160,11 @@ main:focus {
     list-style: none
 }
 
-/* Cada questão: a marca e a nota à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno" embaixo. */
+/* Cada questão: a marca, quando ela volta e os acertos à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno"
+   embaixo. */
 .mistakes li {
     display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+    grid-template-columns: 8.75rem minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--sp-2) var(--sp-4);
     padding: var(--sp-4) 0;
@@ -3147,8 +3172,19 @@ main:focus {
     line-height: var(--lh-read)
 }
 
-.mistakes li > .pen {
-    grid-row: span 2
+.mistakes li > .mistake-when {
+    grid-row: span 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1)
+}
+
+/* Os acertos ficam embaixo da nota, alinhados ao texto dela. */
+.mistake-when small {
+    padding-left: calc(var(--mark) + var(--sp-1));
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    line-height: var(--lh-ui)
 }
 
 .mistakes li strong {
@@ -3202,6 +3238,11 @@ main:focus {
     grid-row: 1;
     min-height: var(--control-h-inline);
     white-space: nowrap
+}
+
+/* "Tirar", a palavra curta, só em 380 px ou menos (mobile.css). */
+.mistakes .drop .short {
+    display: none
 }
 
 /* "Desfazer" que fica na lista depois de uma exclusão. */
