@@ -15,8 +15,8 @@ from pydantic import ValidationError
 
 from .config import settings
 from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
-                     QuizItem, StudyInput, StudyOutput, SummaryItem)
-from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
+                     QuizInput, QuizItem, QuizOutput, StudyInput, StudyOutput, SummaryItem)
+from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, QUIZ, TOPICS
 from .providers import ai, budget, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
@@ -32,6 +32,8 @@ GRADE_SCHEMA = GradeOutput.model_json_schema()
 # O exemplo também: é um campo só, e o JSON quebrado (o chat, que vai sem esquema, recebe 1 em ~20) gastaria a única
 # segunda chamada do clique. Se as quebras de linha sumirem, como no chat com esquema, o texto fica num parágrafo só.
 EXAMPLE_SCHEMA = ExampleText.model_json_schema()
+# As questões novas de um material vão com o esquema delas: a questão é a mesma do material.
+QUIZ_SCHEMA = QuizOutput.model_json_schema()
 ACCENTS = re.compile("[áàâãéêíóôõúç]", re.IGNORECASE)
 # Listas do material e o modelo que valida cada item delas.
 ITEMS = {"summary": SummaryItem, "flashcards": Card, "quiz": QuizItem}
@@ -98,6 +100,8 @@ def invalid_input(_, exc: RequestValidationError):
         message = f"Faltou o campo {field}."
     elif kind == "literal_error":
         message = f"Valor inválido em {field}."
+    elif kind == "too_long" and where[-1] == "avoid":
+        message = f"O material passou do limite de {limits['max_length']} questões."
     elif kind == "too_long":
         message = f"O histórico passou do limite de {limits['max_length']} mensagens."
     else:
@@ -137,32 +141,49 @@ def reasons(exc: ValidationError, *where) -> list:
     return [(".".join(map(str, (*where, *error["loc"]))), error["msg"])
             for error in exc.errors(include_input=False, include_url=False, include_context=False)]
 
-def build_material(raw: dict) -> StudyOutput:
+def valid_items(route: str, name: str, items: list) -> list:
     # Uma questão inválida em seis custava 2 chamadas e podia terminar em 502. Cada item passa sozinho pelo seu
-    # modelo e só o inválido sai. Título, formato e quantidade de itens (mínimos e máximos) ficam com o StudyOutput.
+    # modelo e só o inválido sai. route é a rota no começo da linha do log.
+    model, kept, dropped = ITEMS[name], [], []
+    for position, item in enumerate(items):
+        try:
+            kept.append(model.model_validate(item))
+        except ValidationError as exc:
+            dropped += reasons(exc, name, position)
+    if dropped:
+        logger.warning("%s: %s de %s itens de %s descartados %s", route, len(items) - len(kept), len(items), name, dropped)
+    if name != "summary":
+        # Cartão ou questão que repete a pergunta de outro também sai (sem contar maiúsculas, acentos e espaços a
+        # mais). O tópico não tem pergunta. O log leva só as contagens: as perguntas são texto da IA.
+        first = {}
+        for item in kept:
+            first.setdefault(plain(item.question), item)
+        if len(first) < len(kept):
+            logger.warning("%s: %s de %s itens de %s com pergunta repetida descartados", route, len(kept) - len(first), len(items), name)
+        kept = list(first.values())
+    return kept
+
+def build_material(raw: dict) -> StudyOutput:
+    # Cada lista passa item por item (valid_items). Título, formato e quantidade de itens (mínimos e máximos) ficam com
+    # o StudyOutput.
     material = dict(raw)
-    for name, model in ITEMS.items():
-        items, kept, dropped = raw.get(name), [], []
-        if not isinstance(items, list):
-            continue
-        for position, item in enumerate(items):
-            try:
-                kept.append(model.model_validate(item))
-            except ValidationError as exc:
-                dropped += reasons(exc, name, position)
-        if dropped:
-            logger.warning("generate: %s de %s itens de %s descartados %s", len(items) - len(kept), len(items), name, dropped)
-        if name != "summary":
-            # Cartão ou questão que repete a pergunta de outro também sai (sem contar maiúsculas, acentos e espaços a
-            # mais). O tópico não tem pergunta. O log leva só as contagens: as perguntas são texto da IA.
-            first = {}
-            for item in kept:
-                first.setdefault(plain(item.question), item)
-            if len(first) < len(kept):
-                logger.warning("generate: %s de %s itens de %s com pergunta repetida descartados", len(kept) - len(first), len(items), name)
-            kept = list(first.values())
-        material[name] = kept
+    for name in ITEMS:
+        if isinstance(raw.get(name), list):
+            material[name] = valid_items("generate", name, raw[name])
     return StudyOutput.model_validate(material)
+
+def build_quiz(raw: dict, avoid: set[str]) -> QuizOutput:
+    # A conferência das questões da geração (valid_items) e mais uma: sai a questão que repete uma pergunta que o
+    # material já tem (avoid, na forma de plain). Ficam no máximo 6; o mínimo de 4 é do QuizOutput.
+    items = raw.get("quiz")
+    if isinstance(items, list):
+        kept = valid_items("quiz", "quiz", items)
+        items = [item for item in kept if plain(item.question) not in avoid]
+        if len(items) < len(kept):
+            # Só a contagem: as perguntas são texto da IA.
+            logger.warning("quiz: %s de %s questões repetem uma pergunta do material e foram descartadas", len(kept) - len(items), len(raw["quiz"]))
+        items = items[:6]
+    return QuizOutput.model_validate({"quiz": items})
 
 def shuffle_options(quiz: list[QuizItem]) -> None:
     # Sem embaralhar dava para acertar no chute: o modelo punha a certa em B ou C (36 de 45 nos testes)
@@ -249,6 +270,28 @@ def generate(data: StudyInput):
         logger.warning("generate: %s de %s trechos de origem apagados por não estarem no texto do aluno", dropped, len(cited))
     shuffle_options(material.quiz)
     return material
+
+@app.post("/api/quiz", response_model=QuizOutput)
+def quiz(data: QuizInput):
+    # "Questões novas deste material", no fim do quiz: de 4 a 6 questões sobre o texto do material, sem as perguntas que
+    # ele já tem. Questões recusadas e questões sem nenhum acento ganham uma nova chamada, como o material da geração.
+    payload, avoid = data.model_dump(), {plain(question) for question in data.avoid}
+    for last in (False, True):
+        try:
+            result = build_quiz(ai(payload, QUIZ, QUIZ_SCHEMA), avoid)
+            break
+        except ValidationError as exc:
+            logger.warning("quiz: questões rejeitadas %s", reasons(exc))
+            if last:
+                fail(502, "AI_INVALID_MATERIAL", "As questões geradas não passaram pela validação. Tente novamente.")
+    if not ACCENTS.search(result.model_dump_json()):
+        # Se a nova chamada falhar, ficam as primeiras: sem acento é melhor que erro.
+        try:
+            result = build_quiz(ai(payload, QUIZ, QUIZ_SCHEMA), avoid)
+        except (HTTPException, ValidationError):
+            pass
+    shuffle_options(result.quiz)
+    return result
 
 @app.post("/api/chat", response_model=ChatOutput)
 def chat(data: ChatInput):

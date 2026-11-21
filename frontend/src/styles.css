@@ -2367,6 +2367,14 @@ main:focus {
     text-align: left
 }
 
+/* A espera e o erro das questões novas, embaixo dos botões do fim: na mesma largura, alinhados à esquerda. */
+.quiz-done .quiz-wait,
+.quiz-done .error {
+    max-width: calc(var(--measure) + var(--mark) + var(--sp-3));
+    margin: var(--sp-4) auto 0;
+    text-align: left
+}
+
 /* ---------- Caneta: as marcas que se desenham (marks.jsx) ---------- */
 
 .pen {

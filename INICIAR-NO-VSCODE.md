@@ -151,7 +151,7 @@ Na pasta backend:
 .\.venv\Scripts\python.exe -m app.avalia --rodar
 ```
 
-O primeiro comando só mostra os 24 casos e o teto de chamadas, sem chamar nada. O segundo chama o Gemini de verdade e grava o resultado em docs/, mesmo se for interrompido no meio. Ele para em 40 chamadas HTTP, contando as novas tentativas automáticas; `--limite 50` muda o teto. Também para sozinho se a cota do dia acabar, a chave for recusada ou a rodada chegar ao AI_DAILY_LIMIT do .env, contado só nela.
+O primeiro comando só mostra os 26 casos e o teto de chamadas, sem chamar nada. O segundo chama o Gemini de verdade e grava o resultado em docs/, mesmo se for interrompido no meio. Ele para em 40 chamadas HTTP, contando as novas tentativas automáticas; `--limite 50` muda o teto. Também para sozinho se a cota do dia acabar, a chave for recusada ou a rodada chegar ao AI_DAILY_LIMIT do .env, contado só nela.
 
 Na rodada de 17/11/2026, feita com `--limite 35`, as 35 chamadas combinadas não bastaram: as novas tentativas automáticas (503 do provedor e material sem acento, por exemplo) gastaram o teto antes das 3 últimas revisões. Para a rodada inteira, conte com umas 45 chamadas e use `--limite 50`. Não rode no dia da apresentação: a cota é a mesma.
 

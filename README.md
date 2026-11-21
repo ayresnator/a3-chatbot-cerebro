@@ -12,11 +12,12 @@ Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo
 
 ## 🤖 Inteligência artificial utilizada
 
-O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em quatro situações:
+O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em cinco situações:
 
 | Uso | O que a IA faz | Rota do backend |
 |---|---|---|
 | Gerar material | Monta resumo, flashcards e quiz a partir do texto ou do tema | `POST /api/generate` |
+| Questões novas | Escreve, para o botão "Questões novas deste material", de 4 a 6 questões sobre o mesmo material, sem repetir as que o quiz dele já tem | `POST /api/quiz` |
 | Tirar dúvidas | Responde no chat e explica de outro jeito um tópico ou uma questão | `POST /api/chat` |
 | Revisar resposta curta | Julga o sentido de uma resposta que a comparação de texto marcou como errada | `POST /api/grade` |
 | Escrever um exemplo | Escreve, para o botão "Usar um exemplo", um texto curto sobre um tema sorteado da área escolhida | `POST /api/example` |
@@ -25,7 +26,7 @@ O programa não aceita a resposta do modelo sem conferir. Ele valida cada item g
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho, montar o caderno de erros e marcar o dia em que cada cartão e cada questão do caderno voltam. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
+**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão e, nas questões novas, o texto do material e as perguntas do quiz dele vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
 **Segurança da API:**
 
@@ -129,6 +130,8 @@ As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acen
 Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
+
+"Refazer o quiz todo" repete as mesmas questões. Para treinar o conceito, e não a lembrança da questão, o fim do quiz oferece também "Questões novas deste material" (1 chamada de IA): a IA escreve de 4 a 6 questões sobre o mesmo material, sem repetir as que ele já tem, e elas passam pela mesma conferência do material gerado. As novas entram no material, e na Biblioteca se ele está salvo, e o quiz recomeça só com elas; "Refazer o quiz todo" traz todas. Elas saem do texto usado para gerar o material. No material salvo antes de o texto ser guardado, saem do resumo, e a tela avisa "Questões feitas a partir do resumo". Um material guarda até 30 questões: no teto, o botão fica desligado e diz isso. O botão não aparece na demonstração nem no quiz do caderno de erros e do simulado.
 
 ### 5. Dúvidas
 
@@ -373,7 +376,7 @@ npm run build
 
 O GitHub Actions roda os mesmos comandos a cada envio ao repositório.
 
-A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 24 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
+A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 26 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
 
 O número de testes, o resultado da última execução e o que ainda não rodou na API real estão em [docs/VALIDACAO.md](docs/VALIDACAO.md).
 
@@ -390,6 +393,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
 - A revisão de resposta curta feita pela IA também pode errar.
+- As questões novas podem repetir com outras palavras uma pergunta que o material já tem, e as feitas a partir do resumo podem só repetir o resumo.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
 - O Cérebro é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md).
 

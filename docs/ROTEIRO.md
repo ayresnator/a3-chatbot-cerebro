@@ -70,7 +70,7 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 ## Perguntas prováveis
 
-**Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
+**Onde está a inteligência artificial do trabalho?** Em cinco rotas do backend: gerar o material, escrever questões novas de um material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
 **Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 
