@@ -470,10 +470,10 @@
     }
 
     /* Com mensagens os chips ficam numa linha que rola de lado (a página não rola): a conversa fica com o lugar de duas
-       linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria; o scroll-padding faz o Tab rolar a linha
-       até o chip inteiro, como na barra de baixo. A dica do teclado sai da vista (continua no aria-describedby do campo):
-       a caixa presa ocupava um terço da tela. Na linha que rola o chip não cresce sob o ponteiro (--lift): a rolagem
-       cortaria a ponta dele. */
+       linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria. O Tab rola a linha até o chip inteiro
+       (App.jsx, onFocus do chip), e o scroll-padding deixa um pedaço do vizinho à vista. A dica do teclado sai da vista
+       (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. Na linha que rola o chip não
+       cresce sob o ponteiro (--lift): a rolagem cortaria a ponta dele. */
     .chat-stage[data-state=conversa] .suggestions {
         --lift: 1;
         flex-wrap: nowrap;
