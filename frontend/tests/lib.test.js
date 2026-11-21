@@ -7,7 +7,8 @@ import {
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   chatSubject,
-  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
+  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
+  dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
@@ -1435,6 +1436,42 @@ test('healthLabel: sem model_in_use vale model; sem calls_today não há contado
   for (const health of [null, false, { ai_configured: false, model: 'x' }]) assert.equal(healthLabel(health).model, undefined);
 });
 
+test('healthLabel: com o teto do grupo, "8 de 40 chamadas hoje", âmbar a partir de 80% e "Teto do dia atingido" no teto', () => {
+  const health = { ai_configured: true, model_in_use: 'gemini-2.5-flash', quota_exhausted: false, daily_limit: 40 };
+  assert.deepEqual(healthLabel({ ...health, calls_today: 8 }), {
+    text: 'IA ativa · gemini-2.5-flash · 8 de 40 chamadas hoje',
+    tone: 'ok',
+    model: 'gemini-2.5-flash',
+    count: '8 de 40 chamadas hoje',
+    note: QUOTA_NOTE,
+  });
+  const tones = [0, 31, 32, 39].map(calls_today => healthLabel({ ...health, calls_today }));
+  assert.deepEqual(tones.map(l => [l.count, l.tone]), [
+    ['0 de 40 chamadas hoje', 'ok'], ['31 de 40 chamadas hoje', 'ok'],
+    ['32 de 40 chamadas hoje', 'warn'], ['39 de 40 chamadas hoje', 'warn'],
+  ]);
+  assert.deepEqual(healthLabel({ ...health, calls_today: 40 }), { text: 'Teto do dia atingido', tone: 'warn', note: QUOTA_NOTE });
+  // O teto vem antes da cota esgotada: é ele que desliga os botões da IA.
+  assert.equal(healthLabel({ ...health, calls_today: 40, quota_exhausted: true }).text, 'Teto do dia atingido');
+  assert.equal(healthLabel({ ...health, calls_today: 3, quota_exhausted: true }).text, 'Cota de hoje esgotada');
+  assert.equal(healthLabel({ ...health, daily_limit: 1, calls_today: 0 }).count, '0 de 1 chamada hoje');
+  // Sem teto (null, ou o backend antigo, sem o campo), o texto e o tom não mudam.
+  for (const daily_limit of [null, undefined, 0]) {
+    const label = healthLabel({ ...health, daily_limit, calls_today: 39 });
+    assert.deepEqual([label.text, label.tone], ['IA ativa · gemini-2.5-flash · 39 chamadas deste computador', 'ok']);
+  }
+});
+
+test('capReached: só com teto e as chamadas de hoje nele; sem teto ou sem resposta da saúde, nunca', () => {
+  assert.equal(capReached({ daily_limit: 40, calls_today: 40 }), true);
+  assert.equal(capReached({ daily_limit: 3, calls_today: 4 }), true);
+  assert.equal(capReached({ daily_limit: 40, calls_today: 39 }), false);
+  for (const health of [null, false, undefined, {}, { calls_today: 500 }, { daily_limit: null, calls_today: 500 },
+    { daily_limit: 40 }]) {
+    assert.equal(capReached(health), false, JSON.stringify(health));
+  }
+});
+
 test('errorText: cada código do mapa vira uma frase simples, e o código fica nos detalhes técnicos', () => {
   const said = 'Limite de chamadas por minuto atingido. Tente de novo em 20 segundos.';
   assert.deepEqual(
@@ -1461,6 +1498,16 @@ test('errorText: cada código do mapa vira uma frase simples, e o código fica n
     assert.equal(message, ERRORS[code]);
     assert.doesNotMatch(message, /\[|AI_/, code);
   }
+});
+
+test('errorText: no teto do dia, a frase diz o que funciona sem IA, e a do backend, com o número, fica nos detalhes', () => {
+  const said = 'As 40 chamadas de hoje, o teto escolhido pelo grupo, já foram usadas. A contagem recomeça amanhã.';
+  assert.deepEqual(errorText({ code: 'AI_BUDGET_REACHED', message: said, provider_status: '' }, 429), {
+    message: 'As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo. Os botões da IA voltam amanhã; ' +
+      'enquanto isso, a Biblioteca, os flashcards, o quiz e o caderno de erros funcionam sem ela.',
+    tech: 'AI_BUDGET_REACHED · ' + said,
+    wait: 0,
+  });
 });
 
 test('errorText: código fora do mapa fica com a frase do backend, sem repeti-la nos detalhes', () => {

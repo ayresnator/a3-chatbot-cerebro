@@ -362,6 +362,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - Limpar os dados do navegador apaga materiais, desempenho e caderno de erros que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
+- O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
 - A revisão de resposta curta feita pela IA também pode errar.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.

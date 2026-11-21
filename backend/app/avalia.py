@@ -151,8 +151,9 @@ def plan() -> list[dict]:
 class OverBudget(Exception):
     """A rodada chegou ao teto de chamadas: a chamada seguinte não sai deste processo."""
 
-# Erros que não passam sozinhos (cota do dia, chave, modelo): seguir a rodada só gastaria chamadas.
-STOPS = {"AI_QUOTA_EXCEEDED", "AI_AUTH_ERROR", "AI_MODEL_NOT_FOUND", "AI_NOT_CONFIGURED"}
+# Erros que não passam sozinhos (cota do dia, chave, modelo): seguir a rodada só gastaria chamadas. No teto do dia do
+# grupo (AI_DAILY_LIMIT, contado só neste processo) nenhuma chamada sai: os casos seguintes só repetiriam o erro.
+STOPS = {"AI_QUOTA_EXCEEDED", "AI_AUTH_ERROR", "AI_MODEL_NOT_FOUND", "AI_NOT_CONFIGURED", "AI_BUDGET_REACHED"}
 
 def run(cases: list[dict], pause: float, results: list | None = None, limit: int = 40) -> list[dict]:
     """Chama a função de cada rota no mesmo processo. Erro da IA vira o código do erro, e a rodada continua,

@@ -21,7 +21,8 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, ERRORS, FAILS, dictate,
+  dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -286,13 +287,15 @@ function App() {
     return () => clearTimeout(timer);
   }, [input, area, level, opened, chat, tips, editorChat]);
 
+  // Na volta à aba, o estado da IA é conferido de novo: com o teto do dia atingido nenhum pedido sai, e é esta
+  // consulta que mostra a virada do dia e religa os botões da IA.
   useEffect(() => {
-    const hidden = () => document.visibilityState === 'hidden' && saveDraft();
+    const visibility = () => (document.visibilityState === 'hidden' ? saveDraft() : API_BASE && checkHealth());
     window.addEventListener('pagehide', saveDraft);
-    document.addEventListener('visibilitychange', hidden);
+    document.addEventListener('visibilitychange', visibility);
     return () => {
       window.removeEventListener('pagehide', saveDraft);
-      document.removeEventListener('visibilitychange', hidden);
+      document.removeEventListener('visibilitychange', visibility);
     };
   }, []);
 
@@ -1020,11 +1023,13 @@ function App() {
 
   // "Usar um exemplo": com a IA ligada, ela escreve um texto de estudo sobre um tema sorteado pelo servidor na área e
   // no nível escolhidos (1 chamada da cota), sem repetir o tema do exemplo anterior. Na demonstração, com a IA
-  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (exemplos.js). A área e o nível não mudam.
+  // desligada, no teto do dia ou se ela falhar, entra um exemplo pronto da mesma área (exemplos.js). A área e o nível
+  // não mudam.
   async function addExample() {
-    // Um pedido à IA por vez: o segundo clique durante a espera não pede outro.
-    if (waiting) return;
-    const ai = !!API_BASE && health?.ai_configured !== false;
+    // Um pedido à IA por vez: o segundo clique durante a espera não pede outro. No teto do dia o exemplo é o pronto, sem
+    // pedido nenhum.
+    if (waiting && !capped) return;
+    const ai = cost;
     let written = null;
     if (ai) {
       setBusy({ kind: 'example', label: 'Escrevendo um exemplo…', since: Date.now() });
@@ -1176,14 +1181,29 @@ function App() {
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
   });
+  // Teto de chamadas por dia escolhido pelo grupo (lib.js, capReached): até a contagem recomeçar, os botões da IA ficam
+  // desligados, com o motivo junto deles.
+  const capped = !!API_BASE && capReached(health);
   // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
-  // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
-  const waiting = !!busy || !!asking || !!pausedUntil;
+  // minuto nenhum sai, nem no teto do dia. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale
+  // com "true".
+  const waiting = !!busy || !!asking || !!pausedUntil || capped;
   // IA sem chave neste computador: o botão de gerar fica desligado, e o aviso embaixo do editor diz por quê.
   const aiOff = !!API_BASE && health?.ai_configured === false;
-  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração e o
-  // backend sem a IA configurada não gastam chamada.
-  const cost = !!API_BASE && !aiOff;
+  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração, o
+  // backend sem a IA configurada e o teto do dia não gastam chamada.
+  const cost = !!API_BASE && !aiOff && !capped;
+  // Nos botões que pedem à IA de dentro do estudo ("Não entendi, me explique" e "Pedir revisão da IA"), o custo dá lugar
+  // ao motivo no teto do dia: eles ficam desligados com o motivo ao lado.
+  const askCost = capped ? 'teto do dia atingido' : '1 chamada de IA';
+  // O teto chegou (o último pedido gastou a última chamada, ou a aba abriu ou voltou com ele): o leitor de tela ouve
+  // por que os botões da IA desligaram. Se o foco estava num deles (outra aba gastou o resto), ele iria para o body:
+  // antes da pintura, vai para o título da página.
+  useLayoutEffect(() => {
+    if (!capped) return;
+    say(ERRORS.AI_BUDGET_REACHED);
+    if (document.activeElement?.disabled) [...document.querySelectorAll('main h1')].pop()?.focus();
+  }, [capped]);
   // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
   const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
@@ -1243,6 +1263,9 @@ function App() {
     && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
     && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
   const problem = pause || error;
+  // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas. Enquanto o
+  // aviso de erro já diz o mesmo (o pedido que bateu no teto), ele sai: a frase não aparece duas vezes.
+  const capNote = capped && !problem?.message?.endsWith(ERRORS.AI_BUDGET_REACHED);
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
       {problem && (
@@ -1465,18 +1488,18 @@ function App() {
                         <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
                       </button>
                       {/* Na espera, aria-disabled e não disabled: o botão desligado perdia o foco (addExample não pede
-                          outro exemplo enquanto espera). */}
+                          outro exemplo enquanto espera). No teto do dia ele fica ligado, com o exemplo pronto. */}
                       <button
                         type="button"
                         id="usar-exemplo"
                         className="tool"
-                        aria-disabled={waiting || undefined}
+                        aria-disabled={(waiting && !capped) || undefined}
                         onClick={addExample}
                       >
                         <Icon name="exemplo" />
                         <span className="full">Usar um exemplo</span>
                         {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
-                        {API_BASE && health?.ai_configured !== false && <small className="full">1 chamada de IA</small>}
+                        {cost && <small className="full">1 chamada de IA</small>}
                         <span className="short" aria-hidden="true">Exemplo</span>
                       </button>
                       {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
@@ -1518,15 +1541,15 @@ function App() {
                   </m.div>
                   <m.div variants={rise}>
                     {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
-                        funciona sem IA. */}
+                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. */}
                     <p className="note" id="aviso-ia">
-                      <Icon name={API_BASE && !aiOff ? 'privacidade' : 'info'} />
+                      <Icon name={API_BASE && !aiOff && !capNote ? 'privacidade' : 'info'} />
                       {aiOff ? (
                         <span>
                           A IA não está ligada neste computador: o botão de gerar fica desligado.{' '}
                           <a href="?demo">Ver a demonstração</a>
                         </span>
-                      ) : API_BASE
+                      ) : capNote ? ERRORS.AI_BUDGET_REACHED : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
                           'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
@@ -1562,7 +1585,7 @@ function App() {
                         id="gerar"
                         className={fresh ? 'action' : 'action primary'}
                         disabled={waiting || aiOff}
-                        aria-describedby={aiOff ? 'aviso-ia' : undefined}
+                        aria-describedby={aiOff || capNote ? 'aviso-ia' : undefined}
                         aria-busy={busy?.kind === 'gerar' || undefined}
                         onClick={() => generate()}
                       >
@@ -1742,7 +1765,7 @@ function App() {
                                             aria-disabled={waiting || undefined}
                                             onClick={() => explain(s, whyTopic(s.concept), s.text, 'explicar-' + i)}
                                           >
-                                            Não entendi, me explique <small>1 chamada de IA</small>
+                                            Não entendi, me explique <small>{askCost}</small>
                                           </button>
                                         </div>
                                       )}
@@ -2083,7 +2106,7 @@ function App() {
                                         aria-disabled={waiting || undefined}
                                         onClick={() => explain(quiz, whyQuestion(quiz, answer.value, answer.ok), quiz.explanation, 'explicar-questao')}
                                       >
-                                        Não entendi, me explique <small>1 chamada de IA</small>
+                                        Não entendi, me explique <small>{askCost}</small>
                                       </button>
                                       {/* Só a resposta curta é comparada por texto. Uma revisão por resposta: com o */}
                                       {/* veredito o botão fica desabilitado (se sumisse, o foco do teclado se perdia). */}
@@ -2095,7 +2118,7 @@ function App() {
                                           aria-busy={busy?.kind === 'review' || undefined}
                                           onClick={review}
                                         >
-                                          Pedir revisão da IA <small>1 chamada de IA</small>
+                                          Pedir revisão da IA <small>{askCost}</small>
                                         </button>
                                       )}
                                     </div>
@@ -2269,6 +2292,13 @@ function App() {
                       }
                     />
                     {errorBanner}
+                    {/* No teto do dia o Enviar e os chips ficam desligados: o motivo fica embaixo da caixa. */}
+                    {capNote && (
+                      <p className="note">
+                        <Icon name="info" />
+                        {ERRORS.AI_BUDGET_REACHED}
+                      </p>
+                    )}
                   </div>
                   <div ref={chatEnd} className="chat-end"></div>
                 </section>

@@ -505,19 +505,30 @@ export function chatSubject({ material, made, editor, input, area, level }) {
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
   'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
 
+// O teto de chamadas por dia que o grupo escolheu (AI_DAILY_LIMIT, no /api/health em daily_limit) chegou: os botões da
+// IA ficam desligados até a contagem recomeçar. Sem teto (null, ou backend antigo, sem o campo), nunca.
+export function capReached(health) {
+  return !!health && health.daily_limit > 0 && health.calls_today >= health.daily_limit;
+}
+
 // Estado da IA no cabeçalho, a partir da resposta de /api/health: null enquanto ela não chegou, false se a consulta
 // falhou ou não veio JSON. tone é a classe do ponto colorido, e note, a dica do selo. Com a IA ativa, model e count são
 // partes do text: na barra estreita o modelo sai da vista (styles.css, @container), e o text, chave da troca animada,
-// fica inteiro.
+// fica inteiro. Com o teto do dia, a conta é "8 de 40 chamadas hoje", e o ponto fica âmbar a partir de 80% dele.
 export function healthLabel(health) {
   if (health == null) return { text: 'Conferindo a IA…', tone: '' };
   if (!health) return { text: 'Cérebro desligado', tone: 'off' };
   if (!health.ai_configured) return { text: 'IA não configurada', tone: 'warn' };
+  if (capReached(health)) return { text: 'Teto do dia atingido', tone: 'warn', note: QUOTA_NOTE };
   if (health.quota_exhausted) return { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE };
   const calls = health.calls_today;
+  const limit = health.daily_limit > 0 ? health.daily_limit : 0;
   const model = health.model_in_use || health.model || '';
-  const count = typeof calls === 'number' ? calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador' : '';
-  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone: 'ok', model, count, note: QUOTA_NOTE };
+  const count = typeof calls !== 'number' ? ''
+    : limit ? calls + ' de ' + limit + ' ' + plural(limit, 'chamada', 'chamadas') + ' hoje'
+    : calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador';
+  const tone = limit && calls * 5 >= limit * 4 ? 'warn' : 'ok';
+  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone, model, count, note: QUOTA_NOTE };
 }
 
 // Frase de cada erro para o aluno: o que houve e o que ele consegue fazer. As frases do backend falam de .env, proxy e
@@ -528,6 +539,9 @@ const SHAPE = 'A IA respondeu fora do formato esperado. Tente de novo.';
 export const ERRORS = {
   AI_RATE_LIMITED: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
   AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+  // A mesma frase fica junto dos botões da IA enquanto o teto vale (App.jsx, capNote).
+  AI_BUDGET_REACHED: 'As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo. Os botões da IA voltam amanhã; ' +
+    'enquanto isso, a Biblioteca, os flashcards, o quiz e o caderno de erros funcionam sem ela.',
   AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
     'Enquanto isso, use a demonstração.',
   AI_NETWORK_ERROR: 'O Cérebro não conseguiu falar com a IA. Confira a internet deste computador e tente de novo.',
