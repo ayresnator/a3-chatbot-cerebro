@@ -253,6 +253,11 @@
         flex: 1
     }
 
+    /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
+    .exam-next .primary {
+        flex: 1
+    }
+
     /* Desempenho: a coluna do gráfico fica estreita para "6 respostas" e "50% certas", e o rótulo vira "50% · 6". */
     .chart .full {
         display: none
@@ -266,7 +271,7 @@
         grid-template-columns: minmax(0, 1fr) auto
     }
 
-    .mistakes li > .pen {
+    .mistakes li > .mistake-when {
         grid-row: auto;
         grid-column: 1
     }
@@ -408,13 +413,20 @@
         padding: var(--sp-1) var(--sp-2)
     }
 
+    /* As quatro ferramentas dividem a linha em partes iguais, com o ícone sobre a palavra, como os itens da barra de
+       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. */
     .tool {
-        padding: 0 var(--sp-2)
+        flex: 1 1 0;
+        flex-direction: column;
+        gap: 0;
+        min-width: 0;
+        padding: 0;
+        font-size: var(--fs-1)
     }
 
-    /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
-       Dúvidas, "Enviar" e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O
-       custo do "Perguntar ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
+    /* "Falar" e "Exemplo" na tela; o nome inteiro de cada um continua no nome do botão. Na caixa do Dúvidas, "Enviar"
+       e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O custo do "Perguntar
+       ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
     .tool .full,
     .ask small,
     .composer-bar .primary span,
@@ -493,8 +505,8 @@
         white-space: nowrap
     }
 
-    /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo, na largura da caixa e com o
-       botão primeiro. */
+    /* Duas linhas: as quatro ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo, na largura da caixa e
+       com o botão primeiro. */
     .editor-send {
         flex: 1 1 100%
     }
@@ -610,8 +622,14 @@
         padding-left: calc(var(--letter) + var(--sp-3))
     }
 
-    .feedback {
+    .feedback,
+    .pretest {
         padding: var(--sp-4)
+    }
+
+    /* No celular a frase do bloco "Tente responder antes de ler" tem 4 linhas: o esqueleto também (styles.css). */
+    .pretest .sk-phone {
+        display: inline-block
     }
 
     .next-row {
@@ -623,9 +641,13 @@
         max-width: 92%
     }
 
-    .erros-head .primary {
-        width: 100%;
+    .erros-actions {
+        flex: 1 1 100%;
         margin-left: 0
+    }
+
+    .erros-actions button {
+        flex: 1 1 auto
     }
 
     /* Biblioteca: a busca e o filtro ganham a linha inteira; Exportar e Importar dividem a de baixo. */
@@ -642,6 +664,16 @@
     /* O rótulo "Área" à esquerda e a lista no resto da linha. */
     .toolbar .inline-field select {
         flex: 1
+    }
+
+    /* Simulado: a frase ganha a linha inteira; o tamanho e o botão ficam embaixo, e o botão cresce até a ponta. Com a
+       base no tamanho do texto, o botão que não cabe ao lado do tamanho desce inteiro, em vez de quebrar o nome. */
+    .exam-row > div {
+        flex-basis: 100%
+    }
+
+    .exam-row button {
+        flex: auto
     }
 
     .library-item {
@@ -702,13 +734,6 @@
         font-size: var(--fs-0)
     }
 
-    /* As três ferramentas do editor cabem numa linha (com "Desfazer" também): em 320 px "Limpar" descia para a linha
-       de "Perguntar" e empurrava o contador para uma terceira linha. */
-    .tool {
-        gap: var(--sp-1);
-        padding: 0 var(--sp-1)
-    }
-
     /* "Perguntar" na tela, o nome inteiro no botão: com "Perguntar ao Cérebro" e o contador na mesma linha, em 320 px
        o botão quebrava em duas linhas e o contador caía sozinho para a linha de baixo. */
     .ask .full {
@@ -721,6 +746,16 @@
     }
 
     .ask .short {
+        display: inline
+    }
+
+    /* Caderno de erros: "Tirar" no lugar de "Tirar do caderno" (o nome inteiro continua no aria-label), e a nota
+       "volta em 23/11" cabe ao lado do botão. */
+    .mistakes .drop .full {
+        display: none
+    }
+
+    .mistakes .drop .short {
         display: inline
     }
 
@@ -773,9 +808,10 @@
 
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
    As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
-   abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só), os botões de gerar sobem;
-   com o cartão mais baixo, ele e os três botões cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e
-   ao virar o cartão quem tem a vez é a resposta (App.jsx, turnCard). */
+   abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
+   "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
+   cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e ao virar o cartão quem tem a vez é a resposta
+   (App.jsx, turnCard). */
 @media (max-height: 30rem) {
     .lead {
         display: none
@@ -785,7 +821,8 @@
         max-height: calc(var(--rule) * 5 + var(--pad) + var(--sp-2))
     }
 
-    .tool .full {
+    .tool .full,
+    .ask small {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -801,5 +838,19 @@
     .flashcard {
         min-height: 10rem;
         padding: var(--sp-4)
+    }
+
+    /* A janela "Ver no texto" com menos respiro: a altura que sobra vai para o texto. Com o zoom de 400% ela não sobra,
+       e o texto encolhia até sumir: ele fica com 3 linhas à vista, e a janela rola inteira. O scroll-padding faz o Tab
+       rolar a janela até o anel do foco, com o respiro da borda. */
+    .source-dialog .dialog-body {
+        gap: var(--sp-3);
+        overflow-y: auto;
+        scroll-padding-block: var(--sp-4);
+        padding: var(--sp-4) var(--sp-5)
+    }
+
+    .source-text {
+        min-height: calc(var(--lh-read) * 3em + var(--sp-3) * 2 + var(--hair) * 2)
     }
 }

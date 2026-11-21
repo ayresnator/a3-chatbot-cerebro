@@ -27,6 +27,9 @@ class Settings:
     timeout_seconds: float = 45.0
     request_seconds: float = 100.0
     request_calls: int = 6
+    # Teto de chamadas por dia (AI_DAILY_LIMIT), escolhido pelo grupo para guardar a cota das aulas e da apresentação;
+    # None é sem teto. Usa a conta do dia de providers.calls_today: a deste processo, desde que ele ligou no dia.
+    daily_limit: int | None = None
     # Nomes aceitos no cabeçalho Host, sem a porta. Fecha o DNS rebinding: um site de fora que aponta o próprio nome
     # para 127.0.0.1 passaria pelo CORS como se fosse da mesma origem e gastaria a cota.
     allowed_hosts: list[str] = field(default_factory=lambda: ["127.0.0.1", "localhost"])
@@ -55,6 +58,12 @@ def load_settings():
     ).split(",") if s.strip()]
     # "ALLOWED_HOSTS=" sem valor vale o padrão: a lista vazia recusaria até o proxy do Vite.
     hosts = [s.strip() for s in os.getenv("ALLOWED_HOSTS", "").split(",") if s.strip()] or ["127.0.0.1", "localhost"]
-    return Settings(provider=provider, model=model, api_key=key, allowed_origins=origins, allowed_hosts=hosts)
+    # "AI_DAILY_LIMIT=" sem valor é sem teto. Outro valor impede a partida: um teto digitado errado deixaria a cota sem a
+    # proteção que o grupo escolheu, sem ninguém perceber. Zero à esquerda vale ("040" é 40): a frase não o proíbe.
+    limit = os.getenv("AI_DAILY_LIMIT", "").strip()
+    if limit and not re.fullmatch(r"0*[1-9][0-9]*", limit):
+        raise ValueError("AI_DAILY_LIMIT deve ser um número inteiro maior que zero, ou ficar vazio para não ter teto.")
+    return Settings(provider=provider, model=model, api_key=key, allowed_origins=origins, allowed_hosts=hosts,
+                    daily_limit=int(limit) if limit else None)
 
 settings = load_settings()

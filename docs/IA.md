@@ -15,7 +15,7 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No "Usar um exemplo", e no celular também no "Perguntar ao Cérebro" e no "Enviar", o aviso fica só no nome do botão, lido pelo leitor de tela: na tela ele não cabe ao lado das outras ferramentas. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 
@@ -106,6 +106,7 @@ No caso normal, cada pedido do aluno é uma chamada HTTP ao Gemini. Na rodada re
 | HTTP 429 | nenhuma: repetir gastaria a cota |
 | A tela desistiu (Cancelar ou tempo esgotado) | nenhuma: a chamada que estava no ar termina, e nenhuma outra sai |
 | O pedido chegou ao teto (6 chamadas ou 100 segundos) | nenhuma: o pedido para com `AI_TIMEOUT` |
+| As chamadas do dia chegaram ao teto do grupo (`AI_DAILY_LIMIT`) | nenhuma: a chamada não sai, e o pedido para com `AI_BUDGET_REACHED` |
 
 As situações se somam no mesmo pedido, até o teto. Cada ida ao provedor faz no máximo 4 chamadas HTTP (a primeira, 2 pelo 503 e 1 pelo tempo esgotado), e um pedido pode fazer mais de uma ida; sem teto, um clique chegou a 32 chamadas num teste com o provedor simulado. Por isso cada pedido tem no máximo 6 chamadas HTTP e 100 segundos, menos que os 105 segundos que o navegador espera. Antes de cada chamada o backend confere o saldo e usa como tempo limite o menor valor entre 45 segundos e o tempo que sobra. Sem saldo, o pedido para com `AI_TIMEOUT`. A nova chamada por falta de acento ou por cartões com a mesma resposta só sai se ainda houver saldo; sem ela, fica o primeiro material. Quando o aluno cancela, ou a tela desiste, a ligação fecha (no `npm run dev`, o proxy do Vite repassa o cancelamento ao backend), e o backend não faz a chamada seguinte. O `app.check` e o `app.avalia` chamam a IA fora das rotas e ficam sem esse teto; o `app.avalia` tem o teto da rodada.
 
@@ -113,13 +114,17 @@ No 429 o backend lê o corpo do erro. Espera de até 90 segundos, sem marca de c
 
 O cabeçalho da tela mostra o modelo em uso e quantas chamadas este computador fez no dia da cota, que vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), junto com a cota do Google. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota, que é do projeto inteiro e fica no painel de uso do Google AI Studio. Depois de um `AI_QUOTA_EXCEEDED`, o cabeçalho diz "Cota de hoje esgotada", em âmbar, até um pedido passar ou a cota virar.
 
+O grupo pode pôr um teto de chamadas por dia, com `AI_DAILY_LIMIT` no `.env`, para guardar a cota das aulas e da apresentação. Vazio, não há teto, e esse é o padrão. O valor é um número inteiro maior que zero; outro valor impede o backend de subir, com a frase do que corrigir. O teto usa a mesma conta do cabeçalho: antes de cada chamada HTTP, também das novas tentativas e do catálogo de modelos, o backend confere a conta, e no teto a chamada não sai e o pedido volta `AI_BUDGET_REACHED` (HTTP 429), sem chamar o Gemini. A nova chamada por falta de acento ou por cartões com a mesma resposta que bate no teto não derruba a geração: fica o primeiro material. O `/api/health` informa o teto em `daily_limit`. Com ele, o cabeçalho mostra "8 de 40 chamadas hoje", em âmbar a partir de 80% do teto, e "Teto do dia atingido" no teto. Aí os botões que gastam cota ficam desligados, com o motivo ao lado e o que funciona sem IA (Biblioteca, flashcards, quiz e caderno de erros), e o "Usar um exemplo" usa um exemplo pronto, sem chamar a IA. A tela confere o backend de novo quando a aba volta a aparecer: é assim que a virada do dia religa os botões.
+
+A conta do teto é a deste backend, desde que ele ligou no dia da cota: reiniciar o backend zera a conta, e outros computadores com a mesma chave não entram nela. Não é o saldo da cota no Google, que fica no painel de uso do Google AI Studio. O `app.check` e o `app.avalia` rodam em outro processo, com a conta deles: o teto vale para cada execução, à parte, e a rodada de avaliação para quando chega nele. Com `AI_MODEL=auto`, a consulta ao catálogo que o primeiro pedido faz depois de ligar o backend também entra na conta: com teto 1 nenhum pedido sai nesse dia, e com teto 40 sobram 39 chamadas para os pedidos. Por isso o teto precisa ser 2 ou mais. Com um modelo fixo, como o do `.env.example`, não há essa consulta.
+
 Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável mais novo. Ele nunca escolhe Pro, prévia ou experimental.
 
 ## Privacidade
 
 O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. Nas perguntas do chat sobre o material aberto vão o título e o resumo dele. O nome e o desempenho não saem: ficam no navegador.
 
-Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador, e alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever. A fonte da tela vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora.
+Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador, e alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever. A fonte da tela vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora. O "Abrir arquivo" também não sai do computador: o PDF, o TXT ou o MD é lido no navegador, pelo leitor de PDF que vem junto com o aplicativo, e só o texto que fica no editor vai para o Google, quando o aluno gera o material. Abrir o arquivo não gasta chamada da IA.
 
 Na faixa gratuita, os [termos da Gemini API](https://aistudio.google.com/docs/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
 

@@ -160,15 +160,39 @@ export function Sk({ w, h, className = '' }) {
 
 const TOPIC_W = ['48%', '36%', '54%', '42%', '30%', '46%'];
 
-// Resumo a caminho: a linha de ferramentas e seis tópicos numerados com título e três linhas, como o .summary pronto.
-export function SummarySkeleton() {
+// Resumo a caminho: a linha de ferramentas, o bloco "Tente responder antes de ler" quando ele vai abrir (pretest; senão,
+// o botão "Tentar antes de ler" na linha) e seis tópicos numerados com título e três linhas, como o .summary pronto.
+export function SummarySkeleton({ pretest }) {
   return (
     <div aria-hidden="true">
       <div className="row summary-tools">
         <Sk w="11rem" className="sk-control" />
         <Sk w="9rem" />
+        <Sk w="8.5rem" className="sk-check" />
+        {!pretest && <Sk w="10rem" className="sk-control" />}
         <Sk w="6.5rem" className="sk-control" />
       </div>
+      {pretest && (
+        <div className="pretest">
+          <h3><Sk w="15rem" /></h3>
+          <p className="hint">
+            <Sk w="100%" />
+            <Sk w="100%" className="sk-phone" />
+            <Sk w="100%" className="sk-phone" />
+            <Sk w="60%" />
+          </p>
+          {['60%', '45%'].map(w => (
+            <div key={w} className="pretest-item">
+              <p><Sk w={w} /></p>
+              <Sk className="sk-area" />
+            </div>
+          ))}
+          <div className="row">
+            <Sk w="7.5rem" className="sk-control" />
+            <Sk w="4.25rem" className="sk-control" />
+          </div>
+        </div>
+      )}
       <ol className="summary" role="list">
         {TOPIC_W.map((w, i) => (
           <li key={i}>
@@ -289,6 +313,15 @@ export function BibliotecaSkeleton({ rise }) {
         <Sk w="7rem" className="sk-control" />
       </div>
       <Sk w="80%" className="sk-note" />
+      {/* A linha do simulado: o nome, a frase, o tamanho e o botão. */}
+      <div className="exam-row">
+        <div>
+          <Sk w="5.5rem" className="sk-h3" />
+          <Sk w="70%" />
+        </div>
+        <Sk w="8.5rem" className="sk-control" />
+        <Sk w="11rem" className="sk-control" />
+      </div>
       <ul className="library" role="list">
         {['55%', '40%', '62%'].map((w, i) => (
           <li key={i} className="library-item">
