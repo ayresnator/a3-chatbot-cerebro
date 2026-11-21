@@ -203,9 +203,9 @@ function LevelMenu({ value, onChange }) {
 }
 
 // reason: o id do aviso que diz por que o "Perguntar" está desligado (o teto do dia, App.jsx). Ele descreve o botão e o
-// campo, onde o Ctrl + Enter não pergunta e não diz nada.
+// campo, onde o Ctrl + Enter não pergunta e não diz nada. topic: um tema sozinho vira material (só com a IA).
 export function PromptComposer({
-  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, reason, onFile, children,
+  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, reason, onFile, topic = true, children,
 }) {
   const field = useRef(null);
   const [focused, setFocused] = useState(false);
@@ -283,7 +283,7 @@ export function PromptComposer({
             e.preventDefault();
             if (ready && !e.repeat) onSend();
           }}
-          placeholder="Cole seu texto, anotações ou escreva um tema…"
+          placeholder={topic ? 'Cole seu texto, anotações ou escreva um tema…' : 'Cole seu texto ou anotações…'}
         />
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}

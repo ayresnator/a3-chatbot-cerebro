@@ -58,6 +58,10 @@ Hoje qualquer pessoa que alcance o backend usa a chave e a cota do grupo. Antes 
 8. Histórico do chat conferido. Hoje o navegador manda até 6 mensagens marcadas como da IA, e cada pergunta leva até 64 mil caracteres ao Gemini. Quem escreve essas mensagens conduz o modelo: na internet, o Cérebro viraria um Gemini de uso livre com a chave do grupo. O backend precisa conferir que as mensagens da IA saíram dele, por exemplo com uma assinatura, ou cortar bem o histórico.
 9. Chave e endereços na hospedagem. A chave do plano pago vai numa variável de ambiente da hospedagem, e não num `.env` copiado: `backend/app/config.py` já dá prioridade à variável. `ALLOWED_ORIGINS`, e o `ALLOWED_HOSTS` da issue #75, recebem o endereço público do app.
 
+## O modo estudo, sem IA
+
+Este documento trata do app com IA. O modo estudo do celular (README, "Estudar no celular") é publicado à parte, pelo fluxo `.github/workflows/publicar.yml`, e não depende das tarefas acima: ele não tem backend nem chave, não chama a IA e não manda a servidor o que o aluno faz. O endereço é público: qualquer pessoa com o link abre o app, e o GitHub vê o endereço IP de quem abre. Ativar o GitHub Pages e disparar o fluxo são decisões do dono do repositório.
+
 ## Fontes
 
 - Termos adicionais da Gemini API (Gemini API Additional Terms of Service), em vigor desde 23/03/2026, consultados em 20/11/2026: <https://aistudio.google.com/docs/terms>. Valem aqui as partes sobre idade e sobre os serviços gratuitos (Unpaid Services) e pagos (Paid Services).

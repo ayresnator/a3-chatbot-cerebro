@@ -9,14 +9,14 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 | Rota | O que a IA faz | O que dispara |
 |---|---|---|
 | `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Botão "Gerar resumo, flashcards e quiz" na página Estudar e, com o material do mesmo texto aberto, "Gerar de novo". Os botões de "Abrir" ao lado só abrem o material |
-| `POST /api/quiz` | Escreve de 4 a 6 questões novas sobre o texto de um material, sem repetir as que o quiz dele já tem | Botão "Questões novas deste material", no fim do quiz. Ele não aparece na demonstração nem no quiz do caderno de erros e do simulado |
+| `POST /api/quiz` | Escreve de 4 a 6 questões novas sobre o texto de um material, sem repetir as que o quiz dele já tem | Botão "Questões novas deste material", no fim do quiz. Ele não aparece na demonstração, no modo estudo do celular nem no quiz do caderno de erros e do simulado |
 | `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Ctrl + Enter, ⌘ + Enter no Mac) e o botão "Não entendi, me explique" |
 | `POST /api/grade` | Julga o sentido de uma resposta curta que a comparação de texto marcou como errada | Botão "Pedir revisão da IA" |
 | `POST /api/example` | Escreve um texto curto de estudo sobre um tema sorteado da área | Botão "Usar um exemplo" na página Estudar. Na demonstração, com a IA desligada ou quando ela falha, a tela usa um exemplo pronto da área, sem chamar o modelo |
 
-O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
+O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) e o modo estudo do celular também não: os dois só reorganizam as frases do texto, e o modo estudo não faz nenhum pedido ao backend.
 
-A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No "Usar um exemplo", e no celular também no "Perguntar ao Cérebro" e no "Enviar", o aviso fica só no nome do botão, lido pelo leitor de tela: na tela ele não cabe ao lado das outras ferramentas. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No "Usar um exemplo", e no celular também no "Perguntar ao Cérebro" e no "Enviar", o aviso fica só no nome do botão, lido pelo leitor de tela: na tela ele não cabe ao lado das outras ferramentas. Na demonstração, no modo estudo e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 
@@ -134,6 +134,8 @@ Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecim
 Na faixa gratuita, os [termos da Gemini API](https://aistudio.google.com/docs/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
 
 O servidor não tem banco de dados e não guarda texto de aluno. O log registra o campo e o motivo de cada recusa, nunca o texto recebido nem o gerado. A chave fica no `.env`, só o backend a lê, e ela viaja no cabeçalho `x-goog-api-key`, nunca na URL. O backend não segue redirecionamento: se um filtro de rede responder com outro endereço, o pedido para ali e a chave não vai junto.
+
+O modo estudo do celular (README, "Estudar no celular") não usa o backend: o que o aluno faz nele fica no navegador do aparelho. Publicado no GitHub Pages, ele só baixa os arquivos do app, e o GitHub vê o endereço IP de quem abre a página.
 
 O Cérebro é para uso local do grupo, com a chave gratuita. O que falta para abri-lo na internet, com os termos da Gemini API e a LGPD, está em [PUBLICAR.md](PUBLICAR.md).
 
