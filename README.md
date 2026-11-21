@@ -224,7 +224,8 @@ No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só ne
 | Google Gemini API | Geração de explicações e materiais de estudo |
 | localStorage | Armazenamento de dados no navegador |
 | unittest e node:test | Testes automáticos do backend e do frontend |
-| GitHub Actions | Execução dos testes a cada envio ao repositório |
+| GitHub Actions | Execução dos testes a cada envio ao repositório e, disparada à mão, a publicação do modo estudo |
+| Service worker e manifest | Modo estudo no celular: instalar o app na tela inicial e abrir sem internet |
 
 ---
 
@@ -239,7 +240,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -281,6 +282,7 @@ a3-chatbot-cerebro/
 │   ├── public/
 │   ├── index.html
 │   ├── package.json
+│   ├── sw-molde.js
 │   └── vite.config.js
 │
 ├── docs/
@@ -290,7 +292,9 @@ a3-chatbot-cerebro/
 │   ├── VALIDACAO.md
 │   ├── avaliacao-2026-11-17.json
 │   └── avaliacao-2026-11-17-2.json
-├── .github/workflows/testes.yml
+├── .github/workflows/
+│   ├── testes.yml
+│   └── publicar.yml
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
@@ -321,13 +325,15 @@ a3-chatbot-cerebro/
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
-| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js` e `exemplos.js` |
-| `frontend/public/` | Arquivos públicos |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js` e `exemplos.js` e do service worker do modo estudo |
+| `frontend/public/` | Arquivos públicos: o `config.js`, o favicon e, do modo estudo, o manifest e os ícones |
+| `frontend/sw-molde.js` | Molde do service worker do modo estudo: o build (`vite.config.js`) põe nele a lista de arquivos e grava o `sw.js` |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
 | `docs/VALIDACAO.md` | Registro dos testes e das validações |
 | `docs/avaliacao-2026-11-17.json` e `avaliacao-2026-11-17-2.json` | Respostas gravadas da rodada de avaliação de 17/11/2026 |
 | `.github/workflows/testes.yml` | Testes automáticos a cada envio |
+| `.github/workflows/publicar.yml` | Publicação do modo estudo no GitHub Pages, só quando alguém a dispara à mão |
 | `iniciar.ps1` | Abre o backend, o frontend e o navegador com um comando, depois da primeira instalação (Windows) |
 | `AGENTS.md` | Regras do grupo para issues e pull requests, lidas também pelos agentes de IA (`CLAUDE.md` e `GEMINI.md` só importam este arquivo) |
 
@@ -354,6 +360,46 @@ A interface local ficará disponível em:
 Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil e o rascunho dela não se misturam com os do app com IA.
 
 Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
+
+---
+
+## 📱 Estudar no celular
+
+O modo estudo é o mesmo aplicativo, sem IA, para revisar os materiais no celular, também sem internet. Ele não tem backend nem chave e não faz nenhum pedido à `/api`: o que o estudante faz nele não sai do aparelho e não gasta chamada da IA. O build é o de sempre, com `semIA: true` no `config.js`.
+
+O que muda:
+
+- O cabeçalho mostra "Modo estudo · sem IA".
+- Os botões de gerar só organizam o texto por frases, como na demonstração, e a página Estudar diz isso. O Dúvidas não responde: as respostas precisam do computador com a IA.
+- Resumo, flashcards, quiz, caderno de erros, simulado, Desempenho e Biblioteca funcionam como no computador. O material que veio do app com IA continua com o aviso da IA.
+- Os dados são de verdade e ficam no navegador do celular, nas mesmas chaves do app com IA e no formato do backup.
+
+Para levar os materiais e trazer o progresso de volta:
+
+1. No computador, na Biblioteca, clique em "Exportar".
+2. Passe o arquivo `cerebro-backup-AAAA-MM-DD.json` para o celular, por cabo, por e-mail para você mesmo ou por uma pasta na nuvem. Ele leva os textos dos materiais e o desempenho: não o mande a outras pessoas.
+3. No celular, na Biblioteca, toque em "Importar" e escolha o arquivo.
+4. Para trazer o desempenho e o caderno de erros de volta, faça o caminho contrário: "Exportar" no celular e "Importar" no computador. Importar não duplica o que já existe.
+
+Depois da primeira visita, o app abre sem internet; o leitor de PDF do "Abrir arquivo" fica guardado no primeiro PDF aberto. Para pôr o app na tela inicial: no Android, no Chrome, menu ⋮ > "Instalar app"; no iPhone, no Safari, Compartilhar > "Adicionar à Tela de Início". Instale: no iPhone, o Safari apaga os dados de um site que não está na tela inicial depois de 7 dias sem uso. O modo estudo pede ao navegador para não apagar os dados sozinho, mas quem decide é o navegador: faça backup com frequência. Quando sai uma versão nova, um aviso oferece "Atualizar"; até o clique, o app continua na versão de antes.
+
+Para conferir no computador, monte o mesmo build do fluxo de publicação e sirva a pasta `dist`:
+
+```powershell
+cd frontend
+npx vite build --base ./
+Set-Content dist\config.js "window.CEREBRO_CONFIG = { demo: false, apiBaseUrl: '', semIA: true };"
+python -m http.server 4173 -d dist
+```
+
+Abra **http://localhost:4173**, de preferência no Chrome com a largura de um celular. No Windows, o `http.server` do Python às vezes recusa conexões quando o navegador pede muitos arquivos de uma vez; se o app não abrir sem internet depois da primeira visita, recarregue a página uma vez com o servidor ligado. `npm run dev` e `?demo` não usam o modo estudo nem o service worker.
+
+**Publicar.** O fluxo `.github/workflows/publicar.yml` monta esse build e o publica no GitHub Pages. Ele só roda quando alguém o dispara à mão, e hoje nada está publicado. Publicar é decisão do dono do repositório, em dois passos:
+
+1. Em Settings > Pages, escolher Source: GitHub Actions.
+2. Em Actions > publicar, clicar em "Run workflow".
+
+O endereço fica https://ayresnator.github.io/a3-chatbot-cerebro/, e qualquer pessoa com o link abre o modo estudo. Nenhum dado vai para servidor e nenhuma chave é publicada, mas o GitHub vê o endereço IP de quem abre a página. O navegador guarda os dados por endereço, e esse endereço é o mesmo dos outros sites que a conta publica no GitHub Pages: uma página de outro repositório da conta enxergaria os dados do Cérebro guardados naquele navegador.
 
 ---
 
@@ -391,7 +437,8 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
 - A revisão de resposta curta feita pela IA também pode errar.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
-- O Cérebro é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md).
+- No modo estudo do celular, os dados ficam no celular: o caminho de volta para o computador é o Exportar. No iPhone, com o app fora da tela inicial, o Safari apaga os dados depois de 7 dias sem uso.
+- O Cérebro com IA é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md). O modo estudo, sem IA, pode ser publicado à parte (veja "Estudar no celular").
 
 ---
 

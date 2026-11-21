@@ -1,0 +1,50 @@
+# Publica o modo estudo (o frontend sem IA, para o celular) no GitHub Pages. Não tem backend nem chave: o config.js do
+# build liga o semIA, e o app não faz pedido nenhum à /api. Só roda quando alguém o dispara à mão, em Actions >
+# publicar > Run workflow, depois de o GitHub Pages ser ativado no repositório (README, "Estudar no celular").
+name: publicar
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Uma publicação por vez; a que começou termina.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      # Endereços relativos: o site fica em /a3-chatbot-cerebro/, e não na raiz do domínio.
+      - run: npx vite build --base ./
+      # shortcut: a versão do service worker sai do build, antes desta linha, e mudar só esta linha não chega ao app já
+      # instalado; se ela passar a mudar, escrever o config.js em public/ antes do build.
+      - run: echo "window.CEREBRO_CONFIG = { demo: false, apiBaseUrl: '', semIA: true };" > dist/config.js
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

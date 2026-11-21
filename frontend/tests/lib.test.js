@@ -1145,6 +1145,13 @@ test('hello: na demonstração', () => {
   );
 });
 
+test('hello: no modo estudo, diz que as respostas precisam do computador com a IA', () => {
+  assert.equal(
+    hello({ user: null, area: 'Economia', level: 'Básico', input: '', title: 'Inflação', api: false, study: true }),
+    'Olá! Sou o Cérebro, seu tutor de Economia no nível Básico. No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as respostas a dúvidas precisam do computador com a IA.'
+  );
+});
+
 test('hello: com o material aberto como assunto, cita o material e não fala do editor', () => {
   assert.equal(
     hello({ user: null, area: 'Escolar', level: 'Básico', input: 'Revolução Francesa\nCausas: a crise', title: 'Revolução Francesa', api: true }),

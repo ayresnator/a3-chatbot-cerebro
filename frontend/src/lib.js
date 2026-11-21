@@ -638,14 +638,17 @@ export function slashHints(list, text) {
 }
 
 // Saudação fixa: o Cérebro fala primeiro sem gastar chamada da IA. Não entra em chat, então não vai no histórico do pedido.
-// title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor.
-export function hello({ user, area, level, input, title, api }) {
+// title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor. study é o modo
+// estudo do celular (#85), também sem IA.
+export function hello({ user, area, level, input, title, api, study = false }) {
   return 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' +
     (area === 'Escolar' ? 'das matérias escolares' : 'de ' + area) + ' no nível ' + level + '. ' +
     (api
       ? 'Pergunte o que quiser ou escolha uma das sugestões abaixo. ' +
         (title ? 'Vou considerar o material "' + title + '".'
           : input.trim() ? 'Vou considerar o texto que está no editor.' : 'Se colar um texto no editor, respondo com base nele.')
+      : study ? 'No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as ' +
+        'respostas a dúvidas precisam do computador com a IA.'
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
 }
 
