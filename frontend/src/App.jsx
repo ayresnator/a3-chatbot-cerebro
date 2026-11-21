@@ -2132,9 +2132,9 @@ function App() {
                           </div>
                           {!result.virtual && (
                             <div className="result-actions">
-                              <button type="button" aria-haspopup="dialog" onClick={() => openShare(result)}>
+                              <button type="button" className="share" aria-haspopup="dialog" onClick={() => openShare(result)}>
                                 <Icon name="compartilhar" />
-                                Compartilhar
+                                <span>Compartilhar</span>
                               </button>
                               <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
                                 <Icon name={isSaved ? 'check' : 'salvar'} />

@@ -1775,6 +1775,60 @@ main:focus {
     gap: var(--sp-3)
 }
 
+/* Ao lado do título, os dois botões tiravam dele até 262 px: o título descia para a segunda linha, e o material da IA
+   empurrava as abas ao chegar (o esqueleto tem a altura de uma linha). De 551 px para cima o título fica com a largura
+   toda, e os botões (44 px) ficam ao lado da área e do aviso da IA, que são mais curtos e somam 52 px de altura. O
+   material sem aviso (o da demonstração, que não tem espera) segue com os botões ao lado do título: sem a segunda
+   linha, eles deixariam o cabeçalho mais alto. Até 550 px o grupo fica embaixo do título (mobile.css). A medida em rem
+   (551 px com a letra padrão) cresce com a letra do navegador: com ela grande, o aviso ficaria espremido ao lado dos
+   botões, e eles descem para baixo do título, como antes. */
+@media (min-width: 34.4375rem) {
+    .result-header:has(> .result-actions):has(.ai-note) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0 var(--sp-2)
+    }
+
+    .result-header:has(> .result-actions):has(.ai-note) > :first-child {
+        display: contents
+    }
+
+    .result-header h2 {
+        grid-column: 1 / -1
+    }
+
+    .result-header > .result-actions {
+        grid-area: 2 / 2 / span 2;
+        align-self: center
+    }
+}
+
+/* De 551 a 1179 px os botões ficam juntos como no celular (mobile.css), e o "Compartilhar" fica só com o ícone, como o
+   da Biblioteca, com o nome no leitor de tela: assim o aviso da IA cabe numa linha ao lado deles a partir de 638 px. */
+@media (min-width: 551px) and (max-width: 1179px) {
+    .result-header > .result-actions {
+        gap: var(--sp-2)
+    }
+
+    .result-actions button {
+        padding: 0 var(--sp-3)
+    }
+
+    .result-actions .share {
+        width: var(--control-h);
+        padding: 0
+    }
+
+    .result-actions .share span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
+}
+
 .meta {
     margin-top: var(--sp-1);
     color: var(--ink-2);

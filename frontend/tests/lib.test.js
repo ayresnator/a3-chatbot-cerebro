@@ -2654,10 +2654,12 @@ test('shareFile: material sem data leva a de agora; a demonstração e o exemplo
 const CARDS = [
   { question: 'O que é PIB?', answer: 'A soma das riquezas\tproduzidas \r\n no país.' },
   { question: '  Onde\nocorre?  ', answer: 'Nos cloroplastos.' },
+  { question: 'Linha\rsó com CR', answer: 'Fim.' },
 ];
 
 test('cardLines: um cartão por linha, frente e verso separados por tabulação; tabulação e quebra de dentro viram espaço', () => {
-  assert.equal(cardLines(CARDS), 'O que é PIB?\tA soma das riquezas produzidas no país.\nOnde ocorre?\tNos cloroplastos.');
+  assert.equal(cardLines(CARDS),
+    'O que é PIB?\tA soma das riquezas produzidas no país.\nOnde ocorre?\tNos cloroplastos.\nLinha só com CR\tFim.');
 });
 
 test('ankiFile: o cabeçalho que o Anki lê vem antes das mesmas linhas; o Quizlet recebe só as linhas', () => {
