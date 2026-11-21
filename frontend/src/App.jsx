@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Countdown,
+  PerfilSkeleton, Countdown, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
@@ -161,6 +161,28 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
+  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
+  // sem nada gravado, elas andam. Com movimento reduzido no sistema (wavesStill, lido ao vivo) elas ficam paradas e o
+  // botão some.
+  const wavesAllowed = useWavesAllowed();
+  const wavesStill = useWavesStill();
+  const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
+  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido, e aí o botão
+  // some (não teria o que ligar); null enquanto não houve aviso, e o botão fica.
+  const [wavesActive, setWavesActive] = useState(null);
+  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
+  const [fundoUnsaved, setFundoUnsaved] = useState(false);
+  // O botão some com a janela do perfil aberta (sem WebGL na GPU, movimento reduzido ligado, contexto perdido, janela
+  // estreitada). Com o foco nele, o foco cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai
+  // para o "Fechar". A função do ref não muda, e o React só a chama com null logo antes de tirar o botão do DOM.
+  const fundoButton = useRef(null);
+  const fundoRef = useCallback(el => {
+    if (!el && fundoButton.current === document.activeElement) {
+      fundoButton.current.closest('dialog')?.querySelector('.close')?.focus();
+    }
+    fundoButton.current = el;
+  }, []);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
@@ -315,9 +337,9 @@ function App() {
     };
   }, []);
 
-  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil ou a data do
-  // backup: esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O
-  // rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil, a data do backup
+  // ou o "Fundo animado": esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba
+  // que gravou. O rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
   useEffect(() => {
     const sync = e => {
       const changed = k => e.key === null || e.key === storageKey(k);
@@ -326,6 +348,7 @@ function App() {
       if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
       if (changed('cartoes')) setBoxes(readList('cartoes').filter(validCardReview));
       if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('fundo')) setFundo(read('fundo', true) !== false);
       if (changed('user')) {
         const profile = readUser();
         setUser(profile);
@@ -1496,6 +1519,7 @@ function App() {
       >
         Pular para o conteúdo
       </a>
+      <Waves on={wavesAllowed} animate={fundo && !wavesStill} onActive={setWavesActive} />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
@@ -2952,6 +2976,30 @@ function App() {
                   onSave={saveProfile}
                 />
               </Suspense>
+              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
+                  WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
+              {wavesAllowed && !wavesStill && wavesActive !== false && (
+                <>
+                  <button
+                    ref={fundoRef}
+                    type="button"
+                    className="chip"
+                    aria-pressed={fundo}
+                    onClick={() => {
+                      setFundo(!fundo);
+                      setFundoUnsaved(!persist('fundo', !fundo));
+                    }}
+                  >
+                    {fundo && <Icon name="check" />}
+                    Fundo animado
+                  </button>
+                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta janela, na parte inerte da página, e
+                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
+                  <p role="status">
+                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
+                  </p>
+                </>
+              )}
             </div>
           </Modal>
         )}
