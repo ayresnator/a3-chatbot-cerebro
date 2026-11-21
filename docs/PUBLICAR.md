@@ -6,7 +6,7 @@ O Cérebro foi feito para uso local. Cada aluno do grupo roda o backend e o fron
 
 ## O que já protege hoje
 
-- Os dados do aluno ficam no navegador. Materiais, perfil, desempenho, caderno de erros e rascunho ficam no `localStorage`. O backend não tem banco de dados e não guarda o texto do aluno.
+- Os dados do aluno ficam no navegador. Materiais, perfil, desempenho, caderno de erros, caixas dos cartões e rascunho ficam no `localStorage`. O backend não tem banco de dados e não guarda o texto do aluno.
 - A chave fica só no backend. Ela viaja no cabeçalho `x-goog-api-key`, nunca na URL, e não aparece no log nem nas respostas. O backend não segue redirecionamento, então a chave não vai para outro endereço.
 - O log anota o campo e o motivo de cada recusa, nunca o texto recebido nem o gerado. Os testes de `backend/tests/test_privacidade.py` conferem isso.
 - A entrada é conferida antes de gastar cota. Campo grande demais ou vazio, área ou nível fora da lista e corpo que não é JSON voltam com erro 422, sem chamar a IA.
