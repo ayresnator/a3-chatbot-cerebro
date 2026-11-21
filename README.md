@@ -251,6 +251,7 @@ a3-chatbot-cerebro/
 │   │   ├── anim.js
 │   │   ├── lib.js
 │   │   ├── exemplos.js
+│   │   ├── waves.js
 │   │   ├── styles.css
 │   │   ├── mobile.css
 │   │   └── components/ui/chat-composer.jsx
@@ -297,7 +298,8 @@ a3-chatbot-cerebro/
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
-| `frontend/tests/` | Testes das regras de `lib.js` e `exemplos.js` |
+| `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
+| `frontend/tests/` | Testes das regras de `lib.js`, `exemplos.js` e `waves.js` |
 | `frontend/public/` | Arquivos públicos |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
