@@ -470,16 +470,16 @@
     }
 
     /* Com mensagens os chips ficam numa linha que rola de lado (a página não rola): a conversa fica com o lugar de duas
-       linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria; o scroll-padding faz o Tab rolar a linha
-       até o chip inteiro, como na barra de baixo. A dica do teclado sai da vista (continua no aria-describedby do campo):
-       a caixa presa ocupava um terço da tela. Na linha que rola o chip não cresce sob o ponteiro (--lift): a rolagem
-       cortaria a ponta dele. */
+       linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria. Quem rola a linha até o chip que recebe
+       o foco pelo teclado é o App.jsx (reveal): sozinho, o Chromium só rola até o chip escondido, e o que já aparece em
+       parte ficava cortado (o scroll-padding de 32 px só valia para o chip com menos de 32 px à vista). A dica do
+       teclado sai da vista (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. Na linha
+       que rola o chip não cresce sob o ponteiro (--lift): a rolagem cortaria a ponta dele. */
     .chat-stage[data-state=conversa] .suggestions {
         --lift: 1;
         flex-wrap: nowrap;
         overflow-x: auto;
         scrollbar-width: none;
-        scroll-padding-inline: var(--sp-6);
         margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1)) var(--sp-2);
         padding: var(--sp-1)
     }
@@ -755,7 +755,6 @@
         justify-content: flex-start;
         overflow-x: auto;
         scrollbar-width: none;
-        scroll-padding-inline: var(--sp-6);
         margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1)) var(--sp-2);
         padding: var(--sp-1)
     }

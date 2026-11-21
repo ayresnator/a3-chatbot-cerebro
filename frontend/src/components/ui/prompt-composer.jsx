@@ -41,6 +41,19 @@ function Typed({ lines }) {
   );
 }
 
+// Linha de chips que rola de lado no celular: os da área (Chips, abaixo) e as sugestões do Dúvidas (App.jsx). O chip
+// fica à vista inteiro, com o respiro da linha dos dois lados: o do anel de foco e, nos chips da área, o da faixa que
+// esmaece a ponta direita. Mais largo que a linha, fica o começo dele. Rola só a linha: um scrollIntoView rolaria a
+// página também. A posição do chip é contada a partir do primeiro chip: o offsetLeft sozinho é medido da caixa
+// posicionada mais próxima, que nas sugestões não é a linha.
+export function reveal(line, chip) {
+  const pad = getComputedStyle(line);
+  const start = chip.offsetLeft - line.firstElementChild.offsetLeft;
+  const end = start + chip.offsetWidth + (parseFloat(pad.paddingLeft) || 0) + (parseFloat(pad.paddingRight) || 0);
+  if (start < line.scrollLeft) line.scrollLeft = start;
+  else if (end > line.scrollLeft + line.clientWidth) line.scrollLeft = Math.min(start, end - line.clientWidth);
+}
+
 // A área em chips: um grupo de opções de verdade. Só o chip marcado entra no Tab; as setas, o Home e o End contam do
 // chip com o foco, marcam outro e levam o foco junto (lib.js, rove). A linha fica fora do Tab (tabIndex -1): no Firefox,
 // a linha que rola de lado no celular entraria no Tab como uma parada a mais.
@@ -49,20 +62,11 @@ function Chips({ label, options, value, onChange }) {
   const at = options.indexOf(value);
 
   // No celular os chips ficam numa linha que rola de lado. O chip marcado, ou o que recebe o foco pelo teclado, fica à
-  // vista inteiro, com o anel de foco (o respiro da esquerda) e antes da faixa que esmaece a ponta (o da direita); mais
-  // largo que a linha, fica o começo dele. Rola só a linha: um scrollIntoView rolaria a página também. O foco pelo
-  // ponteiro não rola: o chip andaria entre o toque e o fim dele, e o clique se perderia.
-  function reveal(chip) {
-    const line = row.current;
-    const pad = getComputedStyle(line);
-    const start = chip.offsetLeft - (parseFloat(pad.paddingLeft) || 0);
-    const end = chip.offsetLeft + chip.offsetWidth + (parseFloat(pad.paddingRight) || 0);
-    if (start < line.scrollLeft) line.scrollLeft = start;
-    else if (end > line.scrollLeft + line.clientWidth) line.scrollLeft = Math.min(start, end - line.clientWidth);
-  }
+  // vista inteiro (reveal). O foco pelo ponteiro não rola: o chip andaria entre o toque e o fim dele, e o clique se
+  // perderia.
   useLayoutEffect(() => {
     const chip = row.current.children[at];
-    if (chip) reveal(chip);
+    if (chip) reveal(row.current, chip);
   }, [at]);
 
   function keys(e) {
@@ -84,7 +88,7 @@ function Chips({ label, options, value, onChange }) {
       aria-label={label}
       tabIndex={-1}
       onKeyDown={keys}
-      onFocus={e => byKeyboard() && e.target !== row.current && reveal(e.target)}
+      onFocus={e => byKeyboard() && e.target !== row.current && reveal(row.current, e.target)}
     >
       {options.map(option => (
         <button

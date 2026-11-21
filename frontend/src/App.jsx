@@ -7,7 +7,7 @@ import {
 import { BrandMark, Icon } from './icons.jsx';
 import { Pen } from './marks.jsx';
 import { ChatComposer } from './components/ui/chat-composer.jsx';
-import { PromptComposer } from './components/ui/prompt-composer.jsx';
+import { PromptComposer, reveal } from './components/ui/prompt-composer.jsx';
 import {
   ROUTINE, OPENING, CALM, POP, POP_CALM, FOCUS, FOCUS_CALM, FINALE, HERO, HERO_CALM, EASE_IN, EASE_OUT, MODAL,
   byKeyboard, appear, reduced, enter, flipList, leave,
@@ -2185,13 +2185,16 @@ function App() {
                         </svg>
                         {/* Os chips ficam acima da caixa (#109), também antes dela no Tab. Durante a espera da resposta eles
                             somem (data-espera): a pílula de espera fica no lugar deles, e os chips da resposta nova chegam
-                            com ela. Com a lista do "/" aberta eles também somem (styles.css). */}
+                            com ela. Com a lista do "/" aberta eles também somem (styles.css). No celular a linha deles
+                            rola de lado: o chip que recebe o foco pelo teclado fica à vista inteiro, e o foco do
+                            ponteiro não rola a linha (#112; prompt-composer.jsx, reveal). */}
                         <m.div
                           className="suggestions"
                           role="group"
                           aria-label="Sugestões de perguntas"
                           data-espera={asking ? '' : undefined}
                           variants={hero.chips}
+                          onFocus={e => byKeyboard() && e.target !== e.currentTarget && reveal(e.currentTarget, e.target)}
                         >
                           {chatHints.map((h, i) => (
                             <m.button
