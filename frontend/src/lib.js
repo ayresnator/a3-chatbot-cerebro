@@ -56,12 +56,14 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
 
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
 // não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
-// nela. O App liga a demonstração antes da primeira leitura.
+// nela. O App liga a demonstração antes da primeira leitura. O "Fundo animado" (fundo) fica de fora: não é dado do
+// estudante, é uma preferência do aparelho, como o movimento reduzido do sistema, e quem parou as ondas no app com IA
+// não as vê andando de novo na demonstração.
 let prefix = 'cerebro-';
 export function demoStorage(on) {
   prefix = on ? 'cerebro-demo-' : 'cerebro-';
 }
-export const storageKey = k => prefix + k;
+export const storageKey = k => (k === 'fundo' ? 'cerebro-' : prefix) + k;
 
 // session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
 // que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
@@ -275,6 +277,13 @@ export function readList(k) {
 export function readUser() {
   const user = read('user', null);
   return isText(user?.name) ? user : null;
+}
+
+// "Escrever antes de virar", nos Flashcards: a escolha gravada no navegador. Sem escolha, ou com uma que não é sim nem
+// não, o campo começa ligado no computador e desligado na tela de toque, onde digitar pesa mais.
+export function readWriteFirst(touch) {
+  const on = read('escrever', null);
+  return typeof on === 'boolean' ? on : !touch;
 }
 
 // Rascunho do que estava aberto (editor, material, conversa), gravado a cada mudança para sobreviver a um F5.
@@ -851,6 +860,17 @@ export function deckSummary(deck) {
   const missed = deckMissed(deck).length;
   return cards + (cards === 1 ? ' cartão revisado; ' : ' cartões revisados; ') +
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
+}
+
+// Lembrete embaixo do "Você escreveu", com o cartão virado.
+export const CARD_REMINDER = 'Conte como acerto só se você disse o essencial.';
+
+// O que a região fixa diz ao virar o cartão (toAnswer: para a resposta). Com o que o aluno escreveu na tela (wrote), a
+// resposta vem com o lembrete: o foco não passa por ele. A resposta sem ponto final ganha um, para a pausa antes dele.
+export function spokenCard(card, toAnswer, wrote) {
+  if (!toAnswer) return 'Pergunta: ' + card.question;
+  const text = 'Resposta: ' + card.answer.trim();
+  return wrote ? text + (/[.!?…]$/.test(text) ? ' ' : '. ') + CARD_REMINDER : text;
 }
 
 // Revisão espaçada dos cartões, nas caixas de Leitner: cada cartão avaliado fica em cerebro-cartoes como { key, title,

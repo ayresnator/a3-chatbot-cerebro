@@ -106,6 +106,8 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
+Embaixo do cartão fica o campo opcional "Sua resposta": o estudante escreve o que lembra e aperta Enter, ou clica no cartão, para ver a resposta. O que ele escreveu aparece como "Você escreveu: ..." logo abaixo da resposta do cartão, com o lembrete "Conte como acerto só se você disse o essencial.", e o campo fica só para leitura até o próximo cartão. "Errei", "Revisar depois" e "Acertei" limpam o campo. O texto não é gravado e não sai do navegador. A caixa "Escrever antes de virar", embaixo dos botões, mostra ou esconde o campo; a escolha fica no navegador e começa ligada no computador e desligada na tela de toque, onde digitar pesa mais. O Desempenho continua contando a avaliação do estudante, como antes.
+
 Cada cartão avaliado também ganha uma caixa de 1 a 4 e um dia de volta, como nas caixas de Leitner: a caixa 1 volta em 1 dia, a 2 em 3 dias, a 3 em 7 dias e a 4 em 16 dias. O cartão avaliado pela primeira vez entra na caixa 1. "Acertei" no dia marcado ou depois sobe uma caixa, e a 4 continua na 4; antes do dia marcado não muda nada, e rever o baralho no mesmo dia não empurra o cartão para longe. "Errei" leva o cartão de volta à caixa 1, e "Revisar depois" não muda a caixa.
 
 Os cartões que voltam hoje, do material aberto e de todos os materiais da biblioteca, formam a revisão do dia: no máximo 20 por vez, os mais atrasados primeiro, cada um com o material de onde veio. Ela abre pelo link "N cartões para hoje" em "Seu progresso", no Estudar, e pelo botão "Revisão do dia (N)" da página Flashcards, também sem material aberto. Sair da página Flashcards fecha a revisão e devolve o material que estava aberto. Cartão de material excluído da biblioteca sai da revisão. Quem diz se lembrou é o próprio estudante, e a tela pede: "A caixa sobe pelo seu Acertei. Marque só o que você lembrou de verdade." O baralho de um material continua com todos os cartões, na ordem do material.
@@ -240,7 +242,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -275,6 +277,7 @@ a3-chatbot-cerebro/
 │   │   ├── lib.js
 │   │   ├── arquivo.js
 │   │   ├── exemplos.js
+│   │   ├── waves.js
 │   │   ├── styles.css
 │   │   ├── mobile.css
 │   │   └── components/ui/chat-composer.jsx
@@ -325,7 +328,8 @@ a3-chatbot-cerebro/
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
-| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js` e `exemplos.js` e do service worker do modo estudo |
+| `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js` e do service worker do modo estudo |
 | `frontend/public/` | Arquivos públicos: o `config.js`, o favicon e, do modo estudo, o manifest e os ícones |
 | `frontend/sw-molde.js` | Molde do service worker do modo estudo: o build (`vite.config.js`) põe nele a lista de arquivos e grava o `sw.js` |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
