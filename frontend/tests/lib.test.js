@@ -6,6 +6,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
+  chatSubject,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
@@ -743,6 +744,69 @@ test('hello: na demonstração', () => {
   );
 });
 
+test('hello: com o material aberto como assunto, cita o material e não fala do editor', () => {
+  assert.equal(
+    hello({ user: null, area: 'Escolar', level: 'Básico', input: 'Revolução Francesa\nCausas: a crise', title: 'Revolução Francesa', api: true }),
+    'Olá! Sou o Cérebro, seu tutor das matérias escolares no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o material "Revolução Francesa".'
+  );
+});
+
+// Material aberto da biblioteca, de outra área e outro nível que os do editor.
+const OPENED = {
+  title: 'Revolução Francesa',
+  area: 'Escolar',
+  level: 'Intermediário',
+  summary: [{ concept: 'Causas', text: 'A crise financeira e a desigualdade.' }, { concept: '', text: 'A Queda da Bastilha.' }],
+};
+const EDITOR = { input: 'Hardware e software são as duas partes do computador.', area: 'Tecnologia', level: 'Básico' };
+
+test('chatSubject: com um material aberto, vão o título e o resumo dele, com a área e o nível do material', () => {
+  const got = chatSubject({ material: OPENED, made: '', editor: false, ...EDITOR });
+  assert.deepEqual(got, {
+    title: 'Revolução Francesa',
+    content: 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.',
+    area: 'Escolar',
+    level: 'Intermediário',
+    swap: 'Usar o texto do editor',
+  });
+  // Sem texto no editor não há outra fonte para escolher, nem com a escolha antiga pelo editor.
+  for (const editor of [false, true]) {
+    assert.equal(chatSubject({ material: OPENED, made: '', editor, ...EDITOR, input: '  ' }).swap, '');
+    assert.equal(chatSubject({ material: OPENED, made: '', editor, ...EDITOR, input: '  ' }).title, OPENED.title);
+  }
+});
+
+test('chatSubject: material antigo, sem área ou nível da lista, usa os do editor', () => {
+  const old = { ...OPENED, area: undefined, level: 'Expert' };
+  const got = chatSubject({ material: old, made: '', editor: false, ...EDITOR });
+  assert.equal(got.area, 'Tecnologia');
+  assert.equal(got.level, 'Básico');
+});
+
+test('chatSubject: sem material, com o texto escolhido ou com o material feito do texto do editor, vale o editor', () => {
+  const editorOnly = { title: '', content: EDITOR.input, area: 'Tecnologia', level: 'Básico' };
+  assert.deepEqual(chatSubject({ material: null, made: '', editor: false, ...EDITOR }), { ...editorOnly, swap: '' });
+  assert.deepEqual(
+    chatSubject({ material: OPENED, made: '', editor: true, ...EDITOR }),
+    { ...editorOnly, swap: 'Usar o material aberto' }
+  );
+  // Gerado deste texto em Escolar; depois o aluno trocou a área do editor: continua sendo o mesmo texto.
+  const made = JSON.stringify([EDITOR.input, 'Escolar', 'Intermediário']);
+  for (const editor of [false, true]) {
+    assert.deepEqual(chatSubject({ material: OPENED, made, editor, ...EDITOR }), { ...editorOnly, swap: '' });
+  }
+  // Outro texto no editor: o material volta a valer. Um texto que só começa igual não engana a comparação.
+  assert.equal(chatSubject({ material: OPENED, made, editor: false, ...EDITOR, input: 'Outro texto' }).title, OPENED.title);
+  assert.equal(chatSubject({ material: OPENED, made, editor: false, ...EDITOR, input: 'Hardware' }).title, OPENED.title);
+});
+
+test('chatSubject: material enorme vai cortado em 20.000 caracteres, o limite do backend', () => {
+  const huge = { ...OPENED, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] };
+  const { content } = chatSubject({ material: huge, made: '', editor: false, ...EDITOR });
+  assert.equal([...content].length, 20000);
+  assert.ok(content.startsWith('Revolução Francesa\nLongo: ááá'));
+});
+
 test('LEVELS: os três níveis do contrato da API', () => {
   assert.deepEqual(LEVELS, ['Básico', 'Intermediário', 'Avançado']);
 });
@@ -984,7 +1048,7 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 
 const NO_DRAFT = {
   input: '', exemplo: '', exemploPronto: '', area: '', level: '', result: null, made: { key: '' }, chat: [],
-  tips: NO_TIPS,
+  tips: NO_TIPS, editorChat: false,
 };
 const DRAFT = {
   input: 'Inflação e juros',
@@ -996,6 +1060,7 @@ const DRAFT = {
   made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']) },
   chat: ANSWERED,
   tips: { key: JSON.stringify(['Inflação e juros', 'Economia']), list: ['E o PIB per capita?', 'Como se mede?'] },
+  editorChat: true,
 };
 // O rascunho bom com alguns campos trocados, lido como o App lê na abertura.
 function draft(change) {
@@ -1090,6 +1155,10 @@ test('readDraft: pergunta que ficou sem resposta no fim da conversa sai', () => 
 test('readDraft: sugestões da IA precisam de chave em texto e lista de textos', () => {
   const bad = [null, 'x', { key: 5, list: [] }, { key: 'k' }, { key: 'k', list: 'a' }, { key: 'k', list: ['a', 1] }];
   for (const tips of bad) assert.deepEqual(draft({ tips }).tips, NO_TIPS, JSON.stringify(tips));
+});
+
+test('readDraft: a escolha do texto do editor no chat só vale com true', () => {
+  for (const editorChat of [false, 'true', 1, null, undefined]) assert.equal(draft({ editorChat }).editorChat, false);
 });
 
 // O que esta aba guardou (sessionStorage), como browser() faz com o localStorage. Sem items, a aba fica sem

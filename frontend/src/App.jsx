@@ -21,7 +21,7 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -179,12 +179,16 @@ function App() {
   const [chartArea, setChartArea] = useState('Todas');
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState(DRAFT.chat);
+  // O chat pergunta sobre o texto do editor mesmo com um material aberto: o aluno escolheu na caixa do Dúvidas ou
+  // perguntou pelo editor. Abrir ou gerar outro material volta ao material (lib.js, chatSubject).
+  const [editorChat, setEditorChat] = useState(DRAFT.editorChat);
   // Aviso na tela: { text, action }. action = { label, run } põe um botão no aviso (desfazer, abrir).
   const [notice, setNotice] = useState(null);
   // O que a região fixa do leitor de tela diz (#anuncio, fora do main): o que muda na tela sem um aviso visível.
   const [spoken, setSpoken] = useState('');
   // Desfazer sem prazo: { kind, text, run, focus }. O aviso some sozinho; este botão fica onde a ação aconteceu
-  // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno) até o aluno trocar de página ou desfazer.
+  // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno, 'conversa' no Dúvidas) até o aluno trocar
+  // de página ou desfazer.
   const [undo, setUndo] = useState(null);
   const [retry, setRetry] = useState(null);
   const [tips, setTips] = useState(DRAFT.tips);
@@ -264,12 +268,12 @@ function App() {
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
     draft.current = {
-      input, area, level, result: opened, made: made.current, chat, tips,
+      input, area, level, result: opened, made: made.current, chat, tips, editorChat,
       exemplo: aiExample.current, exemploPronto: readyExample.current,
     };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
-  }, [input, area, level, opened, chat, tips]);
+  }, [input, area, level, opened, chat, tips, editorChat]);
 
   useEffect(() => {
     const hidden = () => document.visibilityState === 'hidden' && saveDraft();
@@ -627,6 +631,7 @@ function App() {
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       setResult(twin || store(material) || material);
       made.current = { key };
+      setEditorChat(false);
       // O quiz e o baralho recomeçam com outro material. O "Gerar de novo" da demonstração, com o mesmo texto, reabre o
       // mesmo, e eles seguem onde estavam. Depois da espera pela IA recomeçam sempre: durante ela o aluno pode ter
       // aberto outro material ou o quiz do caderno de erros.
@@ -904,7 +909,8 @@ function App() {
     }
   }
 
-  // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo.
+  // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo, e o chat passa a ser
+  // sobre o texto do editor. As outras levam o assunto do chat (subject): o material aberto ou o texto do editor.
   // O servidor não guarda conversa: as 6 últimas mensagens vão junto, para ele entender um "me dê um exemplo".
   // O texto do editor já vai em content (ou é a própria pergunta), então a cópia dele fica fora do histórico.
   // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
@@ -913,13 +919,21 @@ function App() {
     if (waiting || !message.trim()) return;
     const msg = message.trim();
     const mine = { role: 'user', text: msg };
+    const own = msg === input.trim();
+    const topic = own ? { content: input, area, level } : subject;
+    if (own) setEditorChat(true);
+    // A pergunta nova encerra o Desfazer de "Nova conversa": ele não pode mais trocar a conversa que começa agora.
+    if (undo?.kind === 'conversa') {
+      setUndo(null);
+      setNotice(n => (n?.text === undo.text ? null : n));
+    }
     setError(null);
     if (message === question) setQuestion('');
     setChat(c => [...c, mine]);
     if (!API_BASE) {
       setChat(c => [...c, {
         role: 'assistant',
-        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (input || EXAMPLE).slice(0, 450),
+        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
       }]);
       return;
     }
@@ -929,16 +943,16 @@ function App() {
     try {
       const data = await callAI('/api/chat', {
         question: msg,
-        content: msg === input.trim() ? '' : input,
-        area,
-        level,
+        content: own ? '' : topic.content,
+        area: topic.area,
+        level: topic.level,
         history: chat
           .filter(m => m.text !== input.trim())
           .slice(-6)
           .map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') })),
       });
       setChat(c => [...c, { role: 'assistant', text: data.answer }]);
-      setTips({ key: JSON.stringify([input, area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
+      setTips({ key: JSON.stringify([topic.content, topic.area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
     } catch (e) {
       if (!e.cancelled) setError(e);
       setChat(c => c.filter(m => m !== mine));
@@ -1050,6 +1064,7 @@ function App() {
   function openSaved(material) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
     made.current = { key: '' };
+    setEditorChat(false);
     setResult(material);
     openPage('Resumos', ['#material-titulo']);
     if (!result || !sameMaterial(result, material)) restart();
@@ -1107,8 +1122,13 @@ function App() {
     [page, saved, events, lastBackup, today]
   );
   const busiest = Math.max(1, ...days.map(d => d.total));
-  const chatHints = hints({ chat, input, area, tips });
-  const greeting = hello({ user, area, level, input, api: !!API_BASE });
+  // O chat pergunta sobre o material aberto ou sobre o texto do editor (lib.js): o pedido, as sugestões, a saudação e a
+  // caixa usam o mesmo assunto.
+  const subject = chatSubject({ material: opened, made: made.current.key, editor: editorChat, input, area, level });
+  const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
+  const greeting = hello({
+    user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
+  });
   // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
   // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
   const waiting = !!busy || !!asking || !!pausedUntil;
@@ -2015,17 +2035,30 @@ function App() {
                         type="button"
                         disabled={asking}
                         onClick={() => {
+                          // Limpa na hora, sem perguntar, e deixa desfazer, como as outras ações: as respostas custaram
+                          // chamadas de IA.
+                          const before = { chat, tips };
                           setChat([]);
                           setTips({ key: '', list: [] });
-                          // O botão sai com o cabeçalho compacto: o foco vai para a caixa (no toque, para o título,
-                          // sem abrir o teclado).
-                          focusAfter.current = [TOUCH ? '#chat-titulo' : '#pergunta'];
+                          // O botão sai com o cabeçalho compacto: o foco vai para o Desfazer que fica embaixo da
+                          // saudação. Desfeito, ele vai para a caixa (no toque, para o título, sem abrir o teclado).
+                          focusAfter.current = ['.chat-head .undo-row button', ...ASK_FOCUS];
+                          // A pergunta nova encerra o Desfazer (ask); se ainda assim ele chegar aqui, a conversa nova fica.
+                          offerUndo('conversa', 'Conversa apagada', () => {
+                            setChat(c => (c.length ? c : before.chat));
+                            setTips(t => (t.key ? t : before.tips));
+                          }, ASK_FOCUS);
                         }}
                       >
                         Nova conversa
                       </button>
                     ) : (
-                      <m.p className="chat-lead" variants={hero.lead}>{greeting}</m.p>
+                      <>
+                        <m.p className="chat-lead" variants={hero.lead}>{greeting}</m.p>
+                        <AnimatePresence mode="popLayout" custom={byKeyboard()}>
+                          {undo?.kind === 'conversa' && <UndoRow key="desfazer" undo={undo} onUndo={undoNow} pop={pop} />}
+                        </AnimatePresence>
+                      </>
                     )}
                   </div>
                   <div className="chat-thread">
@@ -2083,6 +2116,9 @@ function App() {
                       onArea={setArea}
                       level={level}
                       onLevel={setLevel}
+                      about={subject.title ? subject : null}
+                      swap={subject.swap}
+                      onSwap={() => setEditorChat(e => !e)}
                       waiting={waiting}
                       touch={TOUCH}
                       cost={cost}

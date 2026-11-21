@@ -1214,8 +1214,9 @@ class ApiTests(unittest.TestCase):
 
     @patch("app.providers.urlopen")
     def test_instructions_from_prompts_reach_the_provider(self, mock_open):
-        # A saudação da tela promete responder com base no texto do editor, mas a instrução só dizia que content
-        # "pode vir vazio". A frase nova vem logo depois dessa, e as instruções das duas rotas moram em prompts.py.
+        # A saudação da tela promete responder com base no texto do editor ou no material aberto, mas a instrução só
+        # dizia que content "pode vir vazio". A frase nova vem logo depois dessa, e as instruções das duas rotas moram
+        # em prompts.py. content não é sempre o texto do editor: com um material aberto vão o título e o resumo dele.
         def instruction(path, body, reply):
             mock_open.return_value.__enter__.return_value = gemini_reply(json.dumps(reply))
             with patch.object(providers, "settings", CONFIG):
@@ -1223,7 +1224,8 @@ class ApiTests(unittest.TestCase):
             return json.loads(mock_open.call_args.args[0].data)["systemInstruction"]["parts"][0]["text"]
         chat = instruction("/api/chat", {**self.CHAT, "content": "A clorofila absorve a luz."}, {"answer": "Olá!"})
         self.assertEqual(chat, prompts.SYSTEM + "\n" + prompts.CHAT)
-        self.assertIn("content é o texto que o aluno colou no editor e pode vir vazio. "
+        self.assertIn("content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo "
+                      "de um material de estudo, e pode vir vazio. "
                       "Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, "
                       "diga isso em uma frase antes de completar com o que você sabe. ", chat)
         generate = instruction("/api/generate", self.REQUEST, self.MATERIAL)
