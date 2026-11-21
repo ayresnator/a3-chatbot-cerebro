@@ -95,6 +95,8 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
+Embaixo do cartão fica o campo opcional "Sua resposta": o estudante escreve o que lembra e aperta Enter, ou clica no cartão, para ver a resposta. O que ele escreveu aparece como "Você escreveu: ..." logo abaixo da resposta do cartão, com o lembrete "Conte como acerto só se você disse o essencial.", e o campo fica só para leitura até o próximo cartão. "Errei", "Revisar depois" e "Acertei" limpam o campo. O texto não é gravado e não sai do navegador. A caixa "Escrever antes de virar", embaixo dos botões, mostra ou esconde o campo; a escolha fica no navegador e começa ligada no computador e desligada na tela de toque, onde digitar pesa mais. O Desempenho continua contando a avaliação do estudante, como antes.
+
 Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
 ### 4. Quiz

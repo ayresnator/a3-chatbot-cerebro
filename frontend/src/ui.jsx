@@ -186,8 +186,9 @@ export function SummarySkeleton() {
   );
 }
 
-// Cartão a caminho: o cabeçalho do baralho, o cartão e os três botões de avaliação.
-export function CardSkeleton() {
+// Cartão a caminho: o cabeçalho do baralho, o cartão, o campo "Sua resposta" (com a caixa "Escrever antes de virar"
+// ligada, write) e os três botões de avaliação.
+export function CardSkeleton({ write }) {
   return (
     <div aria-hidden="true">
       <div className="study-head">
@@ -200,6 +201,12 @@ export function CardSkeleton() {
         <Sk w="45%" className="sk-face" />
         <Sk w="11rem" />
       </div>
+      {write && (
+        <div className="card-form">
+          <Sk w="10rem" className="sk-label" />
+          <Sk className="sk-control" />
+        </div>
+      )}
       <div className="row center verdicts">
         <Sk w="7.5rem" className="sk-control" />
         <Sk w="9rem" className="sk-control" />

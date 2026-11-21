@@ -162,6 +162,13 @@ export function readUser() {
   return isText(user?.name) ? user : null;
 }
 
+// "Escrever antes de virar", nos Flashcards: a escolha gravada no navegador. Sem escolha, ou com uma que não é sim nem
+// não, o campo começa ligado no computador e desligado na tela de toque, onde digitar pesa mais.
+export function readWriteFirst(touch) {
+  const on = read('escrever', null);
+  return typeof on === 'boolean' ? on : !touch;
+}
+
 // Rascunho do que estava aberto (editor, material, conversa), gravado a cada mudança para sobreviver a um F5.
 // Vale primeiro o desta aba (sessionStorage): com o app aberto em duas abas, o F5 traz o texto da própria aba, e não o
 // da última que gravou. Aba nova ainda não tem o seu e abre com o último gravado (localStorage).

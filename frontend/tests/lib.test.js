@@ -6,7 +6,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  chatSubject,
+  chatSubject, readWriteFirst,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
@@ -1172,6 +1172,29 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
   }
   browser({});
   assert.equal(readUser(), null);
+});
+
+test('readWriteFirst: vale a escolha gravada; sem ela, o campo vem ligado no computador e desligado no toque', () => {
+  for (const touch of [false, true]) {
+    browser({ 'cerebro-escrever': 'true' });
+    assert.equal(readWriteFirst(touch), true);
+    browser({ 'cerebro-escrever': 'false' });
+    assert.equal(readWriteFirst(touch), false);
+    for (const raw of ['"sim"', '"false"', '1', '0', '[]', '{}', 'null', '{"on":']) {
+      browser({ 'cerebro-escrever': raw });
+      assert.equal(readWriteFirst(touch), !touch, raw);
+    }
+    browser({});
+    assert.equal(readWriteFirst(touch), !touch, 'nada gravado');
+  }
+  // Na demonstração a escolha é outra chave: a do app com IA não vale lá.
+  browser({ 'cerebro-escrever': 'false' });
+  demoStorage(true);
+  try {
+    assert.equal(readWriteFirst(false), true);
+  } finally {
+    demoStorage(false);
+  }
 });
 
 const NO_DRAFT = {

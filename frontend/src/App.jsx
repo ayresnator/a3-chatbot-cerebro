@@ -24,7 +24,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote,
+  originNote, readWriteFirst,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -180,6 +180,12 @@ function App() {
   const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
+  // Campo "Sua resposta", embaixo do cartão: o que o aluno escreveu antes de virar (só nesta tela, não é gravado) e
+  // locked, o cartão já virado: o campo fica só para leitura até o próximo cartão. write é a caixa "Escrever antes de
+  // virar", que mostra o campo (lib.js, readWriteFirst).
+  const [typed, setTyped] = useState('');
+  const [locked, setLocked] = useState(false);
+  const [write, setWrite] = useState(() => readWriteFirst(TOUCH));
   const [answer, setAnswer] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [done, setDone] = useState(false);
@@ -464,7 +470,7 @@ function App() {
   // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
   function restart() {
     restartQuiz();
-    setFlip(false);
+    freshCard();
     setDeck(null);
   }
 
@@ -808,12 +814,30 @@ function App() {
     toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
+  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". Quem já viu a resposta não reescreve a sua: o
+  // campo fica só para leitura até o próximo cartão.
+  function turnCard() {
+    setFlip(!flip);
+    setLocked(true);
+    // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a face nova (flip ainda é o de
+    // antes do clique).
+    say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
+    cardMotion.current = 'perspective(900px) rotateX(-10deg)';
+  }
+
+  // O cartão seguinte, ou o mesmo recomeçado, abre na pergunta e com o campo "Sua resposta" vazio e editável.
+  function freshCard() {
+    setFlip(false);
+    setTyped('');
+    setLocked(false);
+  }
+
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
   // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia.
   // Os dois botões ficam desabilitados no cartão novo (ainda não virado): o foco passa para o cartão.
   function cardNext(ok) {
     event('flashcard', ok, result.area, fold(card.question));
-    setFlip(false);
+    freshCard();
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
     focusAfter.current = ['.flashcard', '.deck-done h2'];
@@ -1128,6 +1152,8 @@ function App() {
   const right = answers.length - wrong.length;
   const session = deck || deckStart(result?.flashcards?.length || 0);
   const card = result?.flashcards?.[session.queue[session.pos]];
+  // Virado o cartão, o que o aluno escreveu no campo aparece logo abaixo da resposta ("Você escreveu").
+  const wrote = write && locked && typed.trim() !== '';
   const today = localDay(new Date());
   // Os números do desempenho só mudam com as respostas (ou na virada do dia), não a cada tecla no editor.
   // Quiz e cartões são números separados: nos cartões é o aluno quem diz se acertou.
@@ -1644,7 +1670,8 @@ function App() {
                         </div>
                         {tablist(true)}
                         <div role="tabpanel" aria-label={TABS.find(([p]) => p === page)?.[1]}>
-                          {page === 'Resumos' ? <SummarySkeleton /> : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
+                          {page === 'Resumos' ? <SummarySkeleton />
+                            : page === 'Flashcards' ? <CardSkeleton write={write} /> : <QuizSkeleton />}
                         </div>
                       </m.section>
                     ) : !result ? (
@@ -1824,7 +1851,7 @@ function App() {
                                   style={{ visibility: session.pos ? undefined : 'hidden' }}
                                   onClick={() => {
                                     setDeck(deckRestart(session));
-                                    setFlip(false);
+                                    freshCard();
                                     focusAfter.current = ['.flashcard'];
                                   }}
                                 >
@@ -1837,13 +1864,7 @@ function App() {
                               <button
                                 type="button"
                                 className={'flashcard' + (flip ? ' flipped' : '')}
-                                onClick={() => {
-                                  setFlip(!flip);
-                                  // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a
-                                  // face nova (flip ainda é o de antes do clique).
-                                  say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
-                                  cardMotion.current = 'perspective(900px) rotateX(-10deg)';
-                                }}
+                                onClick={turnCard}
                               >
                                 <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
                                 {/* A dica serve ao mouse, ao toque e ao teclado. */}
@@ -1852,6 +1873,46 @@ function App() {
                                   {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
                                 </span>
                               </button>
+                              {/* Escrever antes de ver a resposta deixa a autoavaliação mais honesta. Virado o
+                                  cartão, o texto inteiro do aluno vem logo abaixo da resposta, com o lembrete: no
+                                  campo de uma linha a resposta longa ficava cortada. */}
+                              {wrote && (
+                                <div className="card-wrote">
+                                  <p>Você escreveu: {typed}</p>
+                                  <p id="lembrete-cartao" className="hint">
+                                    Conte como acerto só se você disse o essencial.
+                                  </p>
+                                </div>
+                              )}
+                              {/* O campo fica fora do cartão (botão não leva controle dentro) e vem logo depois dele
+                                  no Tab. autoComplete off: o navegador não guarda o que o aluno escreve. */}
+                              {write && (
+                                <form
+                                  className="card-form"
+                                  onSubmit={e => {
+                                    e.preventDefault();
+                                    // O Enter vira o cartão para a resposta, como o clique; virado, não volta.
+                                    if (flip) return;
+                                    turnCard();
+                                    // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às
+                                    // vezes para fora da janela ou para trás da barra de baixo: o foco fica no
+                                    // campo, e a página rola até os botões, logo abaixo dele.
+                                    focusAfter.current = ['#resposta-cartao', null, '.verdicts'];
+                                  }}
+                                >
+                                  <label htmlFor="resposta-cartao">Sua resposta (opcional)</label>
+                                  <input
+                                    id="resposta-cartao"
+                                    value={typed}
+                                    onChange={e => setTyped(e.target.value)}
+                                    readOnly={locked}
+                                    placeholder={locked && !typed ? 'Escreva no próximo cartão' : undefined}
+                                    maxLength={500}
+                                    autoComplete="off"
+                                    aria-describedby={wrote ? 'lembrete-cartao' : undefined}
+                                  />
+                                </form>
+                              )}
                               <div className="row center verdicts">
                                 <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
                                   <Icon name="fechar" />
@@ -1862,7 +1923,7 @@ function App() {
                                   disabled={session.pos + 1 >= session.queue.length}
                                   onClick={() => {
                                     setDeck(deckLater(session));
-                                    setFlip(false);
+                                    freshCard();
                                     cardMotion.current = 'translateX(12px)';
                                     toast('Cartão movido para o final do baralho');
                                   }}
@@ -1875,6 +1936,23 @@ function App() {
                                   Acertei
                                 </button>
                               </div>
+                              {/* Embaixo dos botões, fora do caminho do Tab entre o cartão, o campo e a avaliação. A
+                                  escolha fica no navegador (lib.js, readWriteFirst). */}
+                              <label className="write-first">
+                                <input
+                                  type="checkbox"
+                                  id="escrever"
+                                  checked={write}
+                                  onChange={e => {
+                                    setWrite(e.target.checked);
+                                    persist('escrever', e.target.checked);
+                                    // Ligada, o campo entra acima da caixa e a empurra para baixo: a página rola
+                                    // até ela, que continua com o foco, acima da barra de baixo.
+                                    focusAfter.current = ['#escrever', null, '#escrever'];
+                                  }}
+                                />
+                                Escrever antes de virar
+                              </label>
                             </>
                           ))}
                           {page === 'Quizzes' && (done ? (
