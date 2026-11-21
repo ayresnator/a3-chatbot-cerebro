@@ -490,6 +490,17 @@ test('seenIndex: monta o índice das respostas antigas, na ordem, com a primeira
   assert.deepEqual(seenIndex([]), []);
 });
 
+test('seenIndex: a chave guardada de cada questão não mistura materiais e enunciados que juntos dão o mesmo texto', () => {
+  // "A\nB" com "c" e "A" com "B\nc": numa chave de texto corrido as duas seriam a mesma questão.
+  const one = { title: 'A\nB', q: 'c' };
+  const other = { title: 'A', q: 'B\nc' };
+  const events = [quizAt(14, 0, true, one), quizAt(15, 0, false, other), quizAt(16, 0, false, one)];
+  assert.deepEqual(seenIndex(events), [
+    { key: mistakeKey(one.title, one.q), day: '2026-11-16', ok: false },
+    { key: mistakeKey(other.title, other.q), day: '2026-11-15', ok: false },
+  ]);
+});
+
 test('readSeen: o índice gravado; sem índice, ou com um que não é lista, o montado das respostas gravadas', () => {
   const events = JSON.stringify([quizAt(15, 1, false)]);
   const line = { key: mistakeKey('Inflação', 'questao 1'), day: '2026-11-15', ok: false };
@@ -584,19 +595,21 @@ test('keptStat: com menos de 5 revistas o número fica vazio e diz quantas falta
   });
 });
 
-test('keptLine: o acerto na hora e o que ficou, lado a lado, no singular e no plural', () => {
+test('keptLine: o acerto na hora e o que ficou, lado a lado, em todas as áreas, no singular e no plural', () => {
   const none = { total: 0, correct: 0, rate: 0 };
+  // Sem questão nova contada: nenhuma resposta ainda, ou só respostas de antes do índice, sem prev.
   assert.equal(
     keptLine({ ...none, fresh: none }),
-    'Nos últimos 30 dias: nenhuma questão nova · acerto que ficou: faltam 5 questões revistas.'
+    'Nos últimos 30 dias, em todas as áreas: acerto na hora: ainda sem questões novas contadas · acerto que ficou: ' +
+      'faltam 5 questões revistas.'
   );
   assert.equal(
     keptLine({ total: 4, correct: 1, rate: 25, fresh: { total: 1, correct: 1, rate: 100 } }),
-    'Nos últimos 30 dias: 100% na hora (1 questão nova) · acerto que ficou: falta 1 questão revista.'
+    'Nos últimos 30 dias, em todas as áreas: 100% na hora (1 questão nova) · acerto que ficou: falta 1 questão revista.'
   );
   assert.equal(
     keptLine({ total: 14, correct: 9, rate: 64, fresh: { total: 40, correct: 31, rate: 78 } }),
-    'Nos últimos 30 dias: 78% na hora (40 questões novas) · 64% que ficou (14 questões revistas).'
+    'Nos últimos 30 dias, em todas as áreas: 78% na hora (40 questões novas) · 64% que ficou (14 questões revistas).'
   );
 });
 
@@ -3014,6 +3027,21 @@ test('mergeBackup: a mesma questão do índice fica com o dia mais recente; no m
   assert.deepEqual(merge([recent], [old]), [recent]);
   assert.deepEqual(merge([{ ...recent, ok: true }], [recent]), [{ ...recent, ok: true }]);
   assert.deepEqual(merge([{ key, day: 'ontem' }], [old]), [old], 'a linha estragada daqui dá lugar à do arquivo');
+});
+
+test('mergeBackup: uma linha estragada entre linhas boas não tira a questão dela do índice', () => {
+  const events = [quizAt(14, 1, true), quizAt(15, 2, false), quizAt(15, 3, true)];
+  const line = n => ({ key: mistakeKey('Inflação', 'questao ' + n), day: '2026-11-15', ok: n !== 2 });
+  const file = readBackup(JSON.stringify({ ...BACKUP, events, questoes: [line(1), { ...line(2), day: '30/02/2026' }, line(3)] }));
+  assert.deepEqual(file.questoes, [line(1), line(3)]);
+  // A questão 2 volta pelas respostas; a linha gravada da 1, de um dia mais recente que a resposta, fica.
+  assert.deepEqual(mergeBackup(EMPTY, file).questoes, [line(1), line(3), line(2)]);
+  // A gravação do índice falhou depois da resposta: a resposta mais recente vale mais que a linha antiga gravada.
+  const here = { ...EMPTY, events: [quizAt(16, 1, false)], questoes: [{ ...line(1), day: '2026-11-14' }] };
+  assert.deepEqual(mergeBackup(here, { ...EMPTY }).questoes, [{ ...line(1), day: '2026-11-16', ok: false }]);
+  // No mesmo dia, a linha gravada vale mais que a montada das respostas (a revisão da IA não muda o índice).
+  const same = { ...EMPTY, events: [quizAt(15, 1, true)], questoes: [{ ...line(1), ok: false }] };
+  assert.deepEqual(mergeBackup(same, { ...EMPTY }).questoes, [{ ...line(1), ok: false }]);
 });
 
 test('mergeBackup: sem questoes no arquivo, o índice sai das respostas importadas; sem índice aqui, das daqui', () => {

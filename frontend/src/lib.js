@@ -608,9 +608,13 @@ export function seenStep(list, key, ok, now) {
 // resposta de cada dia: o índice sai igual do histórico enxuto.
 export function seenIndex(events) {
   const index = new Map();
+  // A chave de cada material e enunciado sai uma vez: mistakeKey dobra o texto, e o histórico repete a questão.
+  const keys = new Map();
   for (const e of events) {
     if (!validEvent(e) || e.kind !== 'quiz' || !isText(e.title) || !e.title || !isText(e.q) || !e.q) continue;
-    const key = mistakeKey(e.title, e.q);
+    const id = JSON.stringify([e.title, e.q]);
+    if (!keys.has(id)) keys.set(id, mistakeKey(e.title, e.q));
+    const key = keys.get(id);
     const day = localDay(e.date);
     if (!(index.get(key)?.day >= day)) index.set(key, { key, day, ok: e.ok });
   }
@@ -652,12 +656,14 @@ export function keptStat({ total, rate }) {
     : { value: '—', label: 'acerto que ficou · ' + keptMissing(total) };
 }
 
-// Os dois acertos dos últimos 30 dias lado a lado, na nota do gráfico: na hora e o que ficou.
+// Os dois acertos dos últimos 30 dias lado a lado, na nota do gráfico: na hora e o que ficou. Contam todas as áreas,
+// como o número do topo, e não a "Área do gráfico". Sem questão nova contada, a frase não diz "nenhuma": as respostas
+// gravadas antes do índice não têm prev e ficam de fora.
 export function keptLine({ total, rate, fresh }) {
   const first = fresh.total
     ? fresh.rate + '% na hora (' + fresh.total + ' ' + plural(fresh.total, 'questão nova', 'questões novas') + ')'
-    : 'nenhuma questão nova';
-  return 'Nos últimos 30 dias: ' + first + ' · ' +
+    : 'acerto na hora: ainda sem questões novas contadas';
+  return 'Nos últimos 30 dias, em todas as áreas: ' + first + ' · ' +
     (total >= KEPT_MIN ? rate + '% que ficou (' + revisited(total) + ')' : 'acerto que ficou: ' + keptMissing(total)) + '.';
 }
 
@@ -1190,7 +1196,8 @@ export function fixLastQuizEvent(events, title, q, until) {
 // também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
 // limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
 // espaçada não tem cartoes (as caixas dos cartões), e o de antes do acerto que ficou não tem questoes (o índice,
-// seenStep): vale lista vazia. A linha estragada do índice só fica de fora: ele sai de novo das respostas.
+// seenStep): vale lista vazia. A linha estragada do índice só fica de fora: mergeBackup traz a questão dela de volta
+// pelas respostas.
 export function readBackup(text) {
   let data;
   try {
@@ -1269,10 +1276,12 @@ export function mergeBackup(atual, novo) {
     time(e) > time(old) || (time(e) === time(old) && stepOf(e) > stepOf(old)));
   // Cartão com a mesma chave fica com a mudança mais recente.
   const cartoes = byKey(atual.cartoes, novo.cartoes, (e, old) => time(e) > time(old));
-  // Questão do índice do acerto que ficou com a mesma chave fica com o dia mais recente; no mesmo dia, a daqui. O lado
-  // sem índice (backup antigo, navegador que ainda não montou o seu) usa o montado das respostas dele.
-  const index = side => (side.questoes?.length ? side.questoes : seenIndex(side.events));
-  const questoes = byKey(index(atual), index(novo), (e, old) => !validSeen(old) || e.day > old.day);
+  // Questão do índice do acerto que ficou com a mesma chave fica com o dia mais recente; no mesmo dia, a daqui. O índice
+  // de cada lado são as linhas válidas gravadas, completadas pelo montado das respostas dele, que só troca a linha de um
+  // dia mais antigo: a questão da linha estragada, ou da gravação do índice que falhou depois da resposta, volta.
+  const newer = (e, old) => e.day > old.day;
+  const index = side => byKey((side.questoes || []).filter(validSeen), seenIndex(side.events), newer);
+  const questoes = byKey(index(atual), index(novo), newer);
   // O que entra fica no topo da biblioteca, como o material recém-salvo.
   return { saved: [...fresh, ...atual.saved], events, erros, cartoes, questoes };
 }
