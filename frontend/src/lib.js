@@ -580,6 +580,15 @@ export function errorText(detail, status) {
   };
 }
 
+// Erro do limite por minuto (o que tem until, App.jsx, callAI) quando o teto do dia chega: a chamada recusada entrou
+// na conta do dia, e os botões da IA não voltam em alguns segundos. A frase passa a ser a do teto, sem a contagem; os
+// detalhes técnicos ficam. Outro erro volta como veio.
+export function rateAtCap(error) {
+  return error?.until
+    ? { ...error, message: error.message.replace(ERRORS.AI_RATE_LIMITED, ERRORS.AI_BUDGET_REACHED), until: 0 }
+    : error;
+}
+
 // Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
 // sem o corte o ditado passava de 20.000 caracteres e o backend recusava o texto.
 export function dictate(text, spoken) {

@@ -791,12 +791,12 @@ class ConfigTests(unittest.TestCase):
     def test_daily_limit_is_a_whole_number_above_zero_or_empty(self):
         # AI_DAILY_LIMIT é o teto de chamadas por dia escolhido pelo grupo. Sem a linha, ou vazia, não há teto. Outro valor
         # impede o backend de subir, com a frase do que corrigir: um teto errado deixaria a cota sem proteção, calado.
-        for value, limit in ((None, None), ("", None), ("  ", None), ("40", 40), (" 3 ", 3)):
+        for value, limit in ((None, None), ("", None), ("  ", None), ("40", 40), (" 3 ", 3), ("040", 40)):
             with patch.dict(os.environ, {"GEMINI_API_KEY": "sua_chave_aqui", "AI_DAILY_LIMIT": value or ""}):
                 if value is None:
                     del os.environ["AI_DAILY_LIMIT"]
                 self.assertEqual(config.load_settings().daily_limit, limit, value)
-        for value in ("0", "-1", "abc", "4.5", "1e3", "40 chamadas", "²"):
+        for value in ("0", "00", "-1", "abc", "4.5", "1e3", "40 chamadas", "²"):
             with patch.dict(os.environ, {"GEMINI_API_KEY": "sua_chave_aqui", "AI_DAILY_LIMIT": value}), \
                     self.assertRaisesRegex(ValueError, "^AI_DAILY_LIMIT deve ser um número inteiro maior que zero"):
                 config.load_settings()

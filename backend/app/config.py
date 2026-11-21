@@ -59,9 +59,9 @@ def load_settings():
     # "ALLOWED_HOSTS=" sem valor vale o padrão: a lista vazia recusaria até o proxy do Vite.
     hosts = [s.strip() for s in os.getenv("ALLOWED_HOSTS", "").split(",") if s.strip()] or ["127.0.0.1", "localhost"]
     # "AI_DAILY_LIMIT=" sem valor é sem teto. Outro valor impede a partida: um teto digitado errado deixaria a cota sem a
-    # proteção que o grupo escolheu, sem ninguém perceber.
+    # proteção que o grupo escolheu, sem ninguém perceber. Zero à esquerda vale ("040" é 40): a frase não o proíbe.
     limit = os.getenv("AI_DAILY_LIMIT", "").strip()
-    if limit and not re.fullmatch(r"[1-9][0-9]*", limit):
+    if limit and not re.fullmatch(r"0*[1-9][0-9]*", limit):
         raise ValueError("AI_DAILY_LIMIT deve ser um número inteiro maior que zero, ou ficar vazio para não ter teto.")
     return Settings(provider=provider, model=model, api_key=key, allowed_origins=origins, allowed_hosts=hosts,
                     daily_limit=int(limit) if limit else None)

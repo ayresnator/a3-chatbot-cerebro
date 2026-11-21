@@ -37,7 +37,7 @@ O backend lê somente a3-chatbot-cerebro/.env por caminho absoluto; não importa
 
 Variáveis de ambiente já definidas no Windows têm prioridade. Se houver valores antigos de GEMINI_API_KEY, AI_PROVIDER ou AI_MODEL, remova-os ou atualize-os.
 Não precisa informar nome nem número do projeto: a chave já está vinculada à conta/projeto do provedor.
-Teto de chamadas por dia (opcional): AI_DAILY_LIMIT=40, por exemplo, faz o backend parar de chamar o Gemini depois de 40 chamadas no dia, para guardar a cota das aulas e da apresentação. Vazio, como vem no .env.example, não há teto. O valor é um número inteiro maior que zero: outro valor impede o backend de subir, com uma frase que diz o que corrigir. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google.
+Teto de chamadas por dia (opcional): AI_DAILY_LIMIT=40, por exemplo, faz o backend parar de chamar o Gemini depois de 40 chamadas no dia, para guardar a cota das aulas e da apresentação. Vazio, como vem no .env.example, não há teto. O valor é um número inteiro maior que zero: outro valor impede o backend de subir, com uma frase que diz o que corrigir. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google. Com AI_MODEL=auto, o primeiro pedido depois de ligar o backend também consulta o catálogo de modelos, e essa consulta entra na conta: o teto precisa ser 2 ou mais, e nesse dia sobra uma chamada a menos para os pedidos. Com um modelo fixo, como o do .env.example, não há essa consulta.
 Outro provedor (opcional): AI_PROVIDER=openai, com a chave em OPENAI_API_KEY (crie a linha: o .env.example não tem) e AI_MODEL trocado por um modelo da OpenAI. Com AI_MODEL vazio vale o padrão gpt-4o-mini. Esse caminho só tem teste simulado: nunca foi rodado com chave real, e as mensagens de erro citam o Gemini.
 
 ## 2. Terminal do backend
@@ -101,7 +101,7 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 - AI_MODEL_NOT_FOUND: AI_MODEL não está disponível no projeto.
 - AI_RATE_LIMITED: limite de chamadas por minuto da chave. Os botões da IA ficam desligados pelos segundos que o Google pediu, a mensagem conta o tempo e eles voltam sozinhos. Não é a cota do dia: basta aguardar.
 - AI_QUOTA_EXCEEDED: cota do projeto atingida. Confira os limites no AI Studio; trocar a chave do mesmo projeto não renova a cota.
-- AI_BUDGET_REACHED: as chamadas do dia chegaram ao teto do AI_DAILY_LIMIT, e o backend recusa sem chamar o Gemini até a virada do dia da cota (meia-noite do horário do Pacífico, 4h ou 5h em Brasília). Para liberar antes, aumente ou esvazie o AI_DAILY_LIMIT e reinicie o backend.
+- AI_BUDGET_REACHED: as chamadas do dia chegaram ao teto do AI_DAILY_LIMIT, e o backend recusa sem chamar o Gemini até a virada do dia da cota (meia-noite do horário do Pacífico, 4h ou 5h em Brasília). Para liberar antes, aumente ou esvazie o AI_DAILY_LIMIT, reinicie o backend e recarregue a página: no teto nenhum pedido sai, e a aba aberta continuaria com os botões da IA desligados.
 - AI_REQUEST_REJECTED: confira modelo, região e situação do projeto/plano.
 - AI_NETWORK_ERROR: verifique internet, proxy, firewall e certificados HTTPS.
 - AI_TIMEOUT: a IA não respondeu em 45 segundos, nem na segunda tentativa que o backend faz sozinho, ou o pedido chegou ao teto de 6 chamadas ao Gemini ou 100 segundos. Tente de novo.

@@ -21,8 +21,8 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, ERRORS, FAILS, dictate,
-  dictationError,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, ERRORS, FAILS,
+  dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -549,6 +549,9 @@ function App() {
       throw e;
     } finally {
       if (pending.current === stop) pending.current = null;
+      // A frase de espera da região fixa ("Esperando a explicação…") só vale durante o pedido. Sem ela, a frase do teto
+      // que chega logo depois (useLayoutEffect de capped) só se junta ao que foi dito no fim dele ("Material pronto").
+      setSpoken('');
       checkHealth();
     }
   }
@@ -1201,8 +1204,24 @@ function App() {
   // antes da pintura, vai para o título da página.
   useLayoutEffect(() => {
     if (!capped) return;
-    say(ERRORS.AI_BUDGET_REACHED);
+    // A espera do limite por minuto que está na tela passa a dizer o teto (lib.js, rateAtCap).
+    setError(rateAtCap);
+    setWhy(w => (w?.error?.until ? { ...w, error: rateAtCap(w.error) } : w));
+    setAnswer(a => (a?.review?.error?.until ? { ...a, review: { error: rateAtCap(a.review.error) } } : a));
+    // Quando o alerta de um pedido na tela já diz a frase, a região fixa não a repete. A frase que acabou de entrar nela
+    // ("Material pronto", do pedido que gastou a última chamada) vai junto: trocada logo depois, não chegaria ao leitor
+    // de tela.
+    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error] : [])];
+    if (!alerts.some(e => rateAtCap(e)?.message?.endsWith(ERRORS.AI_BUDGET_REACHED))) {
+      say([spoken.trim(), ERRORS.AI_BUDGET_REACHED].filter(Boolean).join(' '));
+    }
     if (document.activeElement?.disabled) [...document.querySelectorAll('main h1')].pop()?.focus();
+    // A virada do dia religa os botões da IA: o leitor de tela ouve, como no fim da espera do limite por minuto, e o
+    // aviso de erro que dizia o teto sai.
+    return () => {
+      say('Os botões da IA voltaram.');
+      setError(e => (e?.message?.endsWith(ERRORS.AI_BUDGET_REACHED) ? null : e));
+    };
   }, [capped]);
   // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
   const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
@@ -1258,13 +1277,16 @@ function App() {
   const still = byKeyboard() || window.scrollY > 80 || cut;
   // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
   // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
-  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
-  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
+  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta. No
+  // teto do dia, não: os botões não voltam no fim da espera.
+  const pause = !!pausedUntil && !capped && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page)
+    && error?.until !== pausedUntil
     && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
     && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
   const problem = pause || error;
-  // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas. Enquanto o
-  // aviso de erro já diz o mesmo (o pedido que bateu no teto), ele sai: a frase não aparece duas vezes.
+  // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o
+  // campo e o botão de enviar (reason). Enquanto o aviso de erro já diz o mesmo (o pedido que bateu no teto, ou a espera
+  // do limite por minuto no teto), ele sai: a frase não aparece duas vezes.
   const capNote = capped && !problem?.message?.endsWith(ERRORS.AI_BUDGET_REACHED);
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
@@ -1476,6 +1498,7 @@ function App() {
                       onLevel={setLevel}
                       waiting={waiting}
                       cost={cost}
+                      reason={capNote ? 'aviso-ia' : undefined}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -2145,7 +2168,12 @@ function App() {
                 // Sem mensagens, o herói (#57): o título, a saudação e a caixa no meio do palco, com a lua atrás. Com
                 // mensagens, o mesmo título encolhe no alto, a conversa ocupa a coluna e a caixa fica presa embaixo.
                 // A caixa é o mesmo elemento nos dois estados: o foco continua nela quando a primeira pergunta sai.
-                <section className="chat-stage" data-state={chat.length ? 'conversa' : 'heroi'}>
+                // No teto do dia (data-teto) ela não fica presa embaixo (styles.css).
+                <section
+                  className="chat-stage"
+                  data-state={chat.length ? 'conversa' : 'heroi'}
+                  data-teto={capped ? '' : undefined}
+                >
                   <span className="moon" aria-hidden="true"></span>
                   <div className="chat-head">
                     {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
@@ -2274,6 +2302,7 @@ function App() {
                       waiting={waiting}
                       touch={TOUCH}
                       cost={cost}
+                      reason={capNote ? 'aviso-teto' : undefined}
                       variants={hero.box}
                       pop={pop}
                       note={aiNote}
@@ -2294,7 +2323,7 @@ function App() {
                     {errorBanner}
                     {/* No teto do dia o Enviar e os chips ficam desligados: o motivo fica embaixo da caixa. */}
                     {capNote && (
-                      <p className="note">
+                      <p className="note" id="aviso-teto">
                         <Icon name="info" />
                         {ERRORS.AI_BUDGET_REACHED}
                       </p>

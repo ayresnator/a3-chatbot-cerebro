@@ -8,7 +8,7 @@ import {
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   chatSubject,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
-  dictate,
+  rateAtCap, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
@@ -1508,6 +1508,24 @@ test('errorText: no teto do dia, a frase diz o que funciona sem IA, e a do backe
     tech: 'AI_BUDGET_REACHED · ' + said,
     wait: 0,
   });
+});
+
+test('rateAtCap: no teto, a espera do limite por minuto diz o teto, sem a contagem; os outros erros não mudam', () => {
+  const said = 'Limite de chamadas por minuto atingido. Tente de novo em 3 segundos.';
+  const detail = { code: 'AI_RATE_LIMITED', message: said, provider_status: 'RESOURCE_EXHAUSTED', retry_after: 3 };
+  // until: a hora da volta, que o App põe no erro do limite por minuto (callAI).
+  const rate = { ...errorText(detail, 429), until: 1000 };
+  // A geração põe o começo dela na frase ("Não deu para gerar o material."): ele fica.
+  assert.deepEqual(rateAtCap({ ...rate, message: 'Não deu para gerar o material. ' + rate.message }), {
+    message: 'Não deu para gerar o material. ' + ERRORS.AI_BUDGET_REACHED,
+    tech: 'AI_RATE_LIMITED · RESOURCE_EXHAUSTED · ' + said,
+    wait: 3,
+    until: 0,
+  });
+  assert.equal(rateAtCap(rate).message, ERRORS.AI_BUDGET_REACHED);
+  const other = errorText({ code: 'AI_PROVIDER_ERROR', message: 'x', provider_status: '' }, 502);
+  assert.equal(rateAtCap(other), other);
+  assert.equal(rateAtCap(null), null);
 });
 
 test('errorText: código fora do mapa fica com a frase do backend, sem repeti-la nos detalhes', () => {
