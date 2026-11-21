@@ -185,6 +185,15 @@ def build_quiz(raw: dict, avoid: set[str]) -> QuizOutput:
         items = items[:6]
     return QuizOutput.model_validate({"quiz": items})
 
+def few_accents(quiz: list[QuizItem]) -> bool:
+    # O modelo às vezes "come" quase toda a acentuação e deixa um acento ou outro: na rodada real de 21/11/2026, as 6
+    # questões feitas do resumo vieram com 1 acento só. Texto em português tem uns 4 acentos a cada 100 letras; com
+    # menos de 1 a cada 200, as questões contam como sem acento.
+    # shortcut: só as questões novas usam esta conta; a geração e o exemplo ainda pedem "nenhum acento". Igualar quando a
+    # suíte da geração puder mudar: o material mínimo dos testes dela tem acento só no título.
+    text = " ".join(f"{item.question} {' '.join(item.options)} {item.explanation}" for item in quiz)
+    return len(ACCENTS.findall(text)) * 200 < sum(char.isalpha() for char in text)
+
 def shuffle_options(quiz: list[QuizItem]) -> None:
     # Sem embaralhar dava para acertar no chute: o modelo punha a certa em B ou C (36 de 45 nos testes)
     # e, depois do aviso no prompt, em A (11 de 19).
@@ -284,7 +293,7 @@ def quiz(data: QuizInput):
             logger.warning("quiz: questões rejeitadas %s", reasons(exc))
             if last:
                 fail(502, "AI_INVALID_MATERIAL", "As questões geradas não passaram pela validação. Tente novamente.")
-    if not ACCENTS.search(result.model_dump_json()):
+    if few_accents(result.quiz):
         # Se a nova chamada falhar, ficam as primeiras: sem acento é melhor que erro.
         try:
             result = build_quiz(ai(payload, QUIZ, QUIZ_SCHEMA), avoid)

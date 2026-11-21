@@ -1329,7 +1329,10 @@ class ApiTests(unittest.TestCase):
         plain = {"quiz": json.loads(strip(json.dumps(self.NEW, ensure_ascii=False)))}
         good = {"quiz": [{**self.NEW[0], "question": self.QUIZ["avoid"][0]}, *self.NEW]}
         down = HTTPException(503, {"code": "AI_PROVIDER_UNAVAILABLE"})
+        # Um acento perdido no meio não salva as questões: na rodada real vieram 6 questões com 1 acento só.
+        nearly = {"quiz": [*plain["quiz"][:-1], {**plain["quiz"][-1], "explanation": "A falta de luz corrói a planta."}]}
         for replies, first in (([plain, good], "Que gás a planta libera?"), ([plain, plain], "Que gas a planta libera?"),
+                               ([nearly, good], "Que gás a planta libera?"),
                                ([plain, {"quiz": self.NEW[:2]}], "Que gas a planta libera?"), ([plain, down], "Que gas a planta libera?")):
             with patch("app.main.ai", side_effect=[*replies, good]) as mock_ai:
                 response = self.client.post("/api/quiz", json=self.QUIZ)
