@@ -25,7 +25,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
-  stepOf, dueOf, dueMistakes, dayMistakes, backOn,
+  stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote, findSource, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
@@ -117,10 +117,11 @@ const NAMES = { Resumos: 'Resumo', Quizzes: 'Quiz', Erros: 'Caderno de erros' };
 const SHORT = { Erros: 'Caderno' };
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 // O que o veredito da revisão da IA muda (review): "parcial" soa como meio ponto, e só "correta" muda a resposta.
-// chute: "correta" numa resposta marcada como chute (#80), que conta como acerto e não tira a questão do caderno.
+// chute: "correta" numa resposta marcada como chute (#80) de uma questão que já estava no caderno. Ela conta como acerto
+// e volta ao ponto do caderno de antes da resposta; a que não estava sai, como na "correta".
 const VERDICT_EFFECT = {
   correta: 'Agora conta como acerto, e a questão saiu do caderno de erros.',
-  chute: 'Agora conta como acerto. Como foi chute, a questão fica no caderno de erros.',
+  chute: 'Agora conta como acerto. Como foi chute, a questão continua no caderno de erros, no ponto em que estava.',
   parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
@@ -400,6 +401,10 @@ function App() {
       return;
     }
     window.scrollTo(0, 0);
+    // No toque, o quiz chega com o enunciado à vista: nos telefones baixos, a faixa presa da certeza (#80) o cobria. A
+    // rolagem para acima dela, ou do "Próxima questão", e da barra de baixo (mobile.css, scroll-padding da raiz). O foco
+    // fica onde o aluno tocou.
+    if (TOUCH && page === 'Quizzes') document.querySelector('.quiz-question')?.scrollIntoView({ block: 'nearest' });
   }, [page]);
 
   useLayoutEffect(() => {
@@ -918,7 +923,9 @@ function App() {
     const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
     const from = origin(q);
     const now = new Date();
-    setAnswer({ value, ok, conf });
+    // before é o erro do caderno de antes da resposta: a revisão da IA que aceita um chute o devolve (review).
+    const before = readList('erros').find(e => e?.key === mistakeKey(from.title, q.question));
+    setAnswer({ value, ok, conf, before });
     setAnswers([...answers, { ...q, ok, given: value, conf }]);
     event('quiz', ok, from.area, fold(q.question), from.title, { conf });
     notebook(list => noteAnswer(list, q, from.title, from.area, ok, conf, now));
@@ -1100,8 +1107,11 @@ function App() {
         const fix = list => fixLastQuizEvent(list, from.title, fold(q.question), asked);
         const next = fix(readList('events'));
         setEvents(persist('events', next) ? next.filter(validEvent) : fix);
-        // O chute aceito é um acerto no chute: a questão fica no caderno como a comparação de texto a deixou (noteAnswer).
-        if (mine.conf !== 'chute') notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
+        // O chute aceito é um acerto no chute, que não muda o caderno (noteAnswer): ele volta ao que era antes da resposta.
+        const key = mistakeKey(from.title, q.question);
+        notebook(list => (mine.conf === 'chute'
+          ? restoreMistake(list, key, mine.before, asked)
+          : removeMistake(list, key, asked)));
       }
     } catch (e) {
       if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
@@ -2571,8 +2581,9 @@ function App() {
                                     e.preventDefault();
                                     const field = e.target.elements.response;
                                     if (!filled(field)) return;
-                                    // Com as marcas, o Enter não escolhe a certeza pelo aluno: o foco vai aos botões dela.
-                                    if (sure) document.querySelector('.sure-row button').focus();
+                                    // Com as marcas, o Enter não escolhe a certeza pelo aluno: o foco vai ao grupo dos
+                                    // botões, e não ao primeiro, que o Enter seguinte (ou a tecla segurada) apertaria.
+                                    if (sure) document.querySelector('.sure-row').focus();
                                     else submit(field.value);
                                   }}
                                 >
@@ -2707,8 +2718,8 @@ function App() {
                                       <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
                                       <p>{answer.review.feedback}</p>
                                       <p>
-                                        {VERDICT_EFFECT[answer.review.verdict === 'correta' && answer.conf === 'chute'
-                                          ? 'chute' : answer.review.verdict]}
+                                        {VERDICT_EFFECT[answer.review.verdict === 'correta' && answer.conf === 'chute' &&
+                                          answer.before ? 'chute' : answer.review.verdict]}
                                       </p>
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
@@ -3455,10 +3466,10 @@ function QuizMarks({ total, answers, idx }) {
 // "Quanta certeza você tem?" (#80): os três botões que mandam a resposta à correção com a certeza. Sem a opção escolhida
 // (ready false) eles ficam com aria-disabled, e não disabled: o Tab chega a eles e o leitor de tela ouve que estão
 // desligados. Como as opções, ignoram o segundo clique de um clique duplo. onPick recebe a certeza e o botão; form é o
-// id do formulário da resposta curta, que o botão alcança sem enviá-lo.
+// id do formulário da resposta curta, que o botão alcança sem enviá-lo. O grupo recebe o foco do Enter no campo.
 function Sureness({ ready, form, onPick }) {
   return (
-    <div className="sure-row" role="group" aria-labelledby="certeza-titulo">
+    <div className="sure-row" role="group" aria-labelledby="certeza-titulo" tabIndex={-1}>
       <span id="certeza-titulo">Quanta certeza você tem?</span>
       {CONF.map(conf => (
         <button

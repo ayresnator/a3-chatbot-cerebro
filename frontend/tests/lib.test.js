@@ -16,7 +16,7 @@ import {
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   examPool, mockExam, examScore, examLine,
-  CONF, noteAnswer, calibration, sureText, guessLine,
+  CONF, noteAnswer, calibration, sureText, guessLine, restoreMistake,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -2497,6 +2497,19 @@ test('removeMistake: na revisão, o erro gravado depois do pedido fica no cadern
   assert.deepEqual(removeMistake(list, list[0].key, at(16, 10)), list, 'errou de novo às 11h, depois do pedido das 10h');
   assert.deepEqual(removeMistake(list, list[0].key, at(16, 11)), [list[1]]);
   assert.deepEqual(removeMistake(list, list[1].key, at(16, 10)), [list[0]]);
+});
+
+test('restoreMistake: o chute aceito pela revisão da IA deixa o caderno como estava antes da resposta', () => {
+  // No degrau 2, para hoje: chutou às 9h, a comparação de texto marcou errado, e a revisão foi pedida às 10h.
+  const list = frozen([{ ...mistake(Q_SHORT, 'Inflação', 9), step: 2, due: '2026-11-16' }, mistake(Q_MULTIPLE, 'Inflação', 15)]);
+  const wrong = frozen(noteAnswer(list, Q_SHORT, 'Inflação', 'Economia', false, 'chute', new Date(2026, 10, 16, 9)));
+  assert.deepEqual([wrong[0].step, wrong[0].due], [0, '2026-11-17']);
+  assert.deepEqual(restoreMistake(wrong, list[0].key, list[0], at(16, 10)), list, 'volta ao degrau 2, para hoje');
+  // Fora do caderno antes do chute: sai dele, como no acerto no chute.
+  const added = frozen(noteAnswer([list[1]], Q_SHORT, 'Inflação', 'Economia', false, 'chute', new Date(2026, 10, 16, 9)));
+  assert.deepEqual(restoreMistake(added, list[0].key, undefined, at(16, 10)), [list[1]]);
+  assert.deepEqual(restoreMistake(wrong, list[0].key, list[0], at(16, 8)), wrong, 'errou de novo depois do pedido');
+  assert.deepEqual(restoreMistake(frozen([list[1]]), list[0].key, list[0], at(16, 10)), [list[1]], 'tirada na espera');
 });
 
 test('fixLastQuizEvent: depois da revisão, o desempenho conta a resposta como acerto', () => {

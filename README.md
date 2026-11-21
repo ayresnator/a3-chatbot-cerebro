@@ -128,7 +128,7 @@ Antes da correção, o estudante marca quanta certeza tem: "Tenho certeza", "Ach
 
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
-Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido; se a resposta foi marcada como chute, ela passa a acerto, mas a questão fica no caderno de erros. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
+Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido; se a resposta foi marcada como chute, ela passa a acerto, e o caderno de erros fica como estava antes da resposta, como no acerto no chute. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
 
@@ -162,7 +162,7 @@ O estudante pode:
 
 Cada questão volta num dia marcado. Errou: ela volta amanhã. Cada acerto no dia marcado ou depois sobe um degrau: depois do primeiro a questão volta em 3 dias, depois do segundo em 7, e o terceiro a tira do caderno. São 3 acertos em dias diferentes, cada um no dia marcado. Acertar antes do dia, como logo depois de ler a explicação ou no "Treinar todas", não muda nada, nem o acerto marcado como chute, e errar em qualquer degrau volta a questão ao começo. A página mostra quando cada questão volta ("para hoje", "volta amanhã" ou "volta em 23/11") e quantos acertos ela já tem ("1 de 3 acertos"); sem nenhuma para hoje, diz quando volta a próxima. A questão cujo último erro foi com "Tenho certeza" leva a marca "você tinha certeza"; errar de novo sem essa certeza tira a marca. Em "Seu progresso", no Estudar, o link mostra quantas questões são para hoje.
 
-A questão também sai na hora quando a revisão da IA aceita a resposta (menos a marcada como chute) ou quando o estudante a tira. Erro gravado antes dessa regra, ou vindo de um backup antigo, começa no primeiro degrau e volta no dia seguinte ao do erro.
+A questão também sai na hora quando a revisão da IA aceita a resposta ou quando o estudante a tira. Na resposta marcada como chute, a revisão aceita devolve a questão ao ponto em que estava antes dela: a que já estava no caderno continua lá, com os mesmos acertos. Erro gravado antes dessa regra, ou vindo de um backup antigo, começa no primeiro degrau e volta no dia seguinte ao do erro.
 
 ### 7. Desempenho
 

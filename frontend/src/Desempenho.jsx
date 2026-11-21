@@ -136,8 +136,8 @@ export default function Desempenho({
           </ul>
         ) : (
           <p className="hint">
-            Ainda não há respostas com a certeza marcada. No quiz, com a caixa "Marcar certeza" ligada, você marca "Tenho
-            certeza", "Acho que sei" ou "Chutei" antes da correção.
+            Nenhuma resposta com a certeza marcada nos últimos 30 dias. No quiz, com a caixa "Marcar certeza" ligada, você
+            marca "Tenho certeza", "Acho que sei" ou "Chutei" antes da correção.
           </p>
         )}
       </m.section>

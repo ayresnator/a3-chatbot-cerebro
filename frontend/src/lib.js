@@ -1001,6 +1001,13 @@ export function removeMistake(list, key, until) {
   return list.filter(e => e?.key !== key || Date.parse(e.date) > Date.parse(until));
 }
 
+// A revisão da IA aceitou uma resposta marcada como chute (#80): é um acerto no chute, que não muda o caderno
+// (noteAnswer). O erro que a resposta gravou volta a ser o de antes dela (before), ou sai, se a questão não estava no
+// caderno. Como em removeMistake, o erro gravado depois do pedido (until) fica.
+export function restoreMistake(list, key, before, until) {
+  return list.flatMap(e => (e?.key !== key || Date.parse(e.date) > Date.parse(until) ? [e] : before ? [before] : []));
+}
+
 // Erro lido do navegador ou de um arquivo de backup, antes de ir para a tela. A chave tem de ser a do material e
 // do enunciado: é por ela que a questão sai do caderno quando o aluno acerta.
 export function validMistake(e) {
