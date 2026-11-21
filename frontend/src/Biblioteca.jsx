@@ -63,7 +63,8 @@ export default function Biblioteca({
               {[10, 20, 30].map(n => <option key={n}>{n}</option>)}
             </select>
           </label>
-          <button type="button" aria-describedby="simulado-conta" onClick={onExam}>
+          {/* O segundo clique de um clique duplo em "Voltar à Biblioteca" cai aqui: ele não começa outro simulado. */}
+          <button type="button" aria-describedby="simulado-conta" onClick={e => e.detail < 2 && onExam()}>
             <Icon name="quizzes" />
             Começar simulado
           </button>

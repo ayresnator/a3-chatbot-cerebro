@@ -120,8 +120,8 @@ const VERDICT_EFFECT = {
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
 
-// Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
-// demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
+// Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique", o caderno de erros e o simulado.
+// A demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
 const aiNote = API_BASE && <p className="ai-note">{AI_NOTE}</p>;
 
 // O modelo às vezes devolve **negrito** em Markdown: mostra em negrito em vez de asteriscos soltos.
@@ -214,8 +214,8 @@ function App() {
   // Caderno de erros: as questões erradas de todos os materiais (lib.js). Como a biblioteca, o que está estragado
   // fica fora da tela e continua gravado.
   const [mistakes, setMistakes] = useState(() => readList('erros').filter(validMistake));
-  // Material que estava aberto quando o quiz do caderno de erros tomou o lugar dele. Só vale enquanto result é o
-  // material temporário do caderno (result.virtual).
+  // Material que estava aberto quando o quiz do caderno de erros ou o simulado tomou o lugar dele. Só vale enquanto
+  // result é o material temporário (result.virtual).
   const [parked, setParked] = useState(null);
   // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
   // Só com item, a resposta ainda não chegou.
@@ -225,13 +225,13 @@ function App() {
   // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
   // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
-  // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
+  // Material de verdade que está aberto: durante o quiz do caderno de erros ou o simulado é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
   // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
-  // confere se o aluno mexeu neles durante a espera.
+  // confere se o aluno mexeu neles durante a espera. virtual: o material temporário está na tela.
   const latest = useRef({});
-  latest.current = { page, result: opened, input, area, level };
+  latest.current = { page, result: opened, virtual: !!result?.virtual, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
   // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
@@ -275,8 +275,8 @@ function App() {
   // responder, o que rola até a vista (show e whole, no efeito abaixo).
   const focusAfter = useRef(null);
 
-  // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário do caderno de erros
-  // não entra: no lugar dele vai o que estava aberto.
+  // O texto do editor, o material aberto e a conversa sobrevivem a um F5. O material temporário (caderno de erros ou
+  // simulado) não entra: no lugar dele vai o que estava aberto.
   // Gravação que falha fica sem aviso: aqui seria um aviso por tecla.
   // A gravação espera 0,4 s sem mudança: gravar o rascunho inteiro a cada tecla pesava na digitação. Sair da página
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
@@ -431,8 +431,8 @@ function App() {
     if (error) errorBox.current?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
   }, [error]);
 
-  // O material temporário do caderno de erros só vale na página do quiz: sair dela por qualquer caminho (menu,
-  // logotipo, botão de um aviso) traz de volta o material que estava aberto, com o quiz no início.
+  // O material temporário (caderno de erros ou simulado) só vale na página do quiz: sair dela por qualquer caminho
+  // (menu, logotipo, botão de um aviso) traz de volta o material que estava aberto, com o quiz no início.
   // Mudar o estado durante o desenho faz o React refazer o desenho na hora: a página nova nunca aparece com o
   // material temporário.
   if (result?.virtual && page !== 'Quizzes') {
@@ -464,7 +464,8 @@ function App() {
   }
 
   // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
-  // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
+  // caderno de erros ou o simulado entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde
+  // estava.
   function restart() {
     restartQuiz();
     setFlip(false);
@@ -576,9 +577,9 @@ function App() {
     return stored;
   }
 
-  // De onde vem a questão ou o tópico: o material aberto ou, no quiz do caderno de erros, o material e a área que
-  // a questão traz. Área e nível vão nos pedidos à IA, que só aceita os das listas: material antigo ou importado
-  // pode não ter (e o do caderno não tem nível), e aí valem a área do editor e o nível Básico.
+  // De onde vem a questão ou o tópico: o material aberto ou, no quiz do caderno de erros e no simulado, o material e a
+  // área que a questão traz. Área e nível vão nos pedidos à IA, que só aceita os das listas: material antigo ou
+  // importado pode não ter (e o temporário não tem nível), e aí valem a área do editor e o nível Básico.
   function origin(item) {
     const from = result.virtual ? item : result;
     return {
@@ -588,8 +589,8 @@ function App() {
     };
   }
 
-  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página: volta o material que
-  // estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
+  // O menu sempre sai do quiz do caderno de erros e do simulado, até o botão Quizzes, que não troca de página: volta o
+  // material que estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
   function go(next) {
     if (result?.virtual) {
       setResult(parked);
@@ -660,15 +661,20 @@ function App() {
       const material = { ...data, area, level };
       const twin = readList('saved').find(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
-      setResult(twin || store(material) || material);
+      const next = twin || store(material) || material;
+      // No quiz do caderno de erros e no simulado, o novo fica no lugar do material guardado e abre quando o aluno sai
+      // do quiz: tomar o lugar do material temporário apagava o quiz no meio, e o simulado só corrige no fim.
+      const away = latest.current.virtual;
+      if (away) setParked(next);
+      else setResult(next);
       made.current = { key };
       setEditorChat(false);
       // O quiz e o baralho recomeçam com outro material. O "Gerar de novo" da demonstração, com o mesmo texto, reabre o
       // mesmo, e eles seguem onde estavam. Depois da espera pela IA recomeçam sempre: durante ela o aluno pode ter
-      // aberto outro material ou o quiz do caderno de erros.
-      if (wait || !previous || !sameMaterial(previous, data)) restart();
+      // aberto outro material. No quiz do material temporário, só quando o aluno sai dele.
+      if (!away && (wait || !previous || !sameMaterial(previous, data))) restart();
       const at = latest.current.page;
-      if (at === 'Estudar' || MATERIAL.includes(at)) {
+      if (!away && (at === 'Estudar' || MATERIAL.includes(at))) {
         // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para o Resumo.
         if (at === 'Estudar') setPage(target);
         // O leitor de tela ouve que ele chegou, e o foco que estava na espera, no botão de gerar ou no body vai para o
@@ -677,7 +683,8 @@ function App() {
         if (adrift('main, .busy')) focusAfter.current = ['#material-titulo'];
         if (kept) toast('O material anterior foi guardado na biblioteca');
       } else {
-        // O aluno saiu para outra página enquanto esperava: fica onde está e abre o material quando quiser.
+        // O aluno saiu para outra página enquanto esperava, ou está no quiz do material temporário: fica onde está e
+        // abre o material quando quiser.
         if (adrift('.busy')) focusAfter.current = ['main h1'];
         toast('Material pronto' + (kept ? '. O anterior foi guardado na biblioteca' : ''), {
           label: 'Abrir',
@@ -689,8 +696,9 @@ function App() {
       }
     } catch (e) {
       // Cancelado ou com erro, o aluno volta do esqueleto para o editor: o aviso de erro fica junto dos botões de gerar.
-      // Se nesse meio-tempo ele abriu outro material, fica nele.
-      const back = wait && MATERIAL.includes(latest.current.page) && latest.current.result === result;
+      // Se nesse meio-tempo ele abriu outro material ou o quiz do material temporário, fica nele.
+      const back = wait && MATERIAL.includes(latest.current.page) && latest.current.result === result &&
+        !latest.current.virtual;
       if (back) setPage('Estudar');
       // O foco que estava no que sai da tela vai para o erro (o alerta já é lido) ou, no Cancelar, para o botão que pediu
       // o material; longe do Estudar, para o título da página.
@@ -1987,9 +1995,12 @@ function App() {
                                     Refazer o quiz todo
                                   </button>
                                 )}
-                                {/* Sair do quiz por aqui devolve o material que estava aberto, como pelo menu. */}
+                                {/* Sair do quiz por aqui devolve o material que estava aberto, como pelo menu. Como
+                                    as opções, o "Voltar à Biblioteca" ignora o segundo clique de um clique duplo. */}
                                 {result.exam ? (
-                                  <button type="button" onClick={() => openPage('Biblioteca')}>Voltar à Biblioteca</button>
+                                  <button type="button" onClick={e => e.detail < 2 && openPage('Biblioteca')}>
+                                    Voltar à Biblioteca
+                                  </button>
                                 ) : result.virtual ? (
                                   <button type="button" onClick={() => openPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
@@ -2070,7 +2081,9 @@ function App() {
                                       disabled={answer !== null}
                                       className={'option' + (blind ? (answer?.value === i ? ' chosen' : '')
                                         : answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
-                                      onClick={() => submit(i)}
+                                      // O segundo clique de um clique duplo no botão que estava aqui ("Próxima
+                                      // questão", "Começar simulado") não responde: detail conta os cliques.
+                                      onClick={e => e.detail < 2 && submit(i)}
                                     >
                                       <span className="letter">{String.fromCharCode(65 + i)}</span>
                                       <span className="option-text">{o}</span>

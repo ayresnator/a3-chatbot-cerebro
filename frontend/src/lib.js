@@ -454,14 +454,22 @@ function shuffle(list, random) {
 // Questões de onde sai o simulado da Biblioteca: as do quiz de cada material, com o título e a área dele, para a
 // resposta contar no desempenho e no caderno de erros com o material de origem. A mesma questão (mesmo material e
 // enunciado, a chave do caderno) entra uma vez só. As opções e a resposta ficam como estão no material.
+// As questões de cada material ficam prontas, com a chave, na primeira vez (POOL): a frase do simulado na Biblioteca
+// refaz a conta a cada tecla da busca, e dobrar de novo a chave de todas as questões pesava com a Biblioteca cheia.
+// shortcut: vale enquanto ninguém muda o material no lugar, como o SEARCH do matches; se isso mudar, apagar junto.
+const POOL = new WeakMap();
 export function examPool(materials) {
   const seen = new Set();
-  return materials.flatMap(m => m.quiz.map(q => ({ ...q, title: m.title, area: m.area }))).filter(q => {
-    const key = mistakeKey(q.title, q.question);
+  return materials.flatMap(m => {
+    if (!POOL.has(m)) {
+      POOL.set(m, m.quiz.map(q => [mistakeKey(m.title, q.question), { ...q, title: m.title, area: m.area }]));
+    }
+    return POOL.get(m);
+  }).filter(([key]) => {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  });
+  }).map(([, q]) => q);
 }
 
 // Simulado: size questões de examPool, sorteadas por rodada (uma de cada material, em ordem sorteada, antes da segunda

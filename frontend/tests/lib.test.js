@@ -822,6 +822,13 @@ test('examPool: a mesma questão (mesmo material e enunciado, sem acento nem mai
   assert.deepEqual(examPool([]), []);
 });
 
+test('examPool: as questões de cada material ficam prontas, e o material trocado traz as dele', () => {
+  const first = examPool(EXAM);
+  assert.ok(examPool(EXAM).every((q, i) => q === first[i]), 'a frase da Biblioteca não copia as questões a cada tecla');
+  // O App troca o objeto ao salvar, excluir e importar: o material novo não reaproveita as questões do antigo.
+  assert.ok(examPool([{ ...EXAM[0], title: 'Juros' }]).every(q => q.title === 'Juros'));
+});
+
 test('mockExam: com o sorteio fixo, a ordem sai sempre a mesma', () => {
   const first = mockExam(EXAM, 10, seeded(7));
   assert.deepEqual(mockExam(EXAM, 10, seeded(7)), first);
@@ -862,6 +869,19 @@ test('mockExam: o sorteio passa por todos os materiais antes de repetir um', () 
   for (let seed = 1; seed <= 20; seed++) {
     assert.equal(new Set(mockExam(EXAM, 2, seeded(seed)).map(q => q.title)).size, 2, 'semente ' + seed);
   }
+});
+
+test('mockExam: qualquer questão de um material pode sair, e não só as primeiras dele', () => {
+  // Uma questão de cada material por simulado: em 50 sementes, todas as 12 saem em algum.
+  const drawn = new Set();
+  for (let seed = 1; seed <= 50; seed++) mockExam(EXAM, 3, seeded(seed)).forEach(q => drawn.add(examKey(q)));
+  assert.deepEqual(drawn, new Set(examPool(EXAM).map(examKey)));
+});
+
+test('mockExam: a ordem final é embaralhada e não segue as rodadas do sorteio', () => {
+  // Na ordem das rodadas, as três primeiras seriam sempre de três materiais diferentes.
+  const rounds = seed => new Set(mockExam(EXAM, 12, seeded(seed)).slice(0, 3).map(q => q.title)).size === 3;
+  assert.ok(!Array.from({ length: 50 }, (_, i) => i + 1).every(rounds));
 });
 
 test('examScore: o acerto por material, na ordem em que cada material apareceu', () => {
