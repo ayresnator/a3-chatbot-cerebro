@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
-  AnimatePresence, LazyMotion, MotionConfig, domAnimation, m, usePresence, useReducedMotion,
+  AnimatePresence, LazyMotion, MotionConfig, domMin, m, usePresence, useReducedMotion,
 } from 'motion/react';
 import { BrandMark, Icon } from './icons.jsx';
 import { Pen } from './marks.jsx';
@@ -23,7 +23,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
+  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
 } from './lib.js';
 
@@ -247,12 +247,14 @@ function App() {
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
-  // clique. O texto do editor, a área e o nível vão junto: na volta da IA, addExample() confere se o aluno mexeu neles
-  // durante a espera.
+  // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
+  // confere se o aluno mexeu neles durante a espera.
   const latest = useRef({});
   latest.current = { page, result: opened, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
+  // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
+  const chipsRow = useRef(null);
   // Pedido à IA em andamento (AbortController): o botão "Cancelar" da espera o interrompe.
   const pending = useRef(null);
   const recognition = useRef(null);
@@ -277,7 +279,7 @@ function App() {
   // Variantes do Motion (anim.js): com movimento reduzido, só a opacidade. A primeira página (a abertura do app) entra
   // na mola de 0,45 s, bloco a bloco; as trocas de seção, na de 0,3 s.
   const calm = useReducedMotion();
-  const { view: viewIn, title: titleIn, rise } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
+  const { view: viewIn, title: titleIn, rise, fade } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
   const pop = calm ? POP_CALM : POP;
   const focusIn = calm ? FOCUS_CALM : FOCUS;
   const hero = calm ? HERO_CALM : HERO;
@@ -341,10 +343,23 @@ function App() {
     if (API_BASE) checkHealth();
   }, []);
 
-  // O código das páginas carregadas à parte vem quando o navegador fica livre: na hora do clique ele já está aqui e
-  // o esqueleto do Suspense não pisca.
+  // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
+  // pelo persist(), como nas outras gravações. Relido aqui, depois do primeiro desenho: outra aba pode ter gravado nesse
+  // meio-tempo. Se a gravação falhar, a lista gravada continua inteira. Os números da tela não mudam, e a próxima
+  // resposta já parte da lista nova.
   useEffect(() => {
-    const load = () => [Desempenho, Biblioteca, Perfil].forEach(page => page.preload().catch(() => {}));
+    const stored = readList('events');
+    const list = compactEvents(stored, new Date());
+    if (list.length < stored.length) persist('events', list);
+  }, []);
+
+  // O código das páginas carregadas à parte vem quando o navegador fica livre: na hora do clique ele já está aqui e
+  // o esqueleto do Suspense não pisca. O do orbe da IA (ui.jsx, Orb) também: ele só aparece numa espera ou no ditado.
+  useEffect(() => {
+    const load = () => {
+      [Desempenho, Biblioteca, Perfil].forEach(page => page.preload().catch(() => {}));
+      import('thinking-orbs').catch(() => {});
+    };
     if (!window.requestIdleCallback) {
       const timer = setTimeout(load, 1500);
       return () => clearTimeout(timer);
@@ -384,7 +399,11 @@ function App() {
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
   // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
   // espera acabar: é ele que conta os segundos até os botões da IA voltarem.
-  useEffect(() => setError(e => (e?.until > Date.now() ? e : null)), [input]);
+  // Só chama setError quando há erro para tirar: sem a guarda, cada tecla fazia um segundo desenho, vazio. error fica
+  // fora das dependências de propósito: com ele, o erro sumiria logo depois de aparecer.
+  useEffect(() => {
+    if (error && !(error.until > Date.now())) setError(null);
+  }, [input]);
 
   // Os botões da IA voltam sozinhos quando a espera do limite por minuto acaba.
   useEffect(() => {
@@ -790,8 +809,12 @@ function App() {
       toast('Este arquivo não é um backup do Cérebro.');
       return;
     }
-    const before = { saved: readList('saved'), events: readList('events'), erros: readList('erros') };
+    // O histórico entra e sai sem as repetições de dias passados (lib.js, compactEvents): o backup não as traz de volta,
+    // e o aviso no fim compara duas listas compactadas.
+    const now = new Date();
+    const before = { saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros') };
     const after = mergeBackup(before, backup);
+    after.events = compactEvents(after.events, now);
     if (!persist('saved', after.saved)) return;
     setSaved(after.saved.filter(validMaterial));
     if (!persist('events', after.events)) return;
@@ -1020,7 +1043,7 @@ function App() {
 
   // "Usar um exemplo": com a IA ligada, ela escreve um texto de estudo sobre um tema sorteado pelo servidor na área e
   // no nível escolhidos (1 chamada da cota), sem repetir o tema do exemplo anterior. Na demonstração, com a IA
-  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (lib.js). A área e o nível não mudam.
+  // desligada ou se ela falhar, entra um exemplo pronto da mesma área (exemplos.js). A área e o nível não mudam.
   async function addExample() {
     // Um pedido à IA por vez: o segundo clique durante a espera não pede outro.
     if (waiting) return;
@@ -1048,19 +1071,28 @@ function App() {
         if (!at || at === document.body || at.closest('.busy')) focusAfter.current = ['#usar-exemplo'];
         setBusy(null);
       }
-      // O aluno mexeu durante a espera no que o exemplo usa: o que ele fez vale mais. O exemplo apagaria o texto no
-      // meio da digitação (o Desfazer do editor some na primeira tecla) ou longe da vista (some também na troca de
-      // página), e o exemplo da área ou do nível do clique ficaria com outra área ou outro nível na tela.
-      const now = latest.current;
-      const changed = now.input !== input ? 'o texto do editor mudou'
-        : now.area !== area || now.level !== level ? 'a área ou o nível mudou'
-        : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
-      if (changed) {
-        toast('O exemplo não entrou: ' + changed + ' durante a espera');
-        return;
-      }
     }
-    const example = written || pickExample(area, { topic: exampleTopic.current, text: input });
+    // Os exemplos prontos ficam à parte (exemplos.js), fora do JavaScript da abertura; a caixa do editor já os trouxe.
+    // O arquivo pode não vir (a rede caiu depois da abertura, ou saiu uma versão nova com a aba aberta): o aviso diz o
+    // que fazer, em vez de o clique não dar em nada.
+    const examples = written ? null : await import('./exemplos.js').catch(() => null);
+    if (!written && !examples) {
+      toast('Não foi possível carregar os exemplos. Recarregue a página.');
+      return;
+    }
+    // O aluno mexeu durante a espera no que o exemplo usa: o que ele fez vale mais. O exemplo apagaria o texto no meio
+    // da digitação (o Desfazer do editor some na primeira tecla) ou longe da vista (some também na troca de página), e
+    // o exemplo da área ou do nível do clique ficaria com outra área ou outro nível na tela. A conferência fica depois
+    // das duas esperas, a da IA e a do arquivo dos exemplos: numa rede lenta o arquivo também demora.
+    const now = latest.current;
+    const changed = now.input !== input ? 'o texto do editor mudou'
+      : now.area !== area || now.level !== level ? 'a área ou o nível mudou'
+      : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
+    if (changed) {
+      toast('O exemplo não entrou: ' + changed + ' durante a espera');
+      return;
+    }
+    const example = written || examples.pickExample(area, { topic: exampleTopic.current, text: input });
     // O aviso diz quem escreveu. O texto fica guardado em aiExample, o da IA, ou em readyExample, o pronto: o material
     // feito dele cita o trecho como "No exemplo escrito pela IA" ou "No texto de exemplo", e não como "No seu texto".
     const note = (written ? 'Exemplo escrito pela IA (confira os fatos): '
@@ -1207,6 +1239,13 @@ function App() {
   useLayoutEffect(() => {
     if (!asking && !TOUCH && document.activeElement?.closest('.chat-status')) document.getElementById('pergunta')?.focus();
   }, [asking]);
+  // A lista de sugestões mudou (a resposta trouxe outras, "Nova conversa", o Desfazer dela, outro assunto): a linha de
+  // chips, que rola de lado no celular (mobile.css), volta ao começo. Ela guardava a rolagem do aluno, e a lista nova
+  // chegava com o 1º chip fora da vista. Antes da pintura: a lista nova não chega a aparecer rolada. Com a mesma
+  // lista, a linha fica onde o aluno a pôs.
+  useLayoutEffect(() => {
+    if (chipsRow.current) chipsRow.current.scrollLeft = 0;
+  }, [chatHints.join('\n')]);
   // Dica do dock (styles.css): o Esc esconde a que está aberta sem mexer no ponteiro nem no foco (WCAG 1.4.13).
   useEffect(() => {
     const hide = e => {
@@ -1294,11 +1333,7 @@ function App() {
     </button>
   );
 
-  // LazyMotion com domAnimation: só a parte da Motion que estas animações usam (sem arrastar nem layout). MotionConfig
-  // com reducedMotion="user" é a rede de segurança: com movimento reduzido, nenhum deslocamento passa.
   return (
-    <MotionConfig reducedMotion="user">
-    <LazyMotion features={domAnimation} strict>
     <div className="app" data-page={slug}>
       {/* O primeiro Tab da página: só aparece com o foco (styles.css) e leva o foco ao título da página, no palco, sem as
           paradas da barra de cima e do menu. O main não ganha tabindex: no Safari o clique num botão dá o foco ao
@@ -1396,8 +1431,11 @@ function App() {
               entrada e a aba que tem o foco do teclado continua na tela (com uma key por página ela era recriada e o
               foco caía na página).
               A página que sai (popLayout) sai do fluxo na hora e esmaece por cima da nova, sem receber clique. Numa
-              troca no meio de outra (cut) a nova aparece parada e a do meio some na hora. */}
-          <AnimatePresence mode="popLayout" custom={still}>
+              troca no meio de outra (cut) a nova aparece parada e a do meio some na hora.
+              presenceAffectsLayout false: sem ele a página passava um contexto novo a cada desenho do App, e cada tecla
+              redesenhava o que mora dentro dela, até os balões da conversa (ChatLog). Ele só importa para animação de
+              layout, que o app não usa. */}
+          <AnimatePresence mode="popLayout" custom={still} presenceAffectsLayout={false}>
             <m.div
               key={viewKey}
               className="view"
@@ -1603,7 +1641,8 @@ function App() {
                 </>
               )}
               {MATERIAL.includes(page) && (
-                <m.div variants={rise}>
+                // Com a lista "Mostrar" do Resumo dentro, o bloco só esmaece (anim.js, fade).
+                <m.div variants={fade}>
                   {/* Esqueleto, vazio ou material: a troca entre eles esmaece no lugar (popLayout tira do fluxo o que
                       sai). Na abertura da página nada disso anima à parte (live false: a entrada é a da página). O
                       initial fica em cada painel e não no AnimatePresence: lá ele valeria para tudo o que monta depois
@@ -2158,42 +2197,69 @@ function App() {
                       </div>
                     )}
                     <div className="chat" role="log" aria-live="polite">
-                      {/* Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam
-                          na conversa quando a página abriu não animam à parte (initial false). A pergunta enviada pelo
-                          teclado aparece parada. A resposta toma o lugar do balão de espera, que esmaece por cima dela. */}
-                      <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
-                        {chat.map((msg, i) => (
-                          <m.div
-                            key={i}
-                            className={'message ' + msg.role}
-                            variants={pop}
-                            initial={msg.role === 'user' ? appear() : 'hidden'}
-                            animate="show"
-                          >
-                            <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
-                            <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
-                          </m.div>
-                        ))}
-                        {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula
-                            acima da caixa, uma vez só para o leitor de tela. */}
-                        {asking && (
-                          <m.div
-                            key="espera"
-                            className="message assistant thinking"
-                            aria-hidden="true"
-                            variants={pop}
-                            initial={appear()}
-                            animate="show"
-                            exit="exit"
-                          >
-                            <span className="dots"><span></span><span></span><span></span></span>
-                          </m.div>
-                        )}
-                      </AnimatePresence>
+                      <ChatLog chat={chat} asking={asking} pop={pop} />
                     </div>
                   </div>
                   {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
                   <div className="chat-dock">
+                    {API_BASE && (
+                      <>
+                        {/* O filtro do vidro dos chips (#110, do Liquid Glass Button do 21st.dev): um ruído que distorce e
+                            desfoca o fundo atrás de cada chip (styles.css, .suggestions button::before). Um só para todos
+                            os chips, fora da vista e do leitor de tela. */}
+                        <svg className="glass-filter" aria-hidden="true" focusable="false">
+                          <filter id="vidro-liquido" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.05 0.05" numOctaves="1" seed="1" result="ruido" />
+                            <feGaussianBlur in="ruido" stdDeviation="2" result="ruido-suave" />
+                            <feDisplacementMap in="SourceGraphic" in2="ruido-suave" scale="70" xChannelSelector="R" yChannelSelector="B" result="distorcido" />
+                            <feGaussianBlur in="distorcido" stdDeviation="4" />
+                          </filter>
+                        </svg>
+                        {/* Os chips ficam acima da caixa (#109), também antes dela no Tab. Durante a espera da resposta eles
+                            somem (data-espera): a pílula de espera fica no lugar deles, e os chips da resposta nova chegam
+                            com ela. Com a lista do "/" aberta eles também somem (styles.css). */}
+                        <m.div
+                          ref={chipsRow}
+                          className="suggestions"
+                          role="group"
+                          aria-label="Sugestões de perguntas"
+                          data-espera={asking ? '' : undefined}
+                          variants={hero.chips}
+                        >
+                          {chatHints.map((h, i) => (
+                            <m.button
+                              key={i}
+                              type="button"
+                              variants={hero.chip}
+                              disabled={waiting}
+                              onKeyUp={e => {
+                                // O Tab que chega ao chip, na linha que rola de lado (mobile.css), rola a linha até ele:
+                                // o navegador sozinho não rola um chip que já aparece em parte. Com folga, o chip fica
+                                // inteiro junto da borda (o scroll-padding deixa um pedaço do vizinho); sem folga, no meio
+                                // da linha; mais largo que ela, com o começo à vista. Só no Tab: o clique não move o chip
+                                // entre apertar e soltar, e a volta para a aba, que dá o foco de novo ao chip, não rola nada.
+                                const chip = e.currentTarget;
+                                const row = chip.parentElement;
+                                if (e.key !== 'Tab' || row.scrollWidth <= row.clientWidth) return;
+                                const room = row.clientWidth - chip.offsetWidth;
+                                const pad = 2 * (parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0);
+                                chip.scrollIntoView({ block: 'nearest', inline: room < 0 ? 'start' : room < pad ? 'center' : 'nearest' });
+                              }}
+                              onClick={() => {
+                                // O chip some durante a espera, e o foco iria para o body: vai para a caixa. No toque vai
+                                // para o título, sem rolar a página: o teclado da tela não abre sozinho, e o leitor de
+                                // tela não fica num chip escondido.
+                                if (TOUCH) document.getElementById('chat-titulo').focus({ preventScroll: true });
+                                else document.getElementById('pergunta').focus();
+                                ask(h);
+                              }}
+                            >
+                              {h}
+                            </m.button>
+                          ))}
+                        </m.div>
+                      </>
+                    )}
                     <ChatComposer
                       value={question}
                       onChange={setQuestion}
@@ -2227,26 +2293,6 @@ function App() {
                       }
                     />
                     {errorBanner}
-                    {API_BASE && (
-                      <m.div className="suggestions" role="group" aria-label="Sugestões de perguntas" variants={hero.chips}>
-                        {chatHints.map((h, i) => (
-                          <m.button
-                            key={i}
-                            type="button"
-                            variants={hero.chip}
-                            disabled={waiting}
-                            onClick={() => {
-                              // O chip fica desligado durante a espera, e o foco iria para o body: vai para a caixa (no
-                              // toque não, para o teclado da tela não abrir sozinho).
-                              if (!TOUCH) document.getElementById('pergunta').focus();
-                              ask(h);
-                            }}
-                          >
-                            {h}
-                          </m.button>
-                        ))}
-                      </m.div>
-                    )}
                   </div>
                   <div ref={chatEnd} className="chat-end"></div>
                 </section>
@@ -2338,6 +2384,7 @@ function App() {
                 <Suspense fallback={<DesempenhoSkeleton rise={rise} />}>
                   <Desempenho
                     rise={rise}
+                    fade={fade}
                     streakDays={streakDays}
                     quizzes={quizzes}
                     cards={cards}
@@ -2369,7 +2416,7 @@ function App() {
               {page === 'Biblioteca' && (
                 <Suspense fallback={<BibliotecaSkeleton rise={rise} />}>
                   <Biblioteca
-                    rise={rise}
+                    fade={fade}
                     pop={pop}
                     query={query}
                     setQuery={setQuery}
@@ -2550,10 +2597,47 @@ function App() {
         )}
       </AnimatePresence>
     </div>
-    </LazyMotion>
-    </MotionConfig>
   );
 }
+
+// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa, a espera ou o movimento mudam (memo): cada
+// tecla na caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
+// Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam na conversa quando a
+// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A resposta toma o
+// lugar do balão de espera, que esmaece por cima dela.
+const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
+  return (
+    <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
+      {chat.map((msg, i) => (
+        <m.div
+          key={i}
+          className={'message ' + msg.role}
+          variants={pop}
+          initial={msg.role === 'user' ? appear() : 'hidden'}
+          animate="show"
+        >
+          <small>{msg.role === 'user' ? 'Você' : 'Cérebro'}</small>
+          <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
+        </m.div>
+      ))}
+      {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula acima da caixa, uma
+          vez só para o leitor de tela. */}
+      {asking && (
+        <m.div
+          key="espera"
+          className="message assistant thinking"
+          aria-hidden="true"
+          variants={pop}
+          initial={appear()}
+          animate="show"
+          exit="exit"
+        >
+          <span className="dots"><span></span><span></span><span></span></span>
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+});
 
 // Margem do baralho: um ✓ ou ✗ da caneta para cada cartão já avaliado nesta sessão. O cartão errado volta para o fim
 // da fila (lib.js): o que aparece de novo mais adiante na fila foi o errado. Com fresh, a marca mais nova se desenha,
@@ -2641,8 +2725,7 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();
         if (o?.width) dialog.style.transformOrigin = (o.left + o.width / 2 - d.left) + 'px ' + (o.top + o.height / 2 - d.top) + 'px';
-        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'], filter: ['blur(4px)', 'blur(0px)'] }, { duration: MODAL.in, ease: EASE_OUT })
-          .then(() => (dialog.style.filter = ''));
+        animate(dialog, { opacity: [0, 1], transform: ['scale(0.96)', 'none'] }, { duration: MODAL.in, ease: EASE_OUT });
       }
     }
     return () => {
@@ -2768,4 +2851,17 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+// LazyMotion com domMin: só a parte da Motion que estas animações usam, a entrada e a saída (sem gestos, arrastar nem
+// layout). whileHover, whileTap, whileFocus e whileInView não funcionam com ele. MotionConfig com reducedMotion="user" é
+// a rede de segurança: com movimento reduzido, nenhum deslocamento passa. Os dois ficam fora do App: o LazyMotion passa
+// um contexto novo a cada desenho dele, e dentro do App cada tecla redesenhava todos os blocos animados da página, até
+// os balões da conversa (ChatLog).
+createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <MotionConfig reducedMotion="user">
+      <LazyMotion features={domMin} strict>
+        <App />
+      </LazyMotion>
+    </MotionConfig>
+  </ErrorBoundary>
+);

@@ -13,6 +13,13 @@ if (-not (Test-Path (Join-Path $raiz 'frontend\node_modules'))) {
     Write-Host 'Falta instalar o frontend. Rode "npm ci" na pasta frontend (passo 3 do INICIAR-NO-VSCODE.md).'
     exit 1
 }
+# Pacote que entrou no package.json depois da instalação (o da fonte, por exemplo): sem ele o app abre sem avisar o que falta.
+$pacotes = (Get-Content (Join-Path $raiz 'frontend\package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).dependencies.PSObject.Properties.Name
+$faltam = @($pacotes | Where-Object { -not (Test-Path (Join-Path $raiz "frontend\node_modules\$_")) })
+if ($faltam) {
+    Write-Host ('Falta instalar no frontend: ' + ($faltam -join ', ') + '. Feche a janela do frontend, se estiver aberta, e rode "npm ci" na pasta frontend.')
+    exit 1
+}
 
 function Test-PortaOcupada($porta) {
     [bool](Get-NetTCPConnection -LocalPort $porta -State Listen -ErrorAction SilentlyContinue)

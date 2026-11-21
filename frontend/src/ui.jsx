@@ -1,6 +1,5 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { m } from 'motion/react';
-import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
 
@@ -21,10 +20,16 @@ export function useFit(field, value) {
   useLayoutEffect(fit, [value]);
   useEffect(() => {
     // A primeira medida pode sair antes de a fonte da página chegar (o rascunho volta logo na abertura): com a fonte,
-    // as linhas mudam de largura, e o campo se mede de novo.
-    document.fonts.ready.then(() => field.current && fit());
+    // as linhas mudam de largura, e o campo se mede de novo. O arquivo da fonte pode chegar depois do primeiro desenho
+    // (font-display: swap): o ready pode já ter passado, e o loadingdone avisa quando ela termina de carregar.
+    const refit = () => field.current && fit();
+    document.fonts.ready.then(refit);
+    document.fonts.addEventListener('loadingdone', refit);
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    return () => {
+      document.fonts.removeEventListener('loadingdone', refit);
+      window.removeEventListener('resize', fit);
+    };
   }, []);
 }
 
@@ -102,10 +107,30 @@ export function Countdown({ until }) {
   return seconds > 0 ? <span className="elapsed" aria-hidden="true">{'Faltam ' + seconds + ' s.'}</span> : 'Pode tentar de novo.';
 }
 
-// Orbe da IA (thinking-orbs): 20 px, no tema escuro e no ciano do --accent (styles.css), que a biblioteca recebe em JS.
-// Fica fora do leitor de tela: o texto ou o nome do botão ao lado já diz o que acontece.
+// O lugar do orbe vazio: 20 px, com o display block do canvas dele e a mesma classe e o mesmo style (a espera pede
+// inline-block).
+function Hole({ className, style }) {
+  return <span className={className} style={{ width: 20, height: 20, display: 'block', ...style }} aria-hidden="true"></span>;
+}
+
+// O orbe chega à parte (React.lazy): só as esperas da IA e o ditado o mostram, e o código dele (27 kB) saiu do
+// JavaScript da abertura. O App o busca quando o navegador fica livre; até ele chegar, fica o lugar vazio. Se o arquivo
+// não vier (sem rede, ou uma versão nova publicada com a aba aberta), o lugar fica vazio: sem isto, o erro derrubava a
+// tela inteira (ErrorBoundary, App.jsx).
+const ThinkingOrb = lazy(() => import('thinking-orbs').then(mod => ({ default: mod.ThinkingOrb }), () => ({ default: Hole })));
+// O canvas do orbe não lê var(--accent): a cor sai do CSS uma vez, no primeiro orbe, e trocar o ciano no styles.css
+// troca o orbe junto.
+let accent = '';
+
+// Orbe da IA (thinking-orbs): 20 px, no tema escuro e no ciano do --accent (styles.css). Fica fora do leitor de tela: o
+// texto ou o nome do botão ao lado já diz o que acontece.
 export function Orb(props) {
-  return <ThinkingOrb size={20} theme="dark" color="#93f1f7" aria-hidden="true" {...props} />;
+  accent ||= getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return (
+    <Suspense fallback={<Hole {...props} />}>
+      <ThinkingOrb size={20} theme="dark" color={accent} aria-hidden="true" {...props} />
+    </Suspense>
+  );
 }
 
 // Espera de um pedido à IA: um fio indeterminado (nada aqui finge saber quanto falta), o que está acontecendo, os

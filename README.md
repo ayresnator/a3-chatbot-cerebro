@@ -130,7 +130,7 @@ Com um material aberto, a pergunta é sobre ele: a caixa do chat mostra "Sobre:"
 
 O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero e pode ser desfeita até a próxima pergunta.
 
-O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
+O chat abre com uma saudação do Cérebro. Com a IA ativa, acima da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
 
 ### 6. Caderno de erros
 
@@ -165,6 +165,8 @@ O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer 
 - Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões, fica o "Refazer meus erros";
 - Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca.
 
+Ao abrir o app e ao importar um backup, o histórico perde as repetições de dias passados: de cada questão do quiz, em cada dia, ficam a primeira resposta e, se ela foi um erro, o primeiro acerto. As avaliações dos cartões ficam todas. Os números da tela não mudam, e o histórico ocupa menos espaço no navegador.
+
 ### 8. Biblioteca
 
 Reúne os materiais salvos para consulta posterior.
@@ -193,6 +195,7 @@ No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só ne
 | CSS | Estilização e adaptação da interface |
 | Motion | Animações e transições da interface |
 | thinking-orbs | Orbe animado nas esperas da IA |
+| Manrope | Fonte da interface, servida pelo próprio aplicativo: pacote `@fontsource-variable/manrope`, licença SIL Open Font License 1.1 |
 | Python | Implementação do backend |
 | FastAPI | Criação das rotas de comunicação |
 | Pydantic | Validação dos dados recebidos e dos materiais gerados |
@@ -247,6 +250,7 @@ a3-chatbot-cerebro/
 │   │   ├── marks.jsx
 │   │   ├── anim.js
 │   │   ├── lib.js
+│   │   ├── exemplos.js
 │   │   ├── styles.css
 │   │   ├── mobile.css
 │   │   └── components/ui/chat-composer.jsx
@@ -292,7 +296,8 @@ a3-chatbot-cerebro/
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, backup |
-| `frontend/tests/` | Testes das regras de `lib.js` |
+| `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
+| `frontend/tests/` | Testes das regras de `lib.js` e `exemplos.js` |
 | `frontend/public/` | Arquivos públicos |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
@@ -376,7 +381,7 @@ Algumas recomendações importantes para manter o projeto seguro:
 
 As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa. O servidor não guarda o texto do aluno, e o registro de erros do backend anota o campo e o motivo, nunca o conteúdo.
 
-A interface carrega as fontes do Google Fonts: ao abrir o aplicativo, o navegador faz um pedido aos servidores do Google.
+A fonte da interface vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora.
 
 ---
 
