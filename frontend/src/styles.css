@@ -89,6 +89,10 @@
         radial-gradient(56rem 36rem at 4% -6%, rgb(147 241 247 / .12), transparent 70%),
         radial-gradient(44rem 36rem at 102% 34%, rgb(88 214 200 / .07), transparent 70%),
         radial-gradient(64rem 30rem at 38% 112%, rgb(147 241 247 / .06), transparent 70%);
+    /* Fundo parado das ondas (issue #136): o primeiro quadro delas em degradê, com as cores tiradas da tela de 10% em
+       10% da altura. Fica atrás do canvas e aparece enquanto o shader não desenha: na abertura (com o navegador
+       recém-aberto a GPU leva uns 3 s) e sem WebGL. Mudou o shader (waves.js), tire as cores de novo. */
+    --waves-rest: linear-gradient(#f8ffff 0 8%, #a0f2ff 20%, #5ee0ff 32%, #36aee2 50%, #0b64a6 70%, #00142a 90%, #000f1b);
 
     /* Vidro: cor translúcida, borda clara fina, luz na quina de cima e sombra na de baixo (--edge) e um brilho em
        diagonal por cima (--shine). --glass é a barra de cima, o dock e o palco; --glass-float, o que passa por cima do
@@ -410,8 +414,9 @@ body::before {
 }
 
 /* Fundo em ondas (issue #92; Waves em ui.jsx, shader em waves.js): canvas preso à janela atrás de tudo, só no
-   computador com mouse. data-waves no html entra com o primeiro quadro do shader; até lá, e sem WebGL na GPU, ficam os
-   brilhos de cima. Com ele, a barra de cima, o dock e o palco ficam com o tom escuro de antes, mas opacos: as ondas
+   computador com mouse. data-waves no html entra com o app, e a camada dos brilhos passa a mostrar o fundo parado
+   (--waves-rest), já na primeira pintura (issue #136); data-waves="on" entra com o primeiro quadro do shader e mostra o
+   canvas por cima. Sem WebGL na GPU, ou com o contexto perdido, fica o fundo parado. Com data-waves, a barra de cima, o dock e o palco ficam com o tom escuro de antes, mas opacos: as ondas
    aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
    espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
    no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
@@ -433,12 +438,12 @@ body::before {
     --quiet: #040404
 }
 
-:root[data-waves] .waves {
+:root[data-waves=on] .waves {
     visibility: visible
 }
 
 :root[data-waves] body::before {
-    display: none
+    background: var(--waves-rest)
 }
 
 :root[data-waves] .busy {
