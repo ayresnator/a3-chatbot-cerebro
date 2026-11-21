@@ -25,7 +25,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
-  stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
+  seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote, virtualNote, findSource, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
@@ -934,7 +934,7 @@ function App() {
     if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'),
-      cartoes: readList('cartoes'), user: readUser(),
+      cartoes: readList('cartoes'), questoes: readSeen(), user: readUser(),
     };
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
@@ -967,7 +967,7 @@ function App() {
     const now = new Date();
     const before = {
       saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros'),
-      cartoes: readList('cartoes'),
+      cartoes: readList('cartoes'), questoes: readList('questoes'),
     };
     const after = mergeBackup(before, backup);
     after.events = compactEvents(after.events, now);
@@ -979,6 +979,7 @@ function App() {
     setMistakes(after.erros.filter(validMistake));
     if (!persist('cartoes', after.cartoes)) return;
     setBoxes(after.cartoes.filter(validCardReview));
+    if (!persist('questoes', after.questoes)) return;
     // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
     // A área do editor não muda.
     const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
@@ -1043,7 +1044,11 @@ function App() {
     const before = readList('erros').find(e => e?.key === mistakeKey(from.title, q.question));
     setAnswer({ value, ok, conf, before });
     setAnswers([...answers, { ...q, ok, given: value, conf }]);
-    event('quiz', ok, from.area, fold(q.question), from.title, { conf });
+    // O índice do acerto que ficou (#78, lib.js: seenStep) dá o prev da resposta: lido antes de gravar a resposta, que
+    // entraria no índice montado das respostas.
+    const seen = seenStep(readSeen(), mistakeKey(from.title, q.question), ok, now);
+    event('quiz', ok, from.area, fold(q.question), from.title, { conf, prev: seen.prev });
+    persist('questoes', seen.list);
     notebook(list => noteAnswer(list, q, from.title, from.area, ok, conf, now));
     // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
     if (blind) {

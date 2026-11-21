@@ -279,7 +279,7 @@ export function DesempenhoSkeleton({ rise }) {
   return (
     <>
       <m.div className="stats" variants={rise} aria-hidden="true">
-        {['7rem', '9rem', '7rem', '12rem'].map((w, i) => (
+        {['7rem', '9rem', '7rem', '10rem', '12rem'].map((w, i) => (
           <p key={i} className="stat"><Sk w={w} /></p>
         ))}
       </m.div>
@@ -298,6 +298,9 @@ export function DesempenhoSkeleton({ rise }) {
           ))}
         </div>
         <Sk w="70%" className="sk-note" />
+        {/* A linha do acerto na hora e do que ficou, e a divisão dele (#78). */}
+        <Sk w="80%" className="sk-note" />
+        <Sk w="60%" className="sk-note" />
       </m.section>
       <m.section className="panel" variants={rise} aria-hidden="true">
         <Sk w="10rem" className="sk-h2" />
