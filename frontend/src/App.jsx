@@ -27,7 +27,7 @@ import {
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote, findSource, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
+  originNote, virtualNote, findSource, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
@@ -37,7 +37,11 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
 // A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
 demoStorage(DEMO);
-const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
+// Modo estudo (#85), o build do celular, com semIA no config.js: os dados são os de verdade, nas chaves do app com IA, e
+// nenhum pedido vai para a /api. Os botões de gerar organizam o texto por frases, como na demonstração. Com ?demo, vale
+// a demonstração.
+const SEM_IA = !DEMO && CONFIG.semIA === true;
+const API_BASE = DEMO || SEM_IA ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
 // Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
 // botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
@@ -382,6 +386,59 @@ function App() {
     if (API_BASE) checkHealth();
   }, []);
 
+  // Modo estudo: o navegador é pedido para não apagar os dados sozinho, e o manifest entra só aqui (com ele, o navegador
+  // oferece instalar o app; o app com IA e a demonstração ficam como estão). O service worker (sw-molde.js) guarda os
+  // arquivos do build, e o app abre sem rede. A versão nova espera o "Atualizar" do aviso, oferecido quando ela chega,
+  // na abertura e na volta à aba; com ele, esta página e as outras abas recarregam na versão nova.
+  useEffect(() => {
+    if (!SEM_IA) return;
+    navigator.storage?.persist?.();
+    document.head.append(Object.assign(document.createElement('link'), { rel: 'manifest', href: './manifest.webmanifest' }));
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    let reg = null;
+    // Sem controller é a primeira visita: o service worker que chega não é versão nova.
+    const offer = () => {
+      if (reg?.waiting && sw.controller) {
+        toast('Versão nova do Cérebro', { label: 'Atualizar', run: () => reg.waiting?.postMessage('atualizar') });
+      }
+    };
+    const watch = worker => worker?.addEventListener('statechange', () => worker.state === 'installed' && offer());
+    sw.register('./sw.js').then(r => {
+      reg = r;
+      watch(r.installing);
+      r.addEventListener('updatefound', () => watch(r.installing));
+      offer();
+    }, () => {});
+    const back = () => {
+      if (document.visibilityState !== 'visible' || !reg) return;
+      offer();
+      reg.update().catch(() => {});
+    };
+    let reloading = false;
+    const reload = () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    };
+    document.addEventListener('visibilitychange', back);
+    sw.addEventListener('controllerchange', reload);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      sw.removeEventListener('controllerchange', reload);
+    };
+  }, []);
+
+  // A demonstração do build do modo estudo não registra o service worker, mas abre do cache dele: com o "Atualizar" de
+  // outra aba, ela também recarrega na versão nova, e não pede depois um arquivo que já saiu do cache.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!DEMO || CONFIG.semIA !== true || !sw) return;
+    const reload = () => window.location.reload();
+    sw.addEventListener('controllerchange', reload);
+    return () => sw.removeEventListener('controllerchange', reload);
+  }, []);
+
   // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
   // pelo persist(), como nas outras gravações. Relido aqui, depois do primeiro desenho: outra aba pode ter gravado nesse
   // meio-tempo. Se a gravação falhar, a lista gravada continua inteira. Os números da tela não mudam, e a próxima
@@ -693,7 +750,10 @@ function App() {
     if (waiting) return;
     setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError({ message: 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
+      setError({
+        message: SEM_IA ? 'Cole um texto completo (mínimo 30 caracteres): sem IA, os botões organizam as frases dele.'
+          : 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).',
+      });
       return;
     }
     // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
@@ -1172,7 +1232,10 @@ function App() {
     if (!API_BASE) {
       setChat(c => [...c, {
         role: 'assistant',
-        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
+        text: (SEM_IA
+          ? 'No modo estudo não há IA neste aparelho: as respostas a dúvidas precisam do computador com a IA. '
+          : 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. ') +
+          'Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
       }]);
       return;
     }
@@ -1494,6 +1557,7 @@ function App() {
   const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
+    study: SEM_IA,
   });
   // Teto de chamadas por dia escolhido pelo grupo (lib.js, capReached): até a contagem recomeçar, os botões da IA ficam
   // desligados, com o motivo junto deles.
@@ -1540,7 +1604,8 @@ function App() {
   // A escolha de páginas: o texto das páginas marcadas, contado como o contador do editor, e se ele passa do limite.
   const picked = pick ? pick.reader.pageSpan(pick.pages, pick.from, pick.to) : '';
   const over = picked.length > MAX_INPUT;
-  const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
+  const status = API_BASE ? healthLabel(health)
+    : { text: SEM_IA ? 'Modo estudo · sem IA' : 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
@@ -1785,7 +1850,9 @@ function App() {
                 <m.div className="page-head" variants={titleIn}>
                   <h1 className="page-title" tabIndex={-1}>{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
-                    <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                    <p className="lead">
+                      Cole o texto da aula{API_BASE && ' ou escreva um tema'}, escolha a área e o nível e gere o material.
+                    </p>
                   )}
                 </m.div>
               )}
@@ -1815,6 +1882,7 @@ function App() {
                       cost={cost}
                       reason={capNote ? 'aviso-ia' : undefined}
                       onFile={openFile}
+                      topic={!!API_BASE}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1908,7 +1976,8 @@ function App() {
                   </m.div>
                   <m.div variants={rise}>
                     {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
-                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. */}
+                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. No modo estudo, o que
+                        os botões fazem sem IA e de onde vêm os materiais. */}
                     <p className="note" id="aviso-ia">
                       <Icon name={API_BASE && !aiOff && !capNote ? 'privacidade' : 'info'} />
                       {aiOff ? (
@@ -1918,6 +1987,9 @@ function App() {
                         </span>
                       ) : capNote ? ERRORS.AI_BUDGET_REACHED : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
+                        : SEM_IA ? 'Modo estudo, sem IA neste aparelho: os botões só organizam o texto por frases. ' +
+                          'Para estudar os seus materiais, importe o backup na Biblioteca. Os dados ficam só aqui: ' +
+                          'instale o app na tela inicial e exporte o backup para levar o progresso ao computador.'
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
                           'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
@@ -2079,9 +2151,13 @@ function App() {
                                 : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
-                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                                O dos outros diz de onde ele veio (lib.js, originNote). No modo estudo, o material
+                                temporário leva o aviso, a menos que cada item venha de material feito no aparelho
+                                (lib.js, virtualNote). */}
                             {result.virtual
-                              ? aiNote
+                              ? aiNote || (SEM_IA &&
+                                virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
+                                <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
                           {!result.virtual && (

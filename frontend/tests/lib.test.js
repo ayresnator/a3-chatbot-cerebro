@@ -15,7 +15,7 @@ import {
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
-  examPool, mockExam, examScore, examLine,
+  examPool, mockExam, examScore, examLine, virtualNote,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -1145,6 +1145,13 @@ test('hello: na demonstração', () => {
   );
 });
 
+test('hello: no modo estudo, diz que as respostas precisam do computador com a IA', () => {
+  assert.equal(
+    hello({ user: null, area: 'Economia', level: 'Básico', input: '', title: 'Inflação', api: false, study: true }),
+    'Olá! Sou o Cérebro, seu tutor de Economia no nível Básico. No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as respostas a dúvidas precisam do computador com a IA.'
+  );
+});
+
 test('hello: com o material aberto como assunto, cita o material e não fala do editor', () => {
   assert.equal(
     hello({ user: null, area: 'Escolar', level: 'Básico', input: 'Revolução Francesa\nCausas: a crise', title: 'Revolução Francesa', api: true }),
@@ -1424,6 +1431,19 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
   assert.equal(originNote([own, { ...own, pronto: true }, none]),
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('virtualNote: o material temporário leva o aviso, a menos que cada item venha de material feito sem IA', () => {
+  const phone = { title: 'Aula de hoje', semIA: true };
+  const ai = { title: 'Fundamentos de Hardware e Software' };
+  const from = title => ({ question: 'O que é?', title });
+  assert.equal(virtualNote([from('Aula de hoje'), from('Aula de hoje')], [phone, ai]), false);
+  assert.equal(virtualNote([from('Aula de hoje'), from(ai.title)], [phone, ai]), true);
+  // A questão do caderno de erros fica lá depois que o material dela sai da biblioteca.
+  assert.equal(virtualNote([from(ai.title)], [phone]), true);
+  // O mesmo título num material feito no aparelho e num da IA.
+  assert.equal(virtualNote([from('Aula de hoje')], [phone, { title: 'Aula de hoje' }]), true);
+  assert.equal(virtualNote([], [ai]), false);
 });
 
 test('textOrigin: o texto do material é do exemplo da IA, de um exemplo pronto ou do aluno, na ordem do aviso', () => {
