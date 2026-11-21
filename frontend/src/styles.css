@@ -1793,18 +1793,20 @@ main:focus {
         display: contents
     }
 
-    .result-header h2 {
+    .result-header:has(> .result-actions):has(.ai-note) h2 {
         grid-column: 1 / -1
     }
 
-    .result-header > .result-actions {
+    .result-header:has(> .result-actions):has(.ai-note) > .result-actions {
         grid-area: 2 / 2 / span 2;
         align-self: center
     }
 }
 
 /* De 551 a 1179 px os botões ficam juntos como no celular (mobile.css), e o "Compartilhar" fica só com o ícone, como o
-   da Biblioteca, com o nome no leitor de tela: assim o aviso da IA cabe numa linha ao lado deles a partir de 638 px. */
+   da Biblioteca, com o nome no leitor de tela: assim o aviso da IA cabe numa linha ao lado deles num cabeçalho de 539 px
+   ou mais (uma janela de 654 px com a barra de rolagem clássica, 639 px sem ela). Mais estreito, o esqueleto guarda a
+   altura do aviso em duas linhas (abaixo, .material-wait). */
 @media (min-width: 551px) and (max-width: 1179px) {
     .result-header > .result-actions {
         gap: var(--sp-2)
@@ -2925,6 +2927,24 @@ main:focus {
    chega (medido: 69 px no esqueleto contra 80 px no material). */
 .material-wait .result-header > div {
     min-height: 5rem
+}
+
+/* Na grade do cabeçalho (.result-header, de 34,4375rem para cima), o aviso padrão da IA só cabe ao lado dos botões num
+   cabeçalho de 538,16 px ou mais (387,25 do aviso, 8 do vão e 142,91 do "Compartilhar" e do "Salvo"). Mais estreito,
+   ele vai para a segunda linha, e o cabeçalho pronto ganha uma linha dele. A medida é a de dentro do painel, que é a do
+   cabeçalho, e não a da janela: a barra de rolagem clássica tira 15 px dele, e com a janela a conta errava para um dos
+   lados. O contêiner é o painel, e não o cabeçalho: no navegador que junta contain: layout ao container-type, o fio da
+   espera (position: absolute) passaria a se prender ao cabeçalho e sairia da borda do painel. */
+.material-wait {
+    container-type: inline-size
+}
+
+@media (min-width: 34.4375rem) {
+    @container (max-width: 33.63rem) {
+        .material-wait .result-header > div {
+            min-height: calc(5rem + var(--fs-2) * var(--lh-ui))
+        }
+    }
 }
 
 .material-wait .wait-bar {
