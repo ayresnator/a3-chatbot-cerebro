@@ -184,6 +184,7 @@ Ao gerar um material novo, o anterior que ainda não tinha sido salvo é guardad
 | CSS | Estilização e adaptação da interface |
 | Motion | Animações e transições da interface |
 | thinking-orbs | Orbe animado nas esperas da IA |
+| Manrope | Fonte da interface, servida pelo próprio aplicativo: pacote `@fontsource-variable/manrope`, licença SIL Open Font License 1.1 |
 | Python | Implementação do backend |
 | FastAPI | Criação das rotas de comunicação |
 | Pydantic | Validação dos dados recebidos e dos materiais gerados |
@@ -367,7 +368,7 @@ Algumas recomendações importantes para manter o projeto seguro:
 
 As solicitações de estudo são enviadas ao provedor de IA quando a integração está ativa. O servidor não guarda o texto do aluno, e o registro de erros do backend anota o campo e o motivo, nunca o conteúdo.
 
-A interface carrega as fontes do Google Fonts: ao abrir o aplicativo, o navegador faz um pedido aos servidores do Google.
+A fonte da interface vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora.
 
 ---
 

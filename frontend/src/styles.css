@@ -1,8 +1,12 @@
 /* Cérebro, app de estudo: tema escuro de vidro, ciano sobre preto (issue #54, no estilo do Glassy Dashboard do
    21st.dev). O fundo é preto com brilhos ciano fracos; a barra de cima, o dock das seções e o palco de cada página são
    de vidro, e os painéis ficam dentro do palco. O ciano marca o principal e a seção aberta; verde, vermelho e laranja
-   continuam dizendo certo, errado e aviso, e a caneta que corrige continua (marks.jsx). As fontes vêm do index.html.
+   continuam dizendo certo, errado e aviso, e a caneta que corrige continua (marks.jsx). A fonte vem do @import abaixo.
    mobile.css (carregado depois) cuida das telas estreitas. Toda cor, tamanho e raio sai das variáveis abaixo. */
+
+/* A Manrope vem do pacote e é servida pelo próprio app: a abertura não pede nada a servidor de fora e a tela não espera
+   pelo arquivo da fonte (font-display: swap). No pacote a família se chama 'Manrope Variable'. */
+@import '@fontsource-variable/manrope/wght.css';
 
 :root {
     color-scheme: dark;
@@ -87,7 +91,7 @@
     --tab-mais: var(--accent);
 
     /* Tipos: Manrope em tudo, até nas notas da caneta. */
-    --font-ui: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-ui: 'Manrope Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
     /* --fs-0 só nos nomes da barra de baixo em telefone de 360 a 380 px. */
     --fs-0: .75rem;
     --fs-1: .8125rem;

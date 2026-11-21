@@ -20,8 +20,8 @@ export function useFit(field, value) {
   useLayoutEffect(fit, [value]);
   useEffect(() => {
     // A primeira medida pode sair antes de a fonte da página chegar (o rascunho volta logo na abertura): com a fonte,
-    // as linhas mudam de largura, e o campo se mede de novo. A folha da fonte chega depois do primeiro desenho
-    // (index.html): o ready pode já ter passado, e o loadingdone avisa quando ela termina de carregar.
+    // as linhas mudam de largura, e o campo se mede de novo. O arquivo da fonte pode chegar depois do primeiro desenho
+    // (font-display: swap): o ready pode já ter passado, e o loadingdone avisa quando ela termina de carregar.
     const refit = () => field.current && fit();
     document.fonts.ready.then(refit);
     document.fonts.addEventListener('loadingdone', refit);

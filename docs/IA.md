@@ -113,7 +113,7 @@ Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável ma
 
 O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. O nome e o desempenho não saem: ficam no navegador.
 
-Dois pedidos não passam pelo backend. Ao abrir o aplicativo, o navegador busca as fontes da tela no Google Fonts. E o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador: alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever.
+Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador, e alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever. A fonte da tela vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora.
 
 Na faixa gratuita, os [termos da Gemini API](https://ai.google.dev/gemini-api/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
 
