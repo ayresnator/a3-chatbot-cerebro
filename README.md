@@ -81,6 +81,7 @@ O estudante pode:
 - Escolher quantos tópicos aparecem (por padrão, todos), com a contagem "Mostrando N de M tópicos" e o botão "Ver os outros N tópicos" quando algum fica escondido;
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
+- Marcar a data da prova, no campo "Prova" do cabeçalho do material (veja a seção 8);
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
 - Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto";
@@ -177,7 +178,7 @@ Entre as informações disponíveis estão:
 
 O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número. Nos cartões vale a mesma regra: conta a primeira avaliação de cada cartão no dia, e revisar o baralho de novo no mesmo dia não muda o número de cartões revisados nem a autoavaliação.
 
-"Seu próximo passo" tem três casos:
+Quando um material da biblioteca tem a data da prova, "Seu próximo passo" começa pela linha do plano até a prova, a mesma do Estudar (veja a seção 8). Depois dela, "Seu próximo passo" tem três casos:
 
 - Sem resposta no quiz: um botão para fazer o quiz do material aberto ou, sem material aberto, para gerar um;
 - Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões para hoje, fica o "Refazer os de hoje";
@@ -194,10 +195,13 @@ O estudante pode:
 - Pesquisar por palavras-chave;
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
+- Ver quando é a prova de cada material ("prova em 6 dias"), de hoje em diante;
 - Excluir materiais, com a opção de desfazer;
 - Fazer um simulado com questões de vários materiais, com a correção só no fim;
 - Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
+
+No cabeçalho do material, o campo "Prova" guarda a data da prova; o leitor de tela o anuncia como "Data da prova". A data fica no próprio material, na biblioteca do navegador e no backup. Marcá-la num material que ainda não está na biblioteca o salva lá, com aviso, e apagar o campo tira a data. Vale uma data de hoje até daqui a um ano: fora disso, o campo diz o prazo e nada muda. Com a data, o app sugere o que estudar em cada dia, sem IA: faltando 2 dias ou mais, cartões e quiz alternando (cartões a 2, 4 e 6 dias da prova; quiz a 3, 5 e 7); na véspera, refazer as questões do material no caderno de erros ou, sem nenhuma lá, o quiz; no dia, "Prova hoje", com o botão que abre o resumo; depois da data, o plano some. A prova mais próxima aparece em "Seu progresso", no Estudar, e no começo de "Seu próximo passo", no Desempenho, como "Prova de "Fotossíntese" em 6 dias. Hoje: cartões (8).", com um botão que abre a tarefa. Materiais com a mesma data aparecem juntos, até três. Os cartões do dia seguem a revisão espaçada: entram os que voltam hoje e os que nunca foram avaliados, e o botão abre só esses; se nenhum volta hoje, a linha diz que os cartões estão em dia. Quando a tarefa termina, a linha diz "feito hoje": todas as questões do quiz respondidas hoje, os cartões do dia avaliados ou as questões da véspera acertadas depois do último erro. A tela avisa que é um plano sugerido pelo app, sem IA, e que não é promessa de nota. Data que já passou, ou estragada, não tira o material da biblioteca: ele só fica sem plano.
 
 Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
 
@@ -239,7 +243,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos (com a data da prova, quando marcada), o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -318,7 +322,7 @@ a3-chatbot-cerebro/
 | `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
-| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
+| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, plano até a prova, backup |
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js` e `exemplos.js` |

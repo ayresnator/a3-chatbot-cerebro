@@ -759,6 +759,12 @@
         display: inline
     }
 
+    /* Aqui a data da prova e o "Salvar material" ficam em duas linhas (styles.css, .header-actions): o esqueleto da
+       geração guarda os 56 px da linha a mais, e o material não empurra as abas. */
+    .material-wait .result-header {
+        min-height: 14.375rem
+    }
+
     /* O botão do nível mostra só o nível ("Nível:" continua no nome dele): sobra lugar para um chip e meio da área. */
     .level-button {
         padding-left: var(--sp-2)

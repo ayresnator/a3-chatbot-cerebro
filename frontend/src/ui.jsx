@@ -2,9 +2,11 @@ import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } 
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
+import { addDays, planLine } from './lib.js';
 
 // Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, a linha do
-// backup, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
+// backup, o plano até a prova e a data dela, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce
+// com o texto.
 
 // Campo de várias linhas (field é o ref dele) que cresce com o texto entre o mínimo e o máximo do CSS e volta ao mínimo
 // quando esvazia: a caixa do Dúvidas e o editor do Estudar. Medir encolhe o campo por um instante: a rolagem da página
@@ -54,6 +56,71 @@ export function BackupNote({ status, onExport, variants }) {
         Fazer backup
       </button>
     </m.div>
+  );
+}
+
+// Plano até a prova (#86; lib.js, studyPlan): uma linha por material com a prova mais próxima e o botão que abre a
+// tarefa de hoje, na faixa "Seu progresso" do Estudar e no começo de "Seu próximo passo", no Desempenho. A tarefa feita
+// e os cartões em dia ficam sem botão. O nome do botão leva o material: com dois na lista, eles não se confundem.
+const TASK_BUTTONS = {
+  quiz: ['Fazer o quiz', 'quizzes'],
+  cartoes: ['Revisar os cartões', 'flashcards'],
+  erros: ['Refazer os erros', 'refazer'],
+  prova: ['Abrir o resumo', 'resumos'],
+};
+export function StudyPlan({ rows, onOpen }) {
+  return (
+    <div className="plan">
+      <ul role="list">
+        {rows.map(row => {
+          const [label, icon] = TASK_BUTTONS[row.task];
+          return (
+            <li key={row.material.title}>
+              <p>{planLine(row)}</p>
+              {(row.task === 'prova' || row.left.length > 0) && (
+                <button type="button" aria-label={label + ' de "' + row.material.title + '"'} onClick={() => onOpen(row)}>
+                  <Icon name={icon} />
+                  {label}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="hint">Plano sugerido pelo app, sem IA. Não é promessa de nota.</p>
+    </div>
+  );
+}
+
+// "Data da prova", no cabeçalho do material (#86). A data vale quando fica completa e dentro do prazo, de hoje a um
+// ano: digitar o ano passa por 0002 e 0202, que não valem e não são gravados. O que não vale fica só no campo, com a
+// nota. O campo vazio apaga a data; com só um pedaço dela em branco (badInput), nada muda. Na tela o rótulo é "Prova":
+// com ele, o campo e o "Salvar material" cabem numa linha em 390 px. O nome inteiro fica no campo.
+export function ExamDate({ value, today, onSave }) {
+  const [typed, setTyped] = useState(null);
+  const bad = typed !== null;
+  return (
+    <div className="exam-date">
+      <label className="inline-field">
+        Prova
+        <input
+          type="date"
+          aria-label="Data da prova"
+          min={today}
+          max={addDays(today, 365)}
+          value={bad ? typed : value}
+          aria-invalid={bad || undefined}
+          aria-describedby={bad ? 'prova-nota' : undefined}
+          onChange={e => {
+            const { value: day, validity } = e.target;
+            if (!validity.valid) return setTyped(day);
+            setTyped(null);
+            if (day !== value) onSave(day);
+          }}
+        />
+      </label>
+      {bad && <p className="hint" id="prova-nota">Escolha uma data entre hoje e daqui a um ano.</p>}
+    </div>
   );
 }
 

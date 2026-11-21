@@ -5,7 +5,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 ## Na véspera
 
 1. Rode o projeto do zero em um computador do grupo, seguindo o [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
-2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito), avalie os flashcards e salve os materiais.
+2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito), avalie os flashcards e salve os materiais. Num deles, marque a data da prova para alguns dias depois da apresentação, no campo "Prova" do cabeçalho do material.
 3. Na Biblioteca, clique em "Exportar". O arquivo `cerebro-backup-AAAA-MM-DD.json` é o plano B: leva a biblioteca, o desempenho, o caderno de erros e as caixas dos cartões para qualquer navegador.
 4. Copie o arquivo para o computador da apresentação e para um pen drive.
 5. Não rode a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`) no dia da apresentação nem na véspera à noite: ela usa a mesma cota da chave.
@@ -41,6 +41,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
 3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
 4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os de hoje", com as questões do caderno que voltam hoje, "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
+5. "Seu próximo passo" começa pelo plano até a prova do material com a data marcada na véspera: "Prova de ... em N dias. Hoje: ...", com o botão que abre a tarefa do dia. Diga a regra: cartões e quiz alternando, a véspera para refazer os erros desse material e o aviso de que é um plano do app, sem IA, que não promete nota.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 

@@ -1695,6 +1695,41 @@ main:focus {
     margin-bottom: 0
 }
 
+/* Plano até a prova (ui.jsx, StudyPlan), no Estudar e no Desempenho: uma linha por material, a frase à esquerda e o
+   botão da tarefa à direita, que desce para baixo dela quando não cabe. Os fios separam as linhas, como na lista de
+   áreas do Desempenho. */
+.plan {
+    margin: var(--sp-3) 0 var(--sp-4)
+}
+
+.plan ul {
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.plan li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-4);
+    padding: var(--sp-3) 0;
+    border-top: var(--hair) solid var(--line)
+}
+
+.plan li:last-child {
+    border-bottom: var(--hair) solid var(--line)
+}
+
+/* pretty: sem ele, o "(6)." da contagem ficava sozinho na última linha em 390 px. */
+.plan li p {
+    flex: 1 1 18rem;
+    min-width: 0;
+    font-size: var(--fs-2);
+    overflow-wrap: anywhere;
+    text-wrap: pretty
+}
+
 .stat {
     display: flex;
     flex-direction: column;
@@ -1770,6 +1805,35 @@ main:focus {
     margin-top: var(--sp-1);
     color: var(--ink-2);
     font-size: var(--fs-2)
+}
+
+/* "Data da prova" (ui.jsx, ExamDate) e "Salvar material" juntos, na ponta direita ou, sem lugar, embaixo do título. O
+   par não cresce como o bloco do título e, na tela estreita, quebra em duas linhas. O rótulo desce para cima do campo
+   quando os dois não cabem numa linha; a nota da data fora do prazo fica embaixo do campo. */
+.result-header > .header-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--sp-3)
+}
+
+.exam-date .inline-field {
+    flex-wrap: wrap
+}
+
+/* A data na tinta do texto, como as listas dos outros campos com rótulo ao lado. */
+.exam-date input {
+    color: var(--ink)
+}
+
+.exam-date .hint {
+    margin-bottom: 0
+}
+
+/* A data fora do prazo: a borda da caneta, com a nota embaixo dizendo o porquê. */
+.exam-date input[aria-invalid=true] {
+    border-color: var(--pen)
 }
 
 /* Abas de verdade (role="tab") num controle segmentado em pílula: a selecionada em ciano, com texto preto. */
@@ -3556,7 +3620,9 @@ main:focus {
     color: var(--ink-2)
 }
 
-.panel > h2 + p {
+/* O plano até a prova abre "Seu próximo passo" (Desempenho.jsx): a frase de baixo dele fica como logo depois do título. */
+.panel > h2 + p,
+.panel > .plan + p {
     margin: var(--sp-2) 0 var(--sp-4);
     color: var(--ink-2)
 }
@@ -3638,6 +3704,12 @@ main:focus {
 
 .library-item small {
     color: var(--ink-2)
+}
+
+/* "prova em 6 dias" (#86): na tinta do texto, para sair da linha da área e da data. */
+.library-item small strong {
+    color: var(--ink);
+    font-weight: 650
 }
 
 .library-item h2 {
