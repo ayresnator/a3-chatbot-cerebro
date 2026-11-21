@@ -2199,15 +2199,18 @@ function App() {
                               type="button"
                               variants={hero.chip}
                               disabled={waiting}
-                              onFocus={e => {
-                                // Na linha que rola de lado (mobile.css), o chip que recebe o foco pelo teclado fica
-                                // inteiro à vista; mais largo que a linha, fica o começo dele. O navegador sozinho não
-                                // rola um chip que já aparece em parte. Pelo ponteiro não: o chip andaria entre apertar e
-                                // soltar, e o clique se perderia.
-                                if (!byKeyboard()) return;
+                              onKeyUp={e => {
+                                // O Tab que chega ao chip, na linha que rola de lado (mobile.css), rola a linha até ele:
+                                // o navegador sozinho não rola um chip que já aparece em parte. Com folga, o chip fica
+                                // inteiro junto da borda (o scroll-padding deixa um pedaço do vizinho); sem folga, no meio
+                                // da linha; mais largo que ela, com o começo à vista. Só no Tab: o clique não move o chip
+                                // entre apertar e soltar, e a volta para a aba, que dá o foco de novo ao chip, não rola nada.
                                 const chip = e.currentTarget;
-                                const wide = chip.offsetWidth > chip.parentElement.clientWidth;
-                                chip.scrollIntoView({ block: 'nearest', inline: wide ? 'start' : 'nearest' });
+                                const row = chip.parentElement;
+                                if (e.key !== 'Tab' || row.scrollWidth <= row.clientWidth) return;
+                                const room = row.clientWidth - chip.offsetWidth;
+                                const pad = 2 * (parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0);
+                                chip.scrollIntoView({ block: 'nearest', inline: room < 0 ? 'start' : room < pad ? 'center' : 'nearest' });
                               }}
                               onClick={() => {
                                 // O chip some durante a espera, e o foco iria para o body: vai para a caixa. No toque vai
