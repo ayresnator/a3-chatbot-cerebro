@@ -610,8 +610,14 @@
         padding-left: calc(var(--letter) + var(--sp-3))
     }
 
-    .feedback {
+    .feedback,
+    .pretest {
         padding: var(--sp-4)
+    }
+
+    /* No celular a frase do bloco "Tente responder antes de ler" tem 4 linhas: o esqueleto também (styles.css). */
+    .pretest .sk-phone {
+        display: inline-block
     }
 
     .next-row {

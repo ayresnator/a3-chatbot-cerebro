@@ -80,7 +80,12 @@ O estudante pode:
 - Salvar o material na biblioteca;
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
-- Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto".
+- Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto";
+- Tentar responder antes de ler e esconder o texto dos tópicos para testar a memória.
+
+Reler um resumo ensina pouco; tentar lembrar fixa mais, mesmo quando a resposta sai errada. Por isso o resumo abre com o bloco "Tente responder antes de ler": 2 perguntas dos flashcards do material, com um campo para cada. Ninguém corrige na hora. Depois de "Ler o resumo", o fim da página mostra "Confira o que você pensou", com cada pergunta, o que o estudante escreveu e a resposta do material. "Pular" fecha o bloco, que fica no botão "Tentar antes de ler", na faixa de ferramentas. Quem pula duas vezes seguidas deixa de ver o bloco aberto nos próximos materiais: ele aparece só nesse botão. "Ler o resumo" com os dois campos em branco também conta como pulo. A conta dos pulos fica no navegador e zera quando o estudante escreve uma resposta.
+
+Na mesma faixa, a caixa "Esconder o texto" deixa cada tópico só com o título e o botão "Mostrar". O texto, o trecho "No seu texto" e o botão "Ver no texto" aparecem juntos ao mostrar, e o estudante marca "Lembrei" ou "Não lembrei"; apertar de novo a marca escolhida a tira. No fim da lista, "Você lembrou 4 de 6 tópicos" conta os tópicos já marcados e lista os que ficaram para rever. Desligar e ligar a caixa começa outra rodada. Nada disso chama a IA nem entra no desempenho ou no caderno de erros, e só a conta dos pulos fica gravada. Também funciona na demonstração.
 
 Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. O texto do "Usar um exemplo" não é do estudante: trecho que saiu do texto que a IA escreveu aparece como "No exemplo escrito pela IA: ...", e trecho de um exemplo pronto, como "No texto de exemplo: ...". O tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, de um exemplo pronto, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta; o trecho de cada tópico dele é a própria frase do texto.
 
@@ -227,7 +232,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler" e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
