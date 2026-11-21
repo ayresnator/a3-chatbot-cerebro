@@ -12,20 +12,22 @@ Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo
 
 ## 🤖 Inteligência artificial utilizada
 
-O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em quatro situações:
+O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em seis situações:
 
 | Uso | O que a IA faz | Rota do backend |
 |---|---|---|
 | Gerar material | Monta resumo, flashcards e quiz a partir do texto ou do tema | `POST /api/generate` |
+| Questões novas | Escreve, para o botão "Questões novas deste material", de 4 a 6 questões sobre o mesmo material, sem repetir as que o quiz dele já tem | `POST /api/quiz` |
 | Tirar dúvidas | Responde no chat e explica de outro jeito um tópico ou uma questão | `POST /api/chat` |
 | Revisar resposta curta | Julga o sentido de uma resposta que a comparação de texto marcou como errada | `POST /api/grade` |
+| Comentar uma explicação | Compara com o tópico do resumo a explicação que o estudante escreveu com as próprias palavras e aponta o que faltou | `POST /api/explain` |
 | Escrever um exemplo | Escreve, para o botão "Usar um exemplo", um texto curto sobre um tema sorteado da área escolhida | `POST /api/example` |
 
-O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
+O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. No comentário de uma explicação, só marca como faltando o trecho que existe no texto do tópico. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho, montar o caderno de erros e marcar o dia em que cada cartão e cada questão do caderno voltam. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
+**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão, as explicações enviadas para comentário e, nas questões novas, o texto do material e as perguntas do quiz dele vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar, e o "Explicar com minhas palavras" avisa "O que você escreve vai para o Google Gemini." antes do botão do comentário. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
 **Segurança da API:**
 
@@ -81,14 +83,18 @@ O estudante pode:
 - Escolher quantos tópicos aparecem (por padrão, todos), com a contagem "Mostrando N de M tópicos" e o botão "Ver os outros N tópicos" quando algum fica escondido;
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
+- Marcar a data da prova, no campo "Prova" do cabeçalho do material (veja a seção 8);
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
 - Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto";
-- Tentar responder antes de ler e esconder o texto dos tópicos para testar a memória.
+- Tentar responder antes de ler e esconder o texto dos tópicos para testar a memória;
+- Explicar um tópico com as próprias palavras e comparar com o texto dele, no botão "Explicar com minhas palavras".
 
 Reler um resumo ensina pouco; tentar lembrar fixa mais, mesmo quando a resposta sai errada. Por isso o resumo abre com o bloco "Tente responder antes de ler": 2 perguntas dos flashcards do material, com um campo para cada. Ninguém corrige na hora. Depois de "Ler o resumo", o fim da página mostra "Confira o que você pensou", com cada pergunta, o que o estudante escreveu e a resposta do material. "Pular" fecha o bloco, que fica no botão "Tentar antes de ler", na faixa de ferramentas. Quem pula duas vezes seguidas deixa de ver o bloco aberto nos próximos materiais: ele aparece só nesse botão. "Ler o resumo" com os dois campos em branco também conta como pulo. A conta dos pulos fica no navegador e zera quando o estudante escreve uma resposta.
 
 Na mesma faixa, a caixa "Esconder o texto" deixa cada tópico só com o título e o botão "Mostrar". O texto, o trecho "No seu texto" e o botão "Ver no texto" aparecem juntos ao mostrar, e o estudante marca "Lembrei" ou "Não lembrei"; apertar de novo a marca escolhida a tira. No fim da lista, "Você lembrou 4 de 6 tópicos" conta os tópicos já marcados e lista os que ficaram para rever. Desligar e ligar a caixa começa outra rodada. Nada disso chama a IA nem entra no desempenho ou no caderno de erros, e só a conta dos pulos fica gravada. Também funciona na demonstração.
+
+Explicar um tópico com as próprias palavras, sem olhar o texto, mostra o que o estudante entendeu e o que ainda falta. Em cada tópico, "Explicar com minhas palavras" tira o texto da tela e abre um campo para ele escrever de 2 a 5 frases, com até 1.000 caracteres; o mesmo botão fecha o campo e devolve o texto. Com "Esconder o texto" ligado, o botão aparece junto com o texto, no "Mostrar", como os outros botões do tópico. "Comparar" mostra o que ele escreveu ao lado do texto do tópico e do trecho "No seu texto", sem chamar a IA. Com a IA ativa, "Pedir comentário da IA" (1 chamada) devolve um veredito (completa, parcial ou incorreta), até 3 trechos do tópico que faltaram, marcados no texto dele e listados embaixo, e o equívoco em uma frase, quando há. O backend só deixa passar o trecho que existe no texto do tópico. Antes do botão, a tela avisa: "O que você escreve vai para o Google Gemini.", e o comentário termina com "Comentário da IA: pode errar.". Nada disso é gravado nem entra no desempenho ou no caderno de erros: fechar o campo, ou abrir o de outro tópico, apaga o que foi escrito. Na demonstração só o "Comparar" aparece.
 
 Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. O texto do "Usar um exemplo" não é do estudante: trecho que saiu do texto que a IA escreveu aparece como "No exemplo escrito pela IA: ...", e trecho de um exemplo pronto, como "No texto de exemplo: ...". O tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, de um exemplo pronto, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta; o trecho de cada tópico dele é a própria frase do texto.
 
@@ -133,6 +139,8 @@ As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acen
 Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido; se a resposta foi marcada como chute, ela passa a acerto, e o caderno de erros fica como estava antes da resposta, como no acerto no chute. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
+
+"Refazer o quiz todo" repete as mesmas questões. Para treinar o conceito, e não a lembrança da questão, o fim do quiz oferece também "Questões novas deste material" (1 chamada de IA): a IA escreve de 4 a 6 questões sobre o mesmo material, sem repetir as que ele já tem, e elas passam pela mesma conferência do material gerado. As novas entram no material, e na Biblioteca se ele está salvo, e o quiz recomeça só com elas; "Refazer o quiz todo" traz todas. Elas saem do texto usado para gerar o material. No material salvo antes de o texto ser guardado, saem do resumo, e a tela avisa "Questões feitas a partir do resumo". Um material guarda até 30 questões: no teto, o botão fica desligado e diz isso. O botão não aparece na demonstração, no modo estudo do celular nem no quiz do caderno de erros e do simulado.
 
 ### 5. Dúvidas
 
@@ -185,7 +193,7 @@ O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer 
 
 O acerto no quiz junta a resposta dada logo depois de ler o resumo e a resposta à mesma questão dias depois, e só a segunda mostra o que ficou na memória. Por isso a nota do gráfico mostra os dois números dos últimos 30 dias lado a lado: "na hora" é a primeira vez que a questão aparece, e "que ficou" é a mesma questão em outro dia. Embaixo, uma linha separa as questões revistas que o estudante tinha acertado das que tinha errado ("Das que você tinha acertado, ainda acerta 85% (11 de 13). Das que tinha errado, agora acerta 50% (1 de 2)."). Para saber o resultado do outro dia, o app guarda no navegador um índice com uma linha por questão: o último dia em que ela foi respondida e se a primeira resposta desse dia foi certa. O índice vai no Exportar e volta no Importar; o backup antigo, sem ele, continua valendo, e o índice sai das respostas do arquivo. As respostas gravadas antes dessa mudança ficam fora do número novo.
 
-"Seu próximo passo" tem três casos:
+Quando um material da biblioteca tem a data da prova, "Seu próximo passo" começa pela linha do plano até a prova, a mesma do Estudar (veja a seção 8). Depois dela, "Seu próximo passo" tem três casos:
 
 - Sem resposta no quiz: um botão para fazer o quiz do material aberto ou, sem material aberto, para gerar um;
 - Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões para hoje, fica o "Refazer os de hoje";
@@ -202,10 +210,13 @@ O estudante pode:
 - Pesquisar por palavras-chave;
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
+- Ver quando é a prova de cada material ("prova em 6 dias"), de hoje em diante;
 - Excluir materiais, com a opção de desfazer;
 - Fazer um simulado com questões de vários materiais, com a correção só no fim;
 - Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
+
+No cabeçalho do material, o campo "Prova" guarda a data da prova; o leitor de tela o anuncia como "Data da prova". A data fica no próprio material, na biblioteca do navegador e no backup. Marcá-la num material que ainda não está na biblioteca o salva lá, com aviso, e apagar o campo tira a data. Vale uma data de hoje até daqui a um ano: fora disso, ao sair do campo, ele diz o prazo, e nada muda. Com a data, o app sugere o que estudar em cada dia, sem IA: faltando 2 dias ou mais, cartões e quiz alternando (cartões a 2, 4 e 6 dias da prova; quiz a 3, 5 e 7); na véspera, refazer as questões que o material tinha no caderno de erros no começo do dia (ou na hora em que a data foi marcada, se foi nesse dia) ou, sem nenhuma lá, o quiz (a questão errada no quiz da véspera não troca a tarefa); no dia, a linha diz só "Prova de "Fotossíntese" hoje.", com o botão que abre o resumo; depois da data, o plano some. A prova mais próxima aparece em "Seu progresso", no Estudar, e no começo de "Seu próximo passo", no Desempenho, como "Prova de "Fotossíntese" em 6 dias. Hoje: cartões (8).", com um botão que abre a tarefa. Materiais com a mesma data aparecem juntos, até três. Os cartões do dia seguem a revisão espaçada: entram os que voltam hoje e os que nunca foram avaliados, e o botão abre só esses; se nenhum volta hoje, a linha diz que os cartões estão em dia. Quando a tarefa termina, a linha diz "feito hoje": todas as questões do quiz respondidas hoje, os cartões do dia avaliados ou as questões da véspera acertadas depois do último erro (o acerto marcado como chute não conta, como no caderno). A tela avisa que é um plano sugerido pelo app, sem IA, e que não é promessa de nota. Data que já passou, ou estragada, não tira o material da biblioteca: ele só fica sem plano.
 
 Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
 
@@ -248,7 +259,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o índice das questões respondidas (o acerto que ficou), o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards, a escolha da caixa "Marcar certeza" do quiz e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos (com a data da prova, quando marcada), o perfil local, os registros de desempenho, o índice das questões respondidas (o acerto que ficou), o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards, a escolha da caixa "Marcar certeza" do quiz e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -331,7 +342,7 @@ a3-chatbot-cerebro/
 | `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
-| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
+| `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, plano até a prova, backup |
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
@@ -429,7 +440,7 @@ npm run build
 
 O GitHub Actions roda os mesmos comandos a cada envio ao repositório.
 
-A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 24 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
+A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 29 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
 
 O número de testes, o resultado da última execução e o que ainda não rodou na API real estão em [docs/VALIDACAO.md](docs/VALIDACAO.md).
 
@@ -445,7 +456,8 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
-- A revisão de resposta curta feita pela IA também pode errar.
+- A revisão de resposta curta feita pela IA também pode errar, e o comentário da explicação com as próprias palavras também. O comentário (`/api/explain`) só tem teste simulado: a instrução e o esquema dele ainda não rodaram na API real.
+- As questões novas podem repetir com outras palavras uma pergunta que o material já tem, e as feitas a partir do resumo podem só repetir o resumo.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
 - No modo estudo do celular, os dados ficam no celular: o caminho de volta para o computador é o Exportar. No iPhone, com o app fora da tela inicial, o Safari apaga os dados depois de 7 dias sem uso.
 - O Cérebro com IA é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md). O modo estudo, sem IA, pode ser publicado à parte (veja "Estudar no celular").

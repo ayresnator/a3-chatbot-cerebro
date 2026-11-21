@@ -10,12 +10,14 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
-  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, textOrigin,
+  gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
+  quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
+  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, markPieces,
+  textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
-  examPool, mockExam, examScore, examLine, virtualNote,
+  examPool, mockExam, examScore, examLine, provaOf, daysUntil, inDays, planTask, studyPlan, planLine, virtualNote,
   CONF, noteAnswer, calibration, sureText, guessLine, restoreMistake,
   validSeen, seenStep, seenIndex, readSeen, retention, keptStat, keptLine, keptSplit,
 } from '../src/lib.js';
@@ -1704,6 +1706,49 @@ test('findSource: os 64 trechos da rodada real são achados no texto de cada cas
   }
 });
 
+const TOPIC = 'A clorofila absorve a luz do Sol. A água é decomposta e libera oxigênio. O açúcar sai do ciclo de Calvin.';
+
+test('markPieces: marca cada trecho que faltou no lugar dele no texto do tópico, na ordem do texto', () => {
+  // Os trechos vêm na ordem da IA, sem acento e com outras maiúsculas: a marca é a parte do texto original.
+  assert.deepEqual(markPieces(TOPIC, ['o acucar sai do ciclo de calvin', 'A clorofila absorve a luz']), [
+    { text: 'A clorofila absorve a luz', mark: true },
+    { text: ' do Sol. A água é decomposta e libera oxigênio. ', mark: false },
+    { text: 'O açúcar sai do ciclo de Calvin', mark: true },
+    { text: '.', mark: false },
+  ]);
+  // As partes juntas refazem o texto inteiro.
+  const parts = markPieces(TOPIC, ['A água é decomposta']);
+  assert.equal(parts.map(p => p.text).join(''), TOPIC);
+  assert.deepEqual(parts.filter(p => p.mark).map(p => p.text), ['A água é decomposta']);
+});
+
+test('markPieces: o trecho com as pontas que o backend tirou (aspas e ponto) é achado, como no findSource', () => {
+  assert.deepEqual(markPieces(TOPIC, ['"A água é decomposta e libera oxigênio."']).filter(p => p.mark),
+    [{ text: 'A água é decomposta e libera oxigênio', mark: true }]);
+});
+
+test('markPieces: trecho que não está no texto fica de fora, e lista vazia deixa o texto sem marca', () => {
+  assert.deepEqual(markPieces(TOPIC, []), [{ text: TOPIC, mark: false }]);
+  assert.deepEqual(markPieces(TOPIC, ['A clorofila reflete a luz verde', '', '   ']), [{ text: TOPIC, mark: false }]);
+  assert.deepEqual(markPieces(TOPIC, ['A clorofila reflete a luz verde', 'libera oxigênio']).filter(p => p.mark),
+    [{ text: 'libera oxigênio', mark: true }]);
+  assert.deepEqual(markPieces('', []), []);
+});
+
+test('markPieces: trechos que se cruzam, encostam ou se repetem viram uma marca só', () => {
+  const marks = pieces => {
+    const parts = markPieces(TOPIC, pieces);
+    // O texto continua inteiro, uma vez só.
+    assert.equal(parts.map(p => p.text).join(''), TOPIC, JSON.stringify(pieces));
+    return parts.filter(p => p.mark).map(p => p.text);
+  };
+  assert.deepEqual(marks(['A clorofila absorve a luz', 'absorve a luz do Sol']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['absorve a luz do Sol', 'A clorofila absorve a luz']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['A clorofila absorve a luz do Sol', 'absorve a luz']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['A clorofila absorve', ' a luz do Sol']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['libera oxigênio', 'LIBERA OXIGENIO']), ['libera oxigênio']);
+});
+
 test('originNote: o aviso do material diz de onde ele veio', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
@@ -2680,6 +2725,208 @@ test('byMaterial: os erros agrupados por material, na ordem em que cada material
   assert.deepEqual(byMaterial([]), []);
 });
 
+// Plano até a prova (#86), com "hoje" em 16/11/2026 às 22h (today): o material como a biblioteca guarda, com a data.
+const PROVA = {
+  ...GOOD, id: 3, date: at(10), title: 'Inflação', area: 'Economia', flashcards: INFLACAO.flashcards,
+  quiz: [Q_SHORT, Q_MULTIPLE], prova: '2026-11-22',
+};
+const exam = (prova, extra) => ({ ...PROVA, prova, ...extra });
+// O plano com as listas do App (respostas, caderno e caixas dos cartões), vazias se o teste não passar.
+const plan = (saved, lists = {}, now = today()) =>
+  studyPlan(frozen(saved), { events: [], mistakes: [], boxes: [], ...lists }, now);
+// Resposta do quiz e avaliação de cartão de hoje (16/11, 12h) como o App grava: o enunciado sem acentos em q.
+const answered = (q, ok = true, extra) => quizAt(16, 0, ok, { q: fold(q.question), ...extra });
+const rated = (question, ok = true, extra) => cardAt(16, ok, { q: fold(question), ...extra });
+// Roda fn com o relógio do Node num fuso: ele lê o process.env.TZ a cada data. No fim volta o fuso de antes.
+function inZone(zone, fn) {
+  const before = process.env.TZ;
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  process.env.TZ = zone;
+  try {
+    fn();
+  } finally {
+    process.env.TZ = before ?? local;
+  }
+}
+
+test('daysUntil: os dias até a prova pelo calendário do aluno; às 22h, amanhã ainda está a 1 dia', () => {
+  assert.equal(daysUntil('2026-11-17', today()), 1);
+  assert.equal(daysUntil('2026-11-16', today()), 0);
+  assert.equal(daysUntil('2026-11-22', today()), 6);
+  assert.equal(daysUntil('2026-11-17', new Date(2026, 10, 17, 0, 1)), 0, 'à 0h01, a prova do dia 17 é hoje');
+  assert.equal(daysUntil('2026-12-01', new Date(2026, 10, 30, 23, 59)), 1, 'a virada do mês');
+  assert.equal(daysUntil('2027-01-01', new Date(2026, 11, 31, 22)), 1, 'a virada do ano');
+});
+
+test('daysUntil: em Brasília, depois das 21h (o dia seguinte em UTC), a conta segue o dia do aluno', () => {
+  inZone('America/Sao_Paulo', () => {
+    const night = new Date('2026-11-17T00:30:00Z');
+    assert.deepEqual([night.getDate(), night.getHours()], [16, 21], '16/11 às 21h30 em Brasília');
+    assert.equal(daysUntil('2026-11-17', night), 1);
+    assert.equal(daysUntil('2026-11-16', night), 0);
+    assert.equal(daysUntil('2026-11-15', night), null);
+    assert.equal(plan([exam('2026-11-17')], {}, night)[0].days, 1);
+  });
+  // A troca do horário de verão no meio (Nova York, 1/11/2026): 2 dias do calendário, com 49 horas.
+  inZone('America/New_York', () => assert.equal(daysUntil('2026-11-02', new Date(2026, 9, 31, 23, 30)), 2));
+});
+
+test('daysUntil: a data que já passou e a estragada dão null; provaOf vale "" para elas e para a ausente', () => {
+  // 31/11 não existe: o Date.parse o leria como 1/12, uma data futura.
+  for (const day of ['2026-11-15', '2026-11-31', '2026-02-30', '2026-11-7', '17/11/2026', '2026-11-17T00:00', '', null, undefined, 20261117, {}]) {
+    assert.equal(daysUntil(day, today()), null, JSON.stringify(day));
+  }
+  assert.equal(provaOf(PROVA), '2026-11-22');
+  assert.equal(provaOf(exam('2026-11-15')), '2026-11-15', 'a que já passou continua sendo a data do material');
+  for (const prova of ['2026-02-30', '22/11', 5, null, undefined]) assert.equal(provaOf(exam(prova)), '', String(prova));
+  assert.equal(provaOf(null), '');
+});
+
+test('inDays e planTask: quando é a prova, e cartões e quiz alternando até a véspera', () => {
+  assert.deepEqual([0, 1, 2, 6].map(inDays), ['hoje', 'amanhã', 'em 2 dias', 'em 6 dias']);
+  assert.deepEqual([7, 6, 5, 4, 3, 2].map(d => planTask(d, true)), ['quiz', 'cartoes', 'quiz', 'cartoes', 'quiz', 'cartoes']);
+  assert.deepEqual([planTask(1, true), planTask(1, false)], ['erros', 'quiz'], 'na véspera, os erros ou o quiz');
+  assert.deepEqual([planTask(0, true), planTask(0, false)], ['prova', 'prova']);
+});
+
+test('studyPlan: só a prova mais próxima, de hoje em diante; sem data, com ela estragada ou passada, nada', () => {
+  assert.deepEqual(plan([]), []);
+  assert.deepEqual(plan([{ ...GOOD }, exam(undefined)]), []);
+  assert.deepEqual(plan([exam('2026-11-15'), exam('2026-02-30'), exam('amanhã'), exam(20261120)]), []);
+  const later = exam('2026-11-22', { id: 4, title: 'Juros' });
+  assert.deepEqual(plan([later, exam('2026-11-19'), { ...GOOD }]).map(r => [r.material.title, r.days]), [['Inflação', 3]]);
+});
+
+test('studyPlan: os materiais da mesma data aparecem juntos, até 3, os primeiros da lista; o mesmo título uma vez', () => {
+  const titled = (title, id) => exam('2026-11-20', { title, id });
+  const rows = plan([titled('A', 1), titled('B', 2), titled('A', 3), exam('2026-11-21', { id: 9 }), titled('C', 4), titled('D', 5)]);
+  assert.deepEqual(rows.map(r => [r.material.id, r.days]), [[1, 4], [2, 4], [4, 4]]);
+});
+
+test('studyPlan: cartões e quiz alternando até a véspera; no dia da prova, só a prova; depois, nada', () => {
+  const task = prova => plan([exam(prova)])[0].task;
+  assert.deepEqual(['2026-11-22', '2026-11-21', '2026-11-20', '2026-11-19', '2026-11-18'].map(task),
+    ['cartoes', 'quiz', 'cartoes', 'quiz', 'cartoes']);
+  assert.deepEqual(plan([exam('2026-11-16')]), [{ material: exam('2026-11-16'), days: 0, task: 'prova', total: 0, left: [] }]);
+  assert.deepEqual(plan([exam('2026-11-16')], {}, new Date(2026, 10, 17, 0, 1)), [], 'passou a meia-noite');
+});
+
+test('studyPlan: na véspera, as questões do material no caderno; sem nenhuma, o quiz', () => {
+  const eve = exam('2026-11-17');
+  const own = mistake(Q_SHORT, 'Inflação', 14);
+  const other = mistake(Q_MULTIPLE, 'Juros', 14);
+  const [row] = plan([eve], { mistakes: [other, own] });
+  assert.deepEqual([row.days, row.task, row.total, row.left], [1, 'erros', 1, [own]]);
+  assert.deepEqual(plan([eve], { mistakes: [other] }).map(r => [r.task, r.total]), [['quiz', 2]], 'o erro de outro material não conta');
+});
+
+test('studyPlan: o quiz do dia fica feito quando todas as questões do material têm resposta hoje, certa ou errada', () => {
+  const quizDay = exam('2026-11-19');
+  const left = events => plan([quizDay], { events }).map(r => [r.task, r.total, r.left]);
+  assert.deepEqual(left([]), [['quiz', 2, [Q_SHORT, Q_MULTIPLE]]]);
+  assert.deepEqual(left([answered(Q_SHORT, false)]), [['quiz', 2, [Q_MULTIPLE]]]);
+  assert.deepEqual(left([answered(Q_SHORT, false), answered(Q_MULTIPLE)]), [['quiz', 2, []]]);
+  // A resposta de ontem e a de outro material não contam.
+  assert.deepEqual(left([answered(Q_SHORT, true, { date: at(15) }), answered(Q_MULTIPLE, true, { title: 'Juros' })])[0][2],
+    [Q_SHORT, Q_MULTIPLE]);
+  // A mesma questão duas vezes no material (com outras maiúsculas) conta uma vez, e uma resposta a tira do que falta.
+  const twice = exam('2026-11-19', { quiz: [Q_SHORT, { ...Q_SHORT, question: Q_SHORT.question.toUpperCase() }, Q_MULTIPLE] });
+  assert.deepEqual(plan([twice], { events: [answered(Q_SHORT)] }).map(r => [r.total, r.left]), [[2, [Q_MULTIPLE]]]);
+});
+
+test('studyPlan: os cartões do dia são os que a revisão espaçada pede hoje e os avaliados hoje', () => {
+  const cardsDay = exam('2026-11-18');
+  const [q1, q2] = INFLACAO.flashcards.map(c => c.question);
+  const row = lists => plan([cardsDay], lists)[0];
+  // Sem caixa, o cartão nunca foi avaliado: entram todos, com o material de cada um, como na revisão do dia.
+  assert.deepEqual(row({}), {
+    material: cardsDay, days: 2, task: 'cartoes', total: 2, whole: true,
+    left: INFLACAO.flashcards.map(c => ({ ...c, title: 'Inflação', area: 'Economia' })),
+  });
+  // Um volta hoje (ou já devia ter voltado) e o outro só depois.
+  const some = row({ boxes: [boxOf('Inflação', q1, 1, '2026-11-15'), boxOf('Inflação', q2, 3, '2026-11-20')] });
+  assert.deepEqual([some.total, some.left.map(c => c.question), some.whole], [1, [q1], false]);
+  // Avaliar leva o cartão para outro dia: ele sai do que falta e continua na conta do dia, com "Acertei" ou "Errei".
+  const boxes = rate(rate([], true, q1), false, q2);
+  const done = row({ boxes, events: [rated(q1), rated(q2, false)] });
+  assert.deepEqual([done.total, done.left], [2, []]);
+  // A avaliação gravada sem a caixa nova (o navegador recusou a gravação das caixas) também conta.
+  assert.deepEqual(row({ events: [rated(q1)] }).left.map(c => c.question), [q2]);
+  // Nenhum pedido hoje e nenhum avaliado: os cartões estão em dia.
+  const ahead = row({ boxes: [boxOf('Inflação', q1, 2, '2026-11-17'), boxOf('Inflação', q2, 3, '2026-11-20')] });
+  assert.deepEqual([ahead.total, ahead.left], [0, []]);
+});
+
+test('studyPlan: na véspera, a questão do caderno fica feita quando o aluno a acerta hoje, depois do último erro', () => {
+  const eve = exam('2026-11-17');
+  // Ela estava no caderno (caderno na primeira resposta de hoje) e foi errada de novo às 9h.
+  const today9h = mistake(Q_SHORT, 'Inflação', 16, 9);
+  const again = answered(Q_SHORT, false, { date: at(16, 9), caderno: true });
+  const left = (events, own = today9h) => plan([eve], { mistakes: [own], events })[0].left.length;
+  assert.equal(left([again]), 1, 'a resposta errada de hoje');
+  assert.equal(left([again, answered(Q_SHORT, false, { date: at(16, 10), caderno: true })]), 1, 'errar de novo não faz a tarefa');
+  assert.equal(left([answered(Q_SHORT, true, { date: at(16, 8), caderno: true }), again]), 1, 'o acerto de antes do último erro');
+  assert.equal(left([again, answered(Q_SHORT, true, { date: at(16, 10), title: 'Juros' })]), 1, 'o acerto em outro material');
+  assert.equal(left([again, answered(Q_SHORT, true, { date: at(16, 10), caderno: true })]), 0);
+  assert.equal(left([answered(Q_SHORT)], mistake(Q_SHORT, 'Inflação', 14)), 0, 'o erro de outro dia, acertado hoje');
+  // O acerto no chute (#80) não tira a questão do caderno nem faz a tarefa; com "Acho que sei", faz.
+  const guess = answered(Q_SHORT, true, { date: at(16, 10), caderno: true, conf: 'chute' });
+  assert.equal(left([again, guess]), 1, 'o acerto no chute');
+  assert.equal(left([again, guess, answered(Q_SHORT, true, { date: at(16, 11), caderno: true, conf: 'acho' })]), 0);
+});
+
+test('studyPlan: na véspera, a tarefa e a conta são as do caderno do começo do dia (ou da marcação) e não trocam', () => {
+  const eve = exam('2026-11-17');
+  const line = (mistakes, events) => planLine(plan([eve], { mistakes, events })[0]);
+  // A questão no último degrau, que volta hoje: acertada, ela sai do caderno, e a tarefa fica feita.
+  const last = { ...mistake(Q_SHORT, 'Inflação', 1), step: 2, due: '2026-11-16' };
+  const hit = answered(Q_SHORT, true, { caderno: true });
+  assert.deepEqual(clearMistake([last], last.key, today()), []);
+  assert.equal(line([last], []), 'Prova de "Inflação" amanhã. Hoje: refazer os erros (1).');
+  assert.equal(line([], [hit]), 'Prova de "Inflação" amanhã. Refazer os erros (1): feito hoje.');
+  const before = mistake(Q_MULTIPLE, 'Inflação', 15);
+  assert.equal(line([before, last], []), 'Prova de "Inflação" amanhã. Hoje: refazer os erros (2).');
+  assert.deepEqual(plan([eve], { mistakes: [before], events: [hit] }).map(r => [r.total, r.left]), [[2, [before]]]);
+  // Sem erro no começo do dia, o quiz. A questão errada nele entra no caderno (a primeira resposta de hoje veio sem
+  // caderno) e não troca a tarefa, nem quando o aluno a refaz.
+  const added = mistake(Q_SHORT, 'Inflação', 16);
+  const quiz = [answered(Q_SHORT, false), answered(Q_MULTIPLE), answered(Q_SHORT, true, { date: at(16, 13), caderno: true })];
+  assert.equal(line([added], quiz.slice(0, 1)), 'Prova de "Inflação" amanhã. Hoje: quiz (2).');
+  assert.equal(line([added], quiz), 'Prova de "Inflação" amanhã. Quiz (2): feito hoje.');
+  assert.equal(line([added], [answered(Q_SHORT, false, { caderno: 'sim' })]), 'Prova de "Inflação" amanhã. Hoje: quiz (2).',
+    'caderno só vale true');
+  // Com a data marcada hoje, a véspera conta de quando ela foi marcada: o erro de antes entra, o de depois não.
+  const marked = exam('2026-11-17', { provaMarcada: at(16, 13) });
+  const rows = (mistakes, events) => plan([marked], { mistakes, events }).map(r => [r.task, r.total, r.left.length]);
+  assert.deepEqual(rows([added], [answered(Q_SHORT, false)]), [['erros', 1, 1]], 'errou às 12h e marcou às 13h');
+  const later = { ...added, date: at(16, 14) };
+  assert.deepEqual(rows([later], [answered(Q_SHORT, false, { date: at(16, 14) })]), [['quiz', 2, 1]], 'errou às 14h');
+  const again = [answered(Q_SHORT, false), answered(Q_SHORT, false, { date: at(16, 14), caderno: true })];
+  assert.deepEqual(rows([later], again), [['erros', 1, 1]], 'errou às 12h e de novo às 14h');
+  assert.deepEqual(rows([], [hit]), [['quiz', 2, 1]], 'saiu do caderno às 12h, antes da marcação');
+  const bad = plan([exam('2026-11-17', { provaMarcada: 'ontem' })], { mistakes: [added], events: [answered(Q_SHORT, false)] });
+  assert.equal(bad[0].task, 'quiz', 'provaMarcada estragada vale o começo do dia');
+});
+
+test('planLine: a prova, quando é e a tarefa de hoje; a feita diz "feito hoje"; os cartões em dia', () => {
+  const line = (days, task, total, left = [{}]) => planLine({ material: { title: 'Fotossíntese' }, days, task, total, left });
+  assert.equal(line(6, 'cartoes', 8), 'Prova de "Fotossíntese" em 6 dias. Hoje: cartões (8).');
+  assert.equal(line(3, 'quiz', 5), 'Prova de "Fotossíntese" em 3 dias. Hoje: quiz (5).');
+  assert.equal(line(1, 'erros', 2), 'Prova de "Fotossíntese" amanhã. Hoje: refazer os erros (2).');
+  assert.equal(line(0, 'prova', 0, []), 'Prova de "Fotossíntese" hoje.');
+  assert.equal(line(2, 'cartoes', 8, []), 'Prova de "Fotossíntese" em 2 dias. Cartões (8): feito hoje.');
+  assert.equal(line(1, 'quiz', 5, []), 'Prova de "Fotossíntese" amanhã. Quiz (5): feito hoje.');
+  assert.equal(line(1, 'erros', 2, []), 'Prova de "Fotossíntese" amanhã. Refazer os erros (2): feito hoje.');
+  assert.equal(line(4, 'cartoes', 0, []), 'Prova de "Fotossíntese" em 4 dias. Cartões em dia: nenhum volta hoje.');
+});
+
+test('plano: fazer a tarefa do dia muda a linha para "feito hoje"', () => {
+  const quizDay = [exam('2026-11-19')];
+  assert.equal(planLine(plan(quizDay)[0]), 'Prova de "Inflação" em 3 dias. Hoje: quiz (2).');
+  const events = [answered(Q_SHORT), answered(Q_MULTIPLE, false)];
+  assert.equal(planLine(plan(quizDay, { events })[0]), 'Prova de "Inflação" em 3 dias. Quiz (2): feito hoje.');
+});
+
 test('whyQuestion: quem errou conta o que respondeu; a opção marcada vai em texto', () => {
   assert.equal(
     whyQuestion(Q_MULTIPLE, 0, false),
@@ -2732,6 +2979,120 @@ test('gradeRequest: corta os textos nos limites do backend (500, 200 e 500) sem 
   assert.equal(sent.expected, 'g'.repeat(200));
   assert.equal(sent.answer, 'r'.repeat(499) + '😀');
   assert.equal([...sent.answer].length, 500, 'o backend conta caracteres, não unidades UTF-16');
+});
+
+test('explainRequest: título e texto do tópico, a explicação sem os espaços das pontas, área e nível', () => {
+  const topic = { concept: 'Condensação', text: 'O vapor se condensa em gotículas e forma as nuvens.', source: 'trecho' };
+  assert.deepEqual(explainRequest(topic, '  É o vapor que esfria.\n', 'Escolar', 'Básico'), {
+    concept: 'Condensação',
+    content: 'O vapor se condensa em gotículas e forma as nuvens.',
+    answer: 'É o vapor que esfria.',
+    area: 'Escolar',
+    level: 'Básico',
+  });
+});
+
+test('explainRequest: corta nos limites do backend (300, 3.000 e 1.000) por caractere inteiro, sem deixar meio emoji', () => {
+  const topic = { concept: 'c'.repeat(299) + '🌧️', text: 't'.repeat(2999) + '😀😀' };
+  const sent = explainRequest(topic, 'e'.repeat(999) + '😀😀', 'Escolar', 'Avançado');
+  assert.equal(sent.concept, 'c'.repeat(299) + '🌧');
+  assert.equal(sent.content, 't'.repeat(2999) + '😀');
+  assert.equal(sent.answer, 'e'.repeat(999) + '😀');
+  for (const [field, size] of [['concept', 300], ['content', 3000], ['answer', 1000]]) {
+    assert.equal([...sent[field]].length, size, field);
+    assert.ok(!/[\uD800-\uDBFF]$/.test(sent[field]), field + ' sem meio emoji no fim');
+  }
+  // Dentro dos limites, nada é cortado.
+  assert.equal(explainRequest({ concept: 'Luz', text: 'A planta usa luz.' }, '😀'.repeat(1000), 'Escolar', 'Básico').answer,
+    '😀'.repeat(1000));
+});
+
+test('quizSource: o texto guardado vai sem os espaços das pontas, com as perguntas que o material já tem', () => {
+  const material = { ...GOOD, texto: '  A fotossíntese acontece nas folhas.\nA clorofila absorve a luz.\n ' };
+  assert.deepEqual(quizSource(material), {
+    content: 'A fotossíntese acontece nas folhas.\nA clorofila absorve a luz.',
+    avoid: ['A água é decomposta?', 'Que pigmento absorve a luz?'],
+    fromSummary: false,
+  });
+});
+
+test('quizSource: sem o texto guardado (material de antes dele, ou texto em branco) vão o título e o resumo', () => {
+  for (const texto of [undefined, null, '', '  \n ']) {
+    assert.deepEqual(quizSource({ ...OPENED, quiz: GOOD.quiz, texto }), {
+      content: 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.',
+      avoid: ['A água é decomposta?', 'Que pigmento absorve a luz?'],
+      fromSummary: true,
+    }, 'texto = ' + JSON.stringify(texto));
+  }
+});
+
+test('quizSource: corta nos limites do backend (20.000 e 500 caracteres) sem meio emoji, e a pergunta em branco sai', () => {
+  const quiz = [{ ...Q_SHORT, question: 'q'.repeat(499) + '😀😀' }, { ...Q_MULTIPLE, question: '   ' }];
+  const fromText = quizSource({ ...GOOD, quiz, texto: 'á'.repeat(19999) + '😀😀' });
+  assert.equal(fromText.content, 'á'.repeat(19999) + '😀');
+  assert.deepEqual(fromText.avoid, ['q'.repeat(499) + '😀']);
+  const { content } = quizSource({ ...OPENED, quiz, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] });
+  assert.equal([...content].length, 20000);
+  assert.ok(content.startsWith('Revolução Francesa\nLongo: ááá'));
+});
+
+test('mergeQuiz: as novas entram no fim; sai a que repete uma pergunta do material ou outra das novas', () => {
+  // A comparação não conta maiúsculas, acentos e espaços a mais, como o backend. As listas congeladas são cópias.
+  const [selic, pib] = [{ ...Q_MULTIPLE }, { ...Q_SHORT }];
+  const incoming = frozen([
+    selic, { ...Q_SHORT, question: '  A AGUA   é decompósta? ' }, pib, { ...Q_MULTIPLE, question: 'quem FIXA a selic?' },
+  ]);
+  const got = mergeQuiz(frozen(GOOD.quiz.map(q => ({ ...q }))), incoming);
+  assert.deepEqual(got, [...GOOD.quiz, Q_MULTIPLE, Q_SHORT]);
+  assert.equal(got[2], selic, 'a questão nova entra como veio');
+  // Sem nada novo, o quiz fica como estava.
+  assert.deepEqual(mergeQuiz(GOOD.quiz, GOOD.quiz), GOOD.quiz);
+});
+
+test('mergeQuiz: só entram as questões que a tela desenha', () => {
+  const bad = [null, 'texto', { ...Q_SHORT, type: 'aberta' }, { ...Q_SHORT, options: 'x' }, { ...Q_SHORT, answer: null },
+    { ...Q_SHORT, question: 7 }, { ...Q_SHORT, explanation: undefined }, { ...Q_SHORT, steps: [1] }];
+  assert.deepEqual(mergeQuiz(GOOD.quiz, [...bad, Q_MULTIPLE]), [...GOOD.quiz, Q_MULTIPLE]);
+  for (const incoming of [undefined, null, {}, 'x', { quiz: [Q_MULTIPLE] }]) {
+    assert.deepEqual(mergeQuiz(GOOD.quiz, incoming), GOOD.quiz, JSON.stringify(incoming));
+  }
+});
+
+test('mergeQuiz: um material guarda até 30 questões', () => {
+  const make = (n, name) => Array.from({ length: n }, (_, i) => ({ ...Q_SHORT, question: name + ' ' + (i + 1) }));
+  assert.equal(QUIZ_CAP, 30);
+  const got = mergeQuiz(make(27, 'Antiga'), make(6, 'Nova'));
+  assert.equal(got.length, 30);
+  assert.deepEqual(got.slice(27).map(q => q.question), ['Nova 1', 'Nova 2', 'Nova 3']);
+  assert.equal(mergeQuiz(make(30, 'Antiga'), make(6, 'Nova')).length, 30);
+  // O material com mais de 30 (importado de um backup) fica como está, sem perder questões.
+  assert.deepEqual(mergeQuiz(make(35, 'Antiga'), make(6, 'Nova')), make(35, 'Antiga'));
+  assert.equal(mergeQuiz(GOOD.quiz, make(6, 'Nova'), 4).length, 4);
+});
+
+test('savedCopy: as questões que outra aba juntou ao material na biblioteca ficam, e as novas entram depois delas', () => {
+  // Duas abas com o mesmo material de 2 questões: a outra aba juntou 3 (B), e esta, parada na cópia antiga, pede mais 3.
+  const make = (n, name) => Array.from({ length: n }, (_, i) => ({ ...Q_SHORT, question: name + ' ' + (i + 1) }));
+  const mine = frozen([{ ...GOOD, id: 7, texto: 'Texto antigo.' }])[0];
+  const saved = frozen([{ ...GOOD, id: 3 }, { ...GOOD, id: 7, texto: 'Texto de lá.', quiz: [...GOOD.quiz, ...make(3, 'B')] }]);
+  const copy = savedCopy(mine, saved);
+  assert.deepEqual(copy, saved[1], 'a cópia gravada, com os campos dela');
+  const quiz = mergeQuiz(copy.quiz, make(3, 'A'));
+  assert.deepEqual(quiz.map(q => q.question), [...GOOD.quiz.map(q => q.question), 'B 1', 'B 2', 'B 3', 'A 1', 'A 2', 'A 3']);
+  // As desta aba que a biblioteca não tem (o navegador recusou a gravação) também ficam, sem passar de 30.
+  const unsaved = { ...mine, quiz: [...GOOD.quiz, ...make(2, 'C')] };
+  assert.deepEqual(savedCopy(unsaved, saved).quiz.map(q => q.question).slice(2), ['B 1', 'B 2', 'B 3', 'C 1', 'C 2']);
+  const full = [{ ...GOOD, id: 7, quiz: make(29, 'B') }];
+  assert.equal(savedCopy(unsaved, full).quiz.length, 30);
+});
+
+test('savedCopy: fora da biblioteca, sem id ou com a cópia de lá estragada, vale o material desta aba', () => {
+  const mine = { ...GOOD, id: 7 };
+  for (const saved of [[], [{ ...GOOD, id: 8 }], [null, 'x', { ...GOOD, id: 7, quiz: [] }], [{ id: 7 }]]) {
+    assert.equal(savedCopy(mine, saved), mine, JSON.stringify(saved));
+  }
+  // Material sem id não casa com um item da biblioteca que também não tem id.
+  assert.equal(savedCopy(GOOD, [{ ...GOOD, quiz: [...GOOD.quiz, Q_SHORT] }]), GOOD);
 });
 
 test('fixLastQuizEvent: a última resposta de quiz da questão vira acerto; as outras não mudam', () => {
@@ -2876,6 +3237,23 @@ test('readBackup: o material entra com o texto de onde saiu; com texto acima do 
   const got = readBackup(JSON.stringify({ ...BACKUP, saved: [withText, tooLong] }));
   assert.deepEqual(got.saved, [withText]);
   assert.deepEqual(got.fora, { ...NONE, saved: 1 });
+});
+
+test('readBackup e mergeBackup: a data da prova vai com o material; estragada, o material entra sem ela', () => {
+  const dated = { ...BACKUP.saved[0], prova: '2026-11-22' };
+  const { prova, ...undated } = dated;
+  const bad = ['22/11/2026', '2026-02-30', 5, null].map((value, i) => ({ ...undated, id: 10 + i, title: 'M' + i, prova: value }));
+  const plain = { ...undated, id: 20, title: 'Sem data' };
+  const got = readBackup(JSON.stringify({ ...BACKUP, saved: [dated, ...bad, plain] }));
+  assert.deepEqual(got.saved, [dated, ...bad.map(({ prova, ...m }) => m), plain]);
+  assert.deepEqual(got.fora, NONE, 'nenhum material fica de fora pela data');
+  assert.deepEqual(mergeBackup(EMPTY, got).saved.map(provaOf), ['2026-11-22', '', '', '', '', '']);
+  assert.equal(validMaterial({ ...dated, prova: 'amanhã' }), true, 'na biblioteca, a data estragada não tira o material');
+  // A hora em que a data foi marcada fica com ela, se for data; sem a data da prova, sai.
+  const marked = [at(16, 13), 'ontem', 13].map((provaMarcada, i) => ({ ...dated, id: 30 + i, title: 'P' + i, provaMarcada }));
+  const lost = { ...undated, id: 40, title: 'Sem prova', prova: '22/11', provaMarcada: at(16, 13) };
+  assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [...marked, lost] })).saved.map(m => m.provaMarcada),
+    [at(16, 13), undefined, undefined, undefined]);
 });
 
 test('readBackup: o arquivo de exemplo da janela "Ver no texto" traz um material com o texto e os trechos nele', () => {

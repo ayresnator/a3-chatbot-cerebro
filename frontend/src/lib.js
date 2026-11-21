@@ -171,6 +171,31 @@ export function findSource(text, source) {
   return null;
 }
 
+// O texto do tópico com os trechos que faltaram na explicação do aluno (#82), em partes na ordem do texto, cada uma com
+// mark true ou false, para a tela desenhar <mark>. Cada trecho é achado pela regra do findSource, a do backend, que já
+// conferiu que ele está no texto; trecho que não está é ignorado. Trechos que se cruzam, ou que só têm espaço entre eles,
+// viram uma marca só.
+export function markPieces(text, pieces) {
+  const ranges = pieces.map(piece => findSource(text, piece)).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  const parts = [];
+  let at = 0;
+  for (const [start, end] of ranges) {
+    if (end <= at) continue;
+    const from = Math.max(start, at);
+    const gap = text.slice(at, from);
+    const last = parts[parts.length - 1];
+    if (last?.mark && !gap.trim()) {
+      last.text += gap + text.slice(from, end);
+    } else {
+      if (gap) parts.push({ text: gap, mark: false });
+      parts.push({ text: text.slice(from, end), mark: true });
+    }
+    at = end;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), mark: false });
+  return parts;
+}
+
 // O trecho de um exemplo do "Usar um exemplo" não é do aluno: o tópico com trecho no texto que a IA escreveu (ai) leva
 // a marca ia, e o com trecho no exemplo pronto (ready), a marca pronto. O App passa o último exemplo que pôs no editor.
 export function markExample(summary, ai, ready) {
@@ -797,6 +822,13 @@ export function hello({ user, area, level, input, title, api, study = false }) {
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
 }
 
+// O material em texto, para um pedido à IA: o título e um tópico por linha ("conceito: texto"), no limite do editor. Vai
+// no assunto do chat (chatSubject) e nas questões novas do material que não guardou o texto (quizSource).
+function summaryText(m) {
+  const topics = m.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
+  return cut([m.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT);
+}
+
 // Assunto do chat. Vale o texto do editor sem material aberto, quando o material saiu desse texto (é o mesmo assunto,
 // e o texto é mais completo) ou quando o aluno escolheu o texto (editor) e há texto lá. Senão, o material: o título e
 // o resumo vão como content, com a área e o nível dele (material antigo sem eles usa os do editor).
@@ -807,10 +839,9 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   if (!material || fromEditor || (editor && input.trim())) {
     return { title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '' };
   }
-  const topics = material.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
   return {
     title: material.title,
-    content: cut([material.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT),
+    content: summaryText(material),
     area: AREAS.includes(material.area) ? material.area : area,
     level: LEVELS.includes(material.level) ? material.level : level,
     swap: input.trim() ? 'Usar o texto do editor' : '',
@@ -1153,6 +1184,109 @@ export function byMaterial(mistakes) {
   return [...groups];
 }
 
+// Plano até a prova (#86), sem IA. A data fica no próprio material, no campo prova (AAAA-MM-DD). Campo estragado vale
+// como sem data: o material continua na biblioteca, só sem plano.
+export const provaOf = m => (isDay(m?.prova) ? m.prova : '');
+
+// Dias de hoje até o dia (AAAA-MM-DD), pelo calendário do aluno: às 23h, amanhã ainda está a 1 dia. A conta é feita ao
+// meio-dia, longe da virada do dia e do horário de verão, como no backupStatus. Dia estragado, ou que já passou, dá null.
+export function daysUntil(day, now) {
+  if (!isDay(day)) return null;
+  const days = Math.round((Date.parse(day + 'T12:00') - Date.parse(localDay(now) + 'T12:00')) / 864e5);
+  return days >= 0 ? days : null;
+}
+
+// Quando é a prova, em texto: "hoje", "amanhã" ou "em 6 dias".
+export const inDays = n => (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : 'em ' + n + ' dias');
+
+// A tarefa do dia pelos dias que faltam: no dia, 'prova'; na véspera, 'erros' (refazer as questões do material no
+// caderno) ou, sem nenhuma lá, 'quiz'; antes, 'cartoes' e 'quiz' alternando, com os cartões a 2, 4, 6... dias da prova.
+export function planTask(days, hasMistakes) {
+  if (days === 0) return 'prova';
+  if (days === 1) return hasMistakes ? 'erros' : 'quiz';
+  return days % 2 ? 'quiz' : 'cartoes';
+}
+
+// Os itens da lista sem repetir a chave, cada um onde apareceu primeiro.
+const uniqueBy = (list, key) => {
+  const seen = new Set();
+  return list.filter(x => !seen.has(key(x)) && seen.add(key(x)));
+};
+
+// O plano de hoje: a prova mais próxima, de hoje em diante, entre os materiais da biblioteca, com até 3 materiais da
+// mesma data (os primeiros da lista, os mais novos). O mesmo título entra uma vez: o caderno, as caixas dos cartões e o
+// desempenho são por título. Cada linha é { material, days, task, total, left, whole }: a tarefa de hoje, quantos itens
+// ela tem, os que faltam e, nos cartões, se os que faltam são o baralho inteiro. Sem nada faltando, ela está feita.
+// - quiz: as questões do material; falta a que não teve resposta hoje.
+// - cartoes: os que a revisão espaçada pede hoje (vencidos ou ainda sem caixa) e os avaliados hoje. Avaliar leva o
+//   cartão para outro dia, então falta o que ela ainda pede. Nenhum pedido nem avaliado: os cartões estão em dia.
+// - erros: as questões do material no caderno no começo do dia (ou quando a data foi marcada); falta a que continua lá
+//   sem acerto hoje depois do último erro (ela pode ter sido errada de novo hoje, e o acerto no chute não conta). A que
+//   saiu hoje, pelo 3º acerto, está feita.
+// - prova: nada.
+// events, mistakes e boxes são as listas já conferidas (validEvent, validMistake, validCardReview).
+export function studyPlan(saved, { events, mistakes, boxes }, now) {
+  const dated = saved.map(m => ({ m, days: daysUntil(m.prova, now) })).filter(d => d.days !== null);
+  const soonest = Math.min(...dated.map(d => d.days));
+  const today = localDay(now);
+  const todays = events.filter(e => e.q && localDay(e.date) === today);
+  const titles = new Set();
+  return dated
+    .filter(({ m, days }) => days === soonest && !titles.has(m.title) && titles.add(m.title))
+    .slice(0, 3)
+    .map(({ m, days }) => {
+      // A véspera segue o caderno do começo do dia ou, com a data marcada hoje, o da hora em que ela foi marcada
+      // (provaMarcada): o 3º acerto tira a questão de lá e o erro no quiz põe outra, e a linha não troca. Estavam lá a
+      // questão com o último erro de antes disso e a que tinha caderno (gravado pelo App em cada resposta) na primeira
+      // resposta depois: a errada de novo e a que saiu do caderno.
+      const since = Math.max(Date.parse(today + 'T00:00'), Date.parse(m.provaMarcada) || 0);
+      const was = new Map();
+      for (const e of todays) {
+        const after = e.kind === 'quiz' && e.title === m.title && Date.parse(e.date) >= since;
+        if (after && !was.has(e.q)) was.set(e.q, e.caderno === true);
+      }
+      const listed = mistakes.filter(e => e.title === m.title);
+      const own = listed.filter(e => Date.parse(e.date) < since || was.get(fold(e.item.question)));
+      const gone = [...was].filter(([q, yes]) => yes && !listed.some(e => fold(e.item.question) === q)).length;
+      const task = planTask(days, own.length + gone > 0);
+      const seen = kind => new Set(todays.filter(e => e.kind === kind && e.title === m.title).map(e => e.q));
+      if (task === 'quiz') {
+        const answered = seen('quiz');
+        const quiz = uniqueBy(m.quiz, q => fold(q.question));
+        return { material: m, days, task, total: quiz.length, left: quiz.filter(q => !answered.has(fold(q.question))) };
+      }
+      if (task === 'cartoes') {
+        const rated = seen('flashcard');
+        const due = new Map(boxes.map(e => [e.key, e.due]));
+        const cards = uniqueBy(m.flashcards, c => fold(c.question));
+        // Sem caixa, o cartão nunca foi avaliado: a revisão espaçada também o pede.
+        const asked = c => !(due.get(mistakeKey(m.title, c.question)) > today);
+        const left = cards.filter(c => asked(c) && !rated.has(fold(c.question)))
+          .map(c => ({ question: c.question, answer: c.answer, title: m.title, area: m.area }));
+        const total = cards.filter(c => asked(c) || rated.has(fold(c.question))).length;
+        return { material: m, days, task, total, left, whole: left.length === cards.length };
+      }
+      if (task === 'erros') {
+        // O acerto no chute não mexe no caderno (noteAnswer, #80): a questão continua por fazer.
+        const fixed = e => todays.some(ev => ev.kind === 'quiz' && ev.ok && ev.conf !== 'chute' &&
+          ev.title === e.title && ev.q === fold(e.item.question) && Date.parse(ev.date) > Date.parse(e.date));
+        return { material: m, days, task, total: own.length + gone, left: own.filter(e => !fixed(e)) };
+      }
+      return { material: m, days, task, total: 0, left: [] };
+    });
+}
+
+// A linha de um material no plano (studyPlan): 'Prova de "Fotossíntese" em 6 dias. Hoje: cartões (8).' A tarefa feita
+// diz "feito hoje"; os cartões sem nenhum pedido hoje, que estão em dia.
+const TASK_NAMES = { quiz: 'quiz', cartoes: 'cartões', erros: 'refazer os erros' };
+export function planLine({ material, days, task, total, left }) {
+  const head = 'Prova de "' + material.title + '" ' + inDays(days) + '.';
+  if (task === 'prova') return head;
+  if (!total) return head + ' Cartões em dia: nenhum volta hoje.';
+  const name = TASK_NAMES[task] + ' (' + total + ')';
+  return head + (left.length ? ' Hoje: ' + name + '.' : ' ' + name[0].toUpperCase() + name.slice(1) + ': feito hoje.');
+}
+
 // Texto que vai num pedido à IA: sem espaços nas pontas e cortado por caractere inteiro (o backend conta
 // caracteres, e meio emoji no fim faria o pedido ser recusado).
 const cut = (text, max) => [...String(text).trim()].slice(0, max).join('');
@@ -1177,6 +1311,46 @@ export function gradeRequest(q, given, area, level) {
   return { question: cut(q.question, 500), expected: cut(q.answer, 200), answer: cut(given, 500), area, level };
 }
 
+// Corpo do pedido de "Pedir comentário da IA" (/api/explain), na explicação de um tópico com as próprias palavras (#82),
+// nos limites do backend: título do tópico com até 300 caracteres, texto com até 3.000 e a explicação com até 1.000.
+export function explainRequest(topic, answer, area, level) {
+  return { concept: cut(topic.concept, 300), content: cut(topic.text, 3000), answer: cut(answer, 1000), area, level };
+}
+
+// "Questões novas deste material" (/api/quiz): um material guarda até QUIZ_CAP questões.
+export const QUIZ_CAP = 30;
+
+// O que vai no pedido de questões novas, nos limites do backend: o texto guardado (#89) com até 20.000 caracteres ou,
+// no material de antes dele, o título e o resumo (summaryText), e as perguntas que o material já tem, cada uma com até
+// 500. fromSummary, que fica fora do pedido, diz que o texto é o resumo: a tela avisa.
+export function quizSource(m) {
+  const fromSummary = !m.texto?.trim();
+  return {
+    content: fromSummary ? summaryText(m) : cut(m.texto, MAX_INPUT),
+    avoid: m.quiz.map(q => cut(q.question, 500)).filter(Boolean),
+    fromSummary,
+  };
+}
+
+// Junta ao quiz do material as questões novas que a IA mandou (incoming): só as que a tela desenha (validQuestion), sem
+// repetir uma pergunta do material nem outra das novas (sem maiúsculas, acentos e espaços a mais, como o backend
+// confere) e até o material ter cap questões. Devolve a lista inteira, com as novas no fim.
+export function mergeQuiz(quiz, incoming, cap = QUIZ_CAP) {
+  const key = q => fold(q.question).replace(/\s+/g, ' ').trim();
+  const seen = new Set(quiz.map(key));
+  const added = (Array.isArray(incoming) ? incoming : [])
+    .filter(q => validQuestion(q) && !seen.has(key(q)) && seen.add(key(q)));
+  return [...quiz, ...added.slice(0, Math.max(0, cap - quiz.length))];
+}
+
+// O material m como está gravado agora na biblioteca (saved, a lista inteira do navegador): outra aba pode ter juntado
+// questões à cópia de lá, e as desta aba que não chegaram lá (o navegador recusou a gravação) vão no fim. Fora da
+// biblioteca, ou com a cópia de lá estragada, o próprio m.
+export function savedCopy(m, saved) {
+  const kept = m.id && saved.find(s => s?.id === m.id);
+  return validMaterial(kept) ? { ...kept, quiz: mergeQuiz(kept.quiz, m.quiz) } : m;
+}
+
 // A revisão da IA aceitou a resposta que a comparação de texto marcou como errada: a última resposta de quiz
 // gravada para a questão (mesmo material e mesmo enunciado) passa a valer como acerto.
 // until é a hora do pedido de revisão: resposta gravada depois dela não é a que a IA viu.
@@ -1197,7 +1371,8 @@ export function fixLastQuizEvent(events, title, q, until) {
 // limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
 // espaçada não tem cartoes (as caixas dos cartões), e o de antes do acerto que ficou não tem questoes (o índice,
 // seenStep): vale lista vazia. A linha estragada do índice só fica de fora: mergeBackup traz a questão dela de volta
-// pelas respostas.
+// pelas respostas. A data da prova estragada sai do material, que entra sem ela (provaOf); a hora em que ela foi
+// marcada (provaMarcada) só fica com a data e sendo data.
 export function readBackup(text) {
   let data;
   try {
@@ -1207,7 +1382,9 @@ export function readBackup(text) {
   }
   if (data?.versao !== 1) return null;
   const list = (value, ok) => (Array.isArray(value) ? value.filter(ok) : []);
-  const saved = list(data.saved, m => validMaterial(m) && isDate(m.date));
+  const saved = list(data.saved, m => validMaterial(m) && isDate(m.date))
+    .map(({ prova, provaMarcada, ...m }) => (provaOf({ prova })
+      ? { ...m, prova, ...(isDate(provaMarcada) && { provaMarcada }) } : m));
   const events = list(data.events, validEvent);
   const erros = list(data.erros, validMistake);
   const cartoes = list(data.cartoes, validCardReview);
