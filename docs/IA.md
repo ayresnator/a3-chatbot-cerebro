@@ -8,21 +8,21 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 | Rota | O que a IA faz | O que dispara |
 |---|---|---|
-| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Gerar o material na página Estudar |
-| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Enter, fora de tela de toque) e o botão "Não entendi, me explique" |
+| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Botão "Gerar resumo, flashcards e quiz" na página Estudar e, com o material do mesmo texto aberto, "Gerar de novo". Os botões de "Abrir" ao lado só abrem o material |
+| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Ctrl + Enter, ⌘ + Enter no Mac) e o botão "Não entendi, me explique" |
 | `POST /api/grade` | Julga o sentido de uma resposta curta que a comparação de texto marcou como errada | Botão "Pedir revisão da IA" |
 | `POST /api/example` | Escreve um texto curto de estudo sobre um tema sorteado da área | Botão "Usar um exemplo" na página Estudar. Na demonstração, com a IA desligada ou quando ela falha, a tela usa um exemplo pronto da área, sem chamar o modelo |
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e os botões que gastam cota fora do fluxo principal avisam ao lado: "1 chamada de IA".
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 
 Toda chamada tem duas partes, montadas em `backend/app/providers.py`:
 
 - `systemInstruction`: o texto fixo `SYSTEM` mais a instrução da rota (`GENERATE`, `CHAT`, `GRADE` ou `EXAMPLE`). Os cinco estão em `backend/app/prompts.py`. `SYSTEM` define o papel de tutor, pede português com acentos, proíbe inventar fontes, leis ou fatos, manda situar Direito no Brasil e resolver matemática passo a passo.
-- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno. No exemplo vão só a área, o nível e o tema. O backend sorteia o tema de uma lista fixa de 10 por área (`TOPICS`, em `prompts.py`), sem o tema do exemplo que já está na tela: a tela manda esse tema para o sorteio, e ele não vai para o modelo.
+- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens; com um material aberto, no lugar do texto do editor vão o título e o resumo dele, com a área e o nível do material. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno. No exemplo vão só a área, o nível e o tema. O backend sorteia o tema de uma lista fixa de 10 por área (`TOPICS`, em `prompts.py`), sem o tema do exemplo que já está na tela: a tela manda esse tema para o sorteio, e ele não vai para o modelo.
 
 A área (seis opções) e o nível (três) fazem parte dos dados, e `SYSTEM` manda adaptar vocabulário, profundidade e exemplos a eles.
 
@@ -70,7 +70,7 @@ A conferência prova que o trecho está no texto. Ela não prova que a explicaç
 O que foi feito para reduzir o problema e para deixá-lo visível:
 
 - Os trechos de origem são conferidos por código, como descrito acima.
-- No chat, quando há texto no editor, a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
+- No chat, quando vai um texto (o do editor, ou o título e o resumo do material aberto), a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
 - A instrução proíbe citar conversa, aula ou estudo que não esteja no histórico. O caso que motivou a regra: uma resposta "com base na nossa conversa anterior" quando o histórico só tinha a explicação do próprio Cérebro. Na rodada real de 17/11/2026 a regra não segurou: à pergunta "Como você disse na aula passada...", o modelo continuou a explicação em vez de pedir que o aluno repetisse o ponto.
 - A tela avisa sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." Sob o título do material, o aviso diz de onde ele veio, como descrito acima. A revisão leva o aviso "Revisão feita por IA: pode errar."
 
@@ -111,13 +111,13 @@ As situações se somam no mesmo pedido, até o teto. Cada ida ao provedor faz n
 
 No 429 o backend lê o corpo do erro. Espera de até 90 segundos, sem marca de cota diária, vira `AI_RATE_LIMITED` com os segundos a aguardar. O resto vira `AI_QUOTA_EXCEEDED`.
 
-O cabeçalho da tela mostra o modelo em uso e quantas chamadas o backend fez no dia. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota no Google.
+O cabeçalho da tela mostra o modelo em uso e quantas chamadas este computador fez no dia da cota, que vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), junto com a cota do Google. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota, que é do projeto inteiro e fica no painel de uso do Google AI Studio. Depois de um `AI_QUOTA_EXCEEDED`, o cabeçalho diz "Cota de hoje esgotada", em âmbar, até um pedido passar ou a cota virar.
 
 Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável mais novo. Ele nunca escolhe Pro, prévia ou experimental.
 
 ## Privacidade
 
-O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. O nome e o desempenho não saem: ficam no navegador.
+O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. Nas perguntas do chat sobre o material aberto vão o título e o resumo dele. O nome e o desempenho não saem: ficam no navegador.
 
 Dois pedidos não passam pelo backend. Ao abrir o aplicativo, o navegador busca as fontes da tela no Google Fonts. E o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador: alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever.
 

@@ -3,7 +3,7 @@ import { useReducedMotion } from 'motion/react';
 import { Icon } from '../../icons.jsx';
 import { useFit } from '../../ui.jsx';
 import { byKeyboard } from '../../anim.js';
-import { AREAS, LEVELS, LEVEL_NOTES, openers, rove, typeDelay } from '../../lib.js';
+import { AREAS, LEVELS, LEVEL_NOTES, askKey, openers, rove, typeDelay } from '../../lib.js';
 
 // Caixa do editor da tela Estudar (#61), o Prompt Composer do 21st.dev adaptado ao Cérebro: o cartão de vidro com o
 // brilho que segue o ponteiro, a frase de exemplo que se escreve no campo vazio, o campo que cresce com o texto, a área
@@ -202,7 +202,7 @@ function LevelMenu({ value, onChange }) {
   );
 }
 
-export function PromptComposer({ value, onChange, onSend, area, onArea, level, onLevel, waiting, touch, children }) {
+export function PromptComposer({ value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, children }) {
   const field = useRef(null);
   const [focused, setFocused] = useState(false);
   const ready = !waiting && !!value.trim();
@@ -232,14 +232,13 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={e => {
-            // Enter pergunta e Shift + Enter quebra a linha. No toque o Enter só quebra a linha (o teclado do celular não
-            // tem Shift + Enter) e quem pergunta é o botão. Tecla da composição de texto (acento, IME) e o Enter repetido
-            // de uma tecla presa não perguntam.
-            if (touch || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+            // Ctrl + Enter (⌘ + Enter no Mac) pergunta; o Enter sozinho fica com a caixa de texto e quebra a linha
+            // (lib.js, askKey). O atalho repetido de uma tecla presa não pergunta de novo.
+            if (!askKey(e.nativeEvent)) return;
             e.preventDefault();
             if (ready && !e.repeat) onSend();
           }}
-          placeholder="Cole seu texto, anotações ou digite uma matéria…"
+          placeholder="Cole seu texto, anotações ou escreva um tema…"
         />
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}
@@ -255,8 +254,10 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
         <span className="editor-send">
           <span className="counter">{value.length.toLocaleString('pt-BR')} / 20.000</span>
           <button type="button" className="ask" data-quiet={(ready && quiet) || undefined} disabled={!ready} onClick={onSend}>
-            {/* Em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome inteiro continua no botão. */}
+            {/* Em 550 px ou menos o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome
+                inteiro e o custo continuam no botão. */}
             <span className="full">Perguntar ao Cérebro</span>
+            {cost && <small>1 chamada de IA</small>}
             <span className="short" aria-hidden="true">Perguntar</span>
             <Icon name="seta" />
           </button>

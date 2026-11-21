@@ -14,13 +14,14 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Waves, useWavesAllowed, useWavesStill,
+  PerfilSkeleton, Countdown, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
-  AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
-  shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine,
+  AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
+  backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
+  shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, healthLabel, errorText, dictate, dictationError,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, pickExample, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -30,9 +31,14 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 // ?demo no endereço abre a demonstração pelo Vite (http://localhost:5173/?demo),
 // sem servir a raiz do repositório, onde fica o .env.
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
+// A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
+demoStorage(DEMO);
 const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
-// Tela de toque: o teclado do celular não tem Shift+Enter, então o Enter do editor só pula linha.
+// Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
+// botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+// No Mac o atalho do editor é ⌘ + Enter, e a dica embaixo dele diz isso.
+const MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
 // Foco da questão nova do quiz: no computador, direto na caixa da resposta curta; no toque, o enunciado, para o
 // teclado da tela não abrir sozinho. E o de quem chega ao Dúvidas para perguntar: a caixa (no toque, o título).
 const QUESTION_FOCUS = TOUCH ? ['.quiz-question'] : ['.quiz-form input', '.quiz-question'];
@@ -46,7 +52,8 @@ function adrift(sel) {
   return !at || at === document.body || !!at.closest(sel);
 }
 
-// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa.
+// Aceita erros JSON do Python e erros de proxy em texto/HTML sem ocultar a causa. O erro sai com a frase para o aluno
+// (message), os detalhes técnicos (tech) e a espera do limite por minuto (wait): lib.js, errorText e FAILS.
 // stop é o sinal do botão "Cancelar" da espera: o pedido para na hora e o erro sai marcado com cancelled, para a tela
 // não mostrar uma falha que o aluno pediu.
 async function requestAPI(path, payload, stop) {
@@ -66,22 +73,21 @@ async function requestAPI(path, payload, stop) {
     try {
       data = JSON.parse(raw);
     } catch {
-      throw Error(
-        'O backend não retornou JSON (HTTP ' + response.status +
-        '). Confira se o Python está rodando em http://127.0.0.1:8000 e reinicie o Vite.'
-      );
+      throw Object.assign(Error(FAILS.noJson), {
+        tech: 'HTTP ' + response.status + ', resposta sem JSON. Confira o Python em http://127.0.0.1:8000 e o proxy do Vite.',
+      });
     }
     if (!response.ok) {
-      throw Error(errorText(data?.detail, response.status));
+      throw Object.assign(Error(), errorText(data?.detail, response.status));
     }
     return data;
   } catch (error) {
     if (error.name === 'AbortError') {
       if (stop?.aborted) throw Object.assign(Error('Pedido cancelado.'), { cancelled: true });
-      throw Error('Tempo de espera esgotado. Verifique o terminal do backend e tente novamente.');
+      throw Object.assign(Error(FAILS.timeout), { tech: 'O navegador desistiu depois de 105 s sem resposta do backend.' });
     }
     if (error instanceof TypeError) {
-      throw Error('Não foi possível conectar ao backend. Confira se o Python está iniciado e se a URL e o proxy estão corretos.');
+      throw Object.assign(Error(FAILS.off), { tech: 'Sem conexão com o backend (' + error.message + ').' });
     }
     throw error;
   } finally {
@@ -96,21 +102,22 @@ const SECTIONS = [
   ['Quizzes', 'quizzes'], ['Erros', 'erros'], ['Desempenho', 'desempenho'], ['Biblioteca', 'biblioteca'],
 ];
 const SLUG = Object.fromEntries(SECTIONS);
-// No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e Erros) e "Mais", uma
-// folha com as outras três seções e o perfil. Na barra, "Quizzes" vai como "Quiz": os seis nomes cabem em 320 px.
-// De 600 a 850 px as outras três também ficam na barra, e "Mais" sai (mobile.css).
+// No celular a barra de baixo leva o caminho do estudo (Estudar, as três partes do material e o caderno de erros) e
+// "Mais", uma folha com as outras três seções e o perfil. De 600 a 850 px as outras três também ficam na barra, e
+// "Mais" sai (mobile.css).
 const BAR = ['Estudar', 'Resumos', 'Flashcards', 'Quizzes', 'Erros'].map(n => [n, SLUG[n]]);
 const MORE = ['Dúvidas', 'Desempenho', 'Biblioteca'].map(n => [n, SLUG[n]]);
-const SHORT = { Quizzes: 'Quiz' };
-const TITLES = { Erros: 'Caderno de erros' };
-// As ações de gerar, na ordem do grupo: Resumir é a principal; Tirar dúvidas só abre a página.
-const ACTIONS = [
-  ['resumo', 'resumos', 'Resumir'],
-  ['flashcards', 'flashcards', 'Criar flashcards'],
-  ['quiz', 'quizzes', 'Fazer quiz'],
-  ['chat', 'duvidas', 'Tirar dúvidas'],
-];
+// Um nome por seção, o mesmo no menu, no título, na aba do material e na aba do navegador. A chave da página não muda:
+// ela está no setPage, nas abas e no data-page do CSS. Na barra do celular vai "Caderno": os seis nomes cabem em 320 px.
+const NAMES = { Resumos: 'Resumo', Quizzes: 'Quiz', Erros: 'Caderno de erros' };
+const SHORT = { Erros: 'Caderno' };
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
+// O que o veredito da revisão da IA muda (review): "parcial" soa como meio ponto, e só "correta" muda a resposta.
+const VERDICT_EFFECT = {
+  correta: 'Agora conta como acerto, e a questão saiu do caderno de erros.',
+  parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
+  incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
+};
 
 // Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e o quiz do caderno de erros. A
 // demonstração não usa IA e não mostra. O aviso do material segue o material, e não o modo (cabeçalho do material).
@@ -151,8 +158,9 @@ function App() {
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
   // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
-  // (WCAG 2.2.2) e fica gravado no navegador; sem nada gravado, elas andam. Com movimento reduzido no sistema
-  // (wavesStill, lido ao vivo) elas ficam paradas e o botão some.
+  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
+  // sem nada gravado, elas andam. Com movimento reduzido no sistema (wavesStill, lido ao vivo) elas ficam paradas e o
+  // botão some.
   const wavesAllowed = useWavesAllowed();
   const wavesStill = useWavesStill();
   const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
@@ -176,16 +184,22 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o botão que pediu (resumo, flashcards,
-  // quiz, why, review), para a espera aparecer nele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, example),
+  // para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
   // Wait); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
   const [busy, setBusy] = useState(null);
-  const [error, setError] = useState('');
-  const [size, setSize] = useState('Médio');
+  // Aviso de erro do Estudar e do Dúvidas: { message, tech, until } (Problem, abaixo), ou null.
+  const [error, setError] = useState(null);
+  // Limite por minuto: a hora em que os botões da IA voltam (o backend manda quantos segundos esperar), ou 0.
+  const [pausedUntil, setPausedUntil] = useState(0);
+  // Quantos tópicos do resumo aparecem: 'todos', '6' ou '3' (a lista "Mostrar"). O texto de cada tópico não muda.
+  const [size, setSize] = useState('todos');
   // Material ou evento estragado fica fora da tela, mas continua gravado: quem grava parte da lista do navegador.
   const [saved, setSaved] = useState(() => readList('saved').filter(validMaterial));
   const [events, setEvents] = useState(() => readList('events').filter(validEvent));
+  // Data do último backup (Exportar ou "Fazer backup"), em texto ISO: a linha do pé da Biblioteca e do Desempenho.
+  const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
   const [answer, setAnswer] = useState(null);
@@ -196,12 +210,16 @@ function App() {
   const [chartArea, setChartArea] = useState('Todas');
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState(DRAFT.chat);
+  // O chat pergunta sobre o texto do editor mesmo com um material aberto: o aluno escolheu na caixa do Dúvidas ou
+  // perguntou pelo editor. Abrir ou gerar outro material volta ao material (lib.js, chatSubject).
+  const [editorChat, setEditorChat] = useState(DRAFT.editorChat);
   // Aviso na tela: { text, action }. action = { label, run } põe um botão no aviso (desfazer, abrir).
   const [notice, setNotice] = useState(null);
   // O que a região fixa do leitor de tela diz (#anuncio, fora do main): o que muda na tela sem um aviso visível.
   const [spoken, setSpoken] = useState('');
   // Desfazer sem prazo: { kind, text, run, focus }. O aviso some sozinho; este botão fica onde a ação aconteceu
-  // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno) até o aluno trocar de página ou desfazer.
+  // (kind: 'texto' no editor, 'material' na biblioteca, 'erro' no caderno, 'conversa' no Dúvidas) até o aluno trocar
+  // de página ou desfazer.
   const [undo, setUndo] = useState(null);
   const [retry, setRetry] = useState(null);
   const [tips, setTips] = useState(DRAFT.tips);
@@ -223,7 +241,8 @@ function App() {
   const [why, setWhy] = useState(null);
   // Ditado em andamento: o botão vira "Parar ditado".
   const [listening, setListening] = useState(false);
-  // Última geração: texto, área e nível usados, e quais botões já mostraram esse material.
+  // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
+  // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
@@ -280,12 +299,12 @@ function App() {
   // (F5, fechar a aba) ou escondê-la grava na hora o que ainda não foi gravado.
   useEffect(() => {
     draft.current = {
-      input, area, level, result: opened, made: made.current, chat, tips,
+      input, area, level, result: opened, made: made.current, chat, tips, editorChat,
       exemplo: aiExample.current, exemploPronto: readyExample.current,
     };
     const timer = setTimeout(saveDraft, 400);
     return () => clearTimeout(timer);
-  }, [input, area, level, opened, chat, tips]);
+  }, [input, area, level, opened, chat, tips, editorChat]);
 
   useEffect(() => {
     const hidden = () => document.visibilityState === 'hidden' && saveDraft();
@@ -295,6 +314,27 @@ function App() {
       window.removeEventListener('pagehide', saveDraft);
       document.removeEventListener('visibilitychange', hidden);
     };
+  }, []);
+
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, o perfil, a data do backup ou o "Fundo animado":
+  // esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O rascunho
+  // fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
+  useEffect(() => {
+    const sync = e => {
+      const changed = k => e.key === null || e.key === storageKey(k);
+      if (changed('saved')) setSaved(readList('saved').filter(validMaterial));
+      if (changed('events')) setEvents(readList('events').filter(validEvent));
+      if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
+      if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('fundo')) setFundo(read('fundo', true) !== false);
+      if (changed('user')) {
+        const profile = readUser();
+        setUser(profile);
+        setName(profile?.name || '');
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
   }, []);
 
   useEffect(() => {
@@ -321,7 +361,7 @@ function App() {
 
   // A página nova começa do topo; a entrada dela é a do m.div da página (key, anim.js: ROUTINE).
   useLayoutEffect(() => {
-    document.title = page + ' · Cérebro';
+    document.title = (NAMES[page] || page) + ' · Cérebro';
     if (!viewed.current) {
       viewed.current = true;
       return;
@@ -342,8 +382,16 @@ function App() {
   useEffect(() => setUndo(null), [page]);
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
-  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo.
-  useEffect(() => setError(''), [input]);
+  // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
+  // espera acabar: é ele que conta os segundos até os botões da IA voltarem.
+  useEffect(() => setError(e => (e?.until > Date.now() ? e : null)), [input]);
+
+  // Os botões da IA voltam sozinhos quando a espera do limite por minuto acaba.
+  useEffect(() => {
+    if (!pausedUntil) return;
+    const timer = setTimeout(() => setPausedUntil(0), pausedUntil - Date.now());
+    return () => clearTimeout(timer);
+  }, [pausedUntil]);
 
   // A frase da região fixa (#anuncio) sai dela 8 s depois de lida: a velha ("Gerando o material", depois de um erro ou
   // do Cancelar) não fica na página para quem a percorre com o leitor de tela.
@@ -393,28 +441,40 @@ function App() {
     restart();
   }
 
+  // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
+  // try: a que falha não impede a outra.
   function saveDraft() {
     if (!draft.current) return;
+    const text = JSON.stringify(draft.current);
     try {
-      localStorage.setItem('cerebro-rascunho', JSON.stringify(draft.current));
+      localStorage.setItem(storageKey('rascunho'), text);
+    } catch {}
+    try {
+      sessionStorage.setItem(storageKey('rascunho'), text);
     } catch {}
   }
 
-  // Volta ao início do baralho ou do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
-  function restart(list = null) {
+  // Volta ao início do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
+  function restartQuiz(list = null) {
     setIdx(0);
     setDone(false);
-    setFlip(false);
     setAnswer(null);
     setAnswers([]);
     setRetry(list);
-    setDeck(null);
     setWhy(null);
+  }
+
+  // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
+  // caderno de erros entrando ou saindo). Trocar de aba ou de página não recomeça: o aluno volta onde estava.
+  function restart() {
+    restartQuiz();
+    setFlip(false);
+    setDeck(null);
   }
 
   function persist(k, v) {
     try {
-      localStorage.setItem('cerebro-' + k, JSON.stringify(v));
+      localStorage.setItem(storageKey(k), JSON.stringify(v));
       return true;
     } catch {
       toast('Não foi possível salvar no navegador. Verifique o espaço e as permissões.');
@@ -475,11 +535,19 @@ function App() {
   }
 
   // Todo pedido à IA termina com uma consulta nova: o contador de chamadas anda e um backend que caiu aparece na hora.
+  // No limite por minuto os botões da IA ficam desligados pelo tempo que o backend mandou; o erro leva a hora da volta
+  // (until) para a contagem dele.
   async function callAI(path, payload) {
     const stop = new AbortController();
     pending.current = stop;
     try {
       return await requestAPI(path, payload, stop.signal);
+    } catch (e) {
+      if (e.wait) {
+        e.until = Date.now() + e.wait * 1000;
+        setPausedUntil(e.until);
+      }
+      throw e;
     } finally {
       if (pending.current === stop) pending.current = null;
       checkHealth();
@@ -521,13 +589,16 @@ function App() {
     };
   }
 
-  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página.
+  // O menu sempre sai do quiz do caderno de erros, até o botão Quizzes, que não troca de página: volta o material que
+  // estava aberto, com o quiz no início. Fora disso o menu não recomeça o quiz nem o baralho.
   function go(next) {
-    if (result?.virtual) setResult(parked);
+    if (result?.virtual) {
+      setResult(parked);
+      restart();
+    }
     setPage(next);
     // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
-    setError('');
-    restart();
+    setError(null);
     setMore(false);
   }
 
@@ -538,28 +609,27 @@ function App() {
     focusAfter.current = focus;
   }
 
-  async function generate(kind = 'resumo') {
-    if (busy || asking) return;
-    setError('');
+  async function generate() {
+    if (waiting) return;
+    setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError('Informe uma matéria (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).');
+      setError({ message: 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
       return;
     }
-    // Uma resposta já traz resumo, flashcards e quiz: outro botão com o mesmo texto reaproveita o material.
-    // O mesmo botão de novo gera material novo.
+    // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
+    // mesmo texto, a mesma área e o mesmo nível (made), o Estudar oferece abrir as partes sem chamar a IA.
     const key = JSON.stringify([input, area, level]);
-    const reuse = result && made.current.key === key && !made.current.kinds.includes(kind);
     // Os exemplos que acompanham o texto deste clique: o Desfazer do aviso pode trocar tudo durante a espera.
     const example = aiExample.current;
     const ready = readyExample.current;
-    const target = kind === 'resumo' ? 'Resumos' : kind === 'flashcards' ? 'Flashcards' : 'Quizzes';
-    // Espera de verdade só com a IA: a página da parte pedida abre na hora, com o esqueleto dela no lugar onde o
-    // material vai entrar. Reaproveitar e a demonstração são instantâneos e não mostram espera nenhuma.
-    const wait = !reuse && !!API_BASE;
-    setBusy({ kind, label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
+    const target = 'Resumos';
+    // Espera de verdade só com a IA: o Resumo abre na hora, com o esqueleto dele no lugar onde o material vai entrar. A
+    // demonstração é instantânea e não mostra espera nenhuma.
+    // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
+    const wait = !!API_BASE;
+    setBusy({ kind: 'gerar', label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
-      restart();
       // O botão apertado sai da tela com o Estudar: o foco espera no título da página do material, e o leitor de tela
       // ouve que a IA está trabalhando (os segundos ficam de fora).
       say('Gerando o material. A IA pode levar até 1 minuto.');
@@ -567,32 +637,40 @@ function App() {
     }
     try {
       let data;
-      if (reuse) {
-        data = result;
-      } else if (API_BASE) {
+      if (API_BASE) {
         data = await callAI('/api/generate', { content: input, area, level });
       } else {
         data = demo(input);
       }
       // A mesma conferência do rascunho e da biblioteca: o que abre aqui também volta depois de um F5.
       if (!validMaterial(data)) {
-        throw Error('Material incompleto recebido do backend');
+        throw Error('A IA mandou um material incompleto. Tente de novo.');
       }
       // Trecho copiado de um exemplo não é do aluno: o do exemplo da IA não confere nada (seria a IA citando a si
       // mesma), e o do exemplo pronto sai como texto de exemplo. As marcas ia e pronto vão com o material para a
       // biblioteca, o rascunho e o backup. Na demonstração o trecho é a própria frase: a do exemplo pronto ganha marca.
-      if (!reuse) data = { ...data, summary: markExample(data.summary, example, ready) };
+      data = { ...data, summary: markExample(data.summary, example, ready) };
       // O material aberto agora (não o do clique) vai para a biblioteca antes de o novo tomar o lugar.
-      // Se o novo é igual a ele, não há o que guardar: é o reaproveitamento, ou a demonstração, que repete o
-      // material do mesmo texto.
+      // Se o novo é igual a ele, não há o que guardar: é a demonstração, que repete o material do mesmo texto.
       const previous = latest.current.result;
       const kept = !!previous && !sameMaterial(previous, data) && keep(previous);
-      setResult({ ...data, area, level });
-      made.current = { key, kinds: reuse ? [...made.current.kinds, kind] : [kind] };
-      restart();
+      // O novo também vai para a biblioteca na hora, depois do anterior, para ficar no topo: com o app em duas abas,
+      // o rascunho de uma podia apagar o material que a outra gerou e não salvou. O que já está lá com o mesmo
+      // conteúdo, a mesma área e o mesmo nível (a demonstração, no "Gerar de novo" com o mesmo texto) abre sem cópia.
+      // Se o navegador recusar, ele abre sem id, e o "Salvar material" continua lá para tentar de novo.
+      const material = { ...data, area, level };
+      const twin = readList('saved').find(m =>
+        validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
+      setResult(twin || store(material) || material);
+      made.current = { key };
+      setEditorChat(false);
+      // O quiz e o baralho recomeçam com outro material. O "Gerar de novo" da demonstração, com o mesmo texto, reabre o
+      // mesmo, e eles seguem onde estavam. Depois da espera pela IA recomeçam sempre: durante ela o aluno pode ter
+      // aberto outro material ou o quiz do caderno de erros.
+      if (wait || !previous || !sameMaterial(previous, data)) restart();
       const at = latest.current.page;
       if (at === 'Estudar' || MATERIAL.includes(at)) {
-        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para a parte pedida.
+        // Na página do material o esqueleto dá lugar a ele ali mesmo; quem voltou ao Estudar vai para o Resumo.
         if (at === 'Estudar') setPage(target);
         // O leitor de tela ouve que ele chegou, e o foco que estava na espera, no botão de gerar ou no body vai para o
         // título dele.
@@ -618,10 +696,10 @@ function App() {
       // O foco que estava no que sai da tela vai para o erro (o alerta já é lido) ou, no Cancelar, para o botão que pediu
       // o material; longe do Estudar, para o título da página.
       if (adrift(back ? 'main, .busy' : '.busy')) {
-        focusAfter.current = e.cancelled ? ['.actions [data-tab=' + SLUG[target] + ']', 'main h1'] : ['#erro'];
+        focusAfter.current = e.cancelled ? ['#gerar', 'main h1'] : ['#erro'];
       }
       if (e.cancelled) toast('Pedido cancelado');
-      else setError('Não foi possível gerar: ' + e.message);
+      else setError({ ...e, message: 'Não deu para gerar o material. ' + e.message });
     } finally {
       setBusy(null);
     }
@@ -630,8 +708,9 @@ function App() {
   // Grava o material no topo da biblioteca e devolve a cópia gravada, ou null se o navegador recusou.
   // Parte da lista do navegador, não da cópia desta aba: outra aba pode ter salvo algo depois que esta abriu.
   function store(material) {
-    const entry = { ...material, id: Date.now(), date: new Date().toISOString() };
-    const next = [entry, ...readList('saved')];
+    const stored = readList('saved');
+    const entry = { ...material, id: newId(stored), date: new Date().toISOString() };
+    const next = [entry, ...stored];
     if (!persist('saved', next)) return null;
     setSaved(next.filter(validMaterial));
     return entry;
@@ -674,9 +753,14 @@ function App() {
     }, ['[data-id="' + material.id + '"] .open', '#busca']);
   }
 
-  // Exportar: um arquivo com tudo o que este navegador guarda (biblioteca, desempenho, caderno de erros e perfil),
-  // para levar a outro computador. Parte do que está gravado, não das listas desta aba.
+  // Exportar (e o "Fazer backup" do pé da Biblioteca e do Desempenho): um arquivo com tudo o que este navegador guarda
+  // (biblioteca, desempenho, caderno de erros e perfil), para levar a outro computador. Parte do que está gravado, não
+  // das listas desta aba. O material aberto que ainda não está na biblioteca vai para lá antes, como quando outro toma
+  // o lugar dele, e assim vai no arquivo.
   function exportBackup() {
+    const unsaved = !!opened && !opened.id;
+    const entry = unsaved ? store(opened) : null;
+    if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'), user: readUser(),
     };
@@ -686,6 +770,11 @@ function App() {
     link.click();
     // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
     setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    // A data marca o clique: o navegador pode perguntar onde salvar, e o aluno, cancelar.
+    const now = new Date().toISOString();
+    if (persist('backup', now)) setLastBackup(now);
+    toast(backupSummary(backup) + (entry ? ' O material aberto foi salvo na biblioteca e foi junto.'
+      : unsaved ? ' O material aberto não pôde ser salvo no navegador e ficou de fora.' : ''));
   }
 
   // Importar: junta o arquivo ao que já está gravado, sem duplicar (lib.js). O arquivo vem de fora: o que não passa
@@ -709,13 +798,21 @@ function App() {
     setEvents(after.events.filter(validEvent));
     if (!persist('erros', after.erros)) return;
     setMistakes(after.erros.filter(validMistake));
-    toast(backupNote(before, after));
+    // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
+    // A área do editor não muda.
+    const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
+    if (profile) {
+      setUser(profile);
+      setName(profile.name);
+    }
+    toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
-  // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados.
+  // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
+  // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia.
   // Os dois botões ficam desabilitados no cartão novo (ainda não virado): o foco passa para o cartão.
   function cardNext(ok) {
-    event('flashcard', ok, result.area);
+    event('flashcard', ok, result.area, fold(card.question));
     setFlip(false);
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
@@ -758,7 +855,8 @@ function App() {
 
   // "Refazer meus erros": o quiz abre num material temporário com as questões do caderno, cada uma com o material
   // e a área de onde veio. O material que estava aberto fica guardado e volta quando o aluno sai do quiz.
-  function redoMistakes() {
+  // Com title, só as questões desse material ("Refazer os erros de", no Desempenho).
+  function redoMistakes(title) {
     setParked(opened);
     setResult({
       virtual: true,
@@ -767,7 +865,7 @@ function App() {
       level: '',
       summary: [],
       flashcards: [],
-      quiz: mistakes.map(m => ({ ...m.item, title: m.title, area: m.area })),
+      quiz: mistakes.filter(m => !title || m.title === title).map(m => ({ ...m.item, title: m.title, area: m.area })),
     });
     openPage('Quizzes', QUESTION_FOCUS);
     restart();
@@ -800,7 +898,7 @@ function App() {
       });
       setWhy({ item, text: data.answer });
     } catch (e) {
-      setWhy(e.cancelled ? null : { item, error: e.message });
+      setWhy(e.cancelled ? null : { item, error: e });
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.why, .busy')) focusAfter.current = ['#' + button, 'main h1'];
@@ -825,7 +923,7 @@ function App() {
     try {
       const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
       if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
-        throw Error('Revisão incompleta recebida do backend');
+        throw Error('A IA mandou uma revisão incompleta. Tente de novo.');
       }
       const accepted = data.verdict === 'correta';
       setAnswer(a => (a === mine ? { ...a, ok: accepted, review: data } : a));
@@ -837,7 +935,7 @@ function App() {
         notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
       }
     } catch (e) {
-      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e.message } } : a));
+      if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.review-wait, .busy')) focusAfter.current = ['#pedir-revisao', 'main h1'];
@@ -845,22 +943,31 @@ function App() {
     }
   }
 
-  // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo.
+  // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo, e o chat passa a ser
+  // sobre o texto do editor. As outras levam o assunto do chat (subject): o material aberto ou o texto do editor.
   // O servidor não guarda conversa: as 6 últimas mensagens vão junto, para ele entender um "me dê um exemplo".
   // O texto do editor já vai em content (ou é a própria pergunta), então a cópia dele fica fora do histórico.
   // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
   // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
   async function ask(message = question) {
-    if (busy || asking || !message.trim()) return;
+    if (waiting || !message.trim()) return;
     const msg = message.trim();
     const mine = { role: 'user', text: msg };
-    setError('');
+    const own = msg === input.trim();
+    const topic = own ? { content: input, area, level } : subject;
+    if (own) setEditorChat(true);
+    // A pergunta nova encerra o Desfazer de "Nova conversa": ele não pode mais trocar a conversa que começa agora.
+    if (undo?.kind === 'conversa') {
+      setUndo(null);
+      setNotice(n => (n?.text === undo.text ? null : n));
+    }
+    setError(null);
     if (message === question) setQuestion('');
     setChat(c => [...c, mine]);
     if (!API_BASE) {
       setChat(c => [...c, {
         role: 'assistant',
-        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (input || EXAMPLE).slice(0, 450),
+        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
       }]);
       return;
     }
@@ -870,18 +977,18 @@ function App() {
     try {
       const data = await callAI('/api/chat', {
         question: msg,
-        content: msg === input.trim() ? '' : input,
-        area,
-        level,
+        content: own ? '' : topic.content,
+        area: topic.area,
+        level: topic.level,
         history: chat
           .filter(m => m.text !== input.trim())
           .slice(-6)
           .map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') })),
       });
       setChat(c => [...c, { role: 'assistant', text: data.answer }]);
-      setTips({ key: JSON.stringify([input, area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
+      setTips({ key: JSON.stringify([topic.content, topic.area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
     } catch (e) {
-      if (!e.cancelled) setError(e.message);
+      if (!e.cancelled) setError(e);
       setChat(c => c.filter(m => m !== mine));
       if (message === question) setQuestion(q => q || msg);
     } finally {
@@ -930,8 +1037,10 @@ function App() {
         }
         written = { topic: data.topic, text: data.text.trim() };
       } catch (e) {
-        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto.
+        // Cancelado, nada muda. Outra falha (rede, cota, resposta fora do formato) cai no exemplo pronto. No limite por
+        // minuto os botões da IA ficam desligados alguns segundos (callAI): o aviso de erro conta a espera.
         if (e.cancelled) return;
+        if (e.wait) setError(e);
       } finally {
         // O botão desabilitado na espera, ou o Cancelar da faixa que sai com ela, deixa o foco no vazio: ele volta ao
         // botão. Quem foi escrever ou foi para outra página continua onde está.
@@ -971,7 +1080,8 @@ function App() {
     } else toast(note);
   }
 
-  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto.
+  // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto. O quiz e o baralho ficam
+  // onde estavam.
   function tabKeys(e) {
     const at = TABS.findIndex(([p]) => p === page);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
@@ -979,26 +1089,28 @@ function App() {
     e.preventDefault();
     const [next] = TABS[(to + TABS.length) % TABS.length];
     setPage(next);
-    restart();
     // A aba dentro desta mesma faixa: a do esqueleto da geração não tem id.
     e.currentTarget.querySelector('[data-tab=' + SLUG[next] + ']')?.focus();
   }
 
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
+  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho.
   function openSaved(material) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
-    made.current = { key: '', kinds: [] };
+    made.current = { key: '' };
+    setEditorChat(false);
     setResult(material);
     openPage('Resumos', ['#material-titulo']);
-    restart();
+    if (!result || !sameMaterial(result, material)) restart();
   }
 
-  // Perfil confirmado na janela (Perfil.jsx).
+  // Perfil confirmado na janela (Perfil.jsx). A área do editor só muda quando o perfil é criado ou a área principal
+  // muda: quem abre a janela só para corrigir o nome continua na área em que está estudando. user ainda é o anterior.
   function saveProfile(profile) {
-    setArea(profile.area);
+    if (!user || profile.area !== user.area) setArea(profile.area);
     setUser(profile);
     setLogin(false);
-    if (persist('user', profile)) toast('Seu espaço está pronto');
+    if (persist('user', profile)) toast(user ? 'Perfil atualizado' : 'Seu espaço está pronto');
   }
 
   const quizList = retry || result?.quiz || [];
@@ -1016,7 +1128,7 @@ function App() {
       quizzes: quizRate(events),
       cards: cardRate(events),
       streakDays: streak(events, now),
-      studied: lastDays(events, 5, now),
+      studied: lastDays(events, 7, now),
       weakest: weakSpot(events, now),
     };
   }, [events, today]);
@@ -1024,7 +1136,7 @@ function App() {
   // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
-  const topics = summary.slice(0, size === 'Curto' ? 3 : size === 'Médio' ? 6 : 99);
+  const topics = size === 'todos' ? summary : summary.slice(0, Number(size));
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1037,19 +1149,41 @@ function App() {
     const timer = setTimeout(() => latest.current.page === 'Biblioteca' && say(libraryCount(shown.length)), 500);
     return () => clearTimeout(timer);
   }, [query, filter]);
+  // A linha do backup, no pé da Biblioteca e do Desempenho: só nessas páginas, fora do caminho de cada resposta.
+  const backupLine = useMemo(
+    () => (page === 'Biblioteca' || page === 'Desempenho'
+      ? backupStatus({ saved, events, last: lastBackup, now: new Date() })
+      : null),
+    [page, saved, events, lastBackup, today]
+  );
   const busiest = Math.max(1, ...days.map(d => d.total));
-  const chatHints = hints({ chat, input, area, tips });
-  const greeting = hello({ user, area, level, input, api: !!API_BASE });
-  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Sempre true ou false: asking
-  // guarda a hora do pedido, e aria-disabled só vale com "true".
-  const waiting = !!busy || !!asking;
+  // O material do ponto fraco, para o "Abrir" do Desempenho: o aberto ou, na biblioteca, o mais novo com o mesmo título
+  // (a demonstração dá o mesmo título ao mesmo texto). O ponto fraco de evento antigo, sem título, não acha nenhum.
+  const weakMaterial = weakest && [opened, ...saved].find(s => s?.title === weakest.name);
+  // O chat pergunta sobre o material aberto ou sobre o texto do editor (lib.js): o pedido, as sugestões, a saudação e a
+  // caixa usam o mesmo assunto.
+  const subject = chatSubject({ material: opened, made: made.current.key, editor: editorChat, input, area, level });
+  const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
+  const greeting = hello({
+    user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
+  });
+  // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
+  // minuto nenhum sai. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale com "true".
+  const waiting = !!busy || !!asking || !!pausedUntil;
+  // IA sem chave neste computador: o botão de gerar fica desligado, e o aviso embaixo do editor diz por quê.
+  const aiOff = !!API_BASE && health?.ai_configured === false;
+  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração e o
+  // backend sem a IA configurada não gastam chamada.
+  const cost = !!API_BASE && !aiOff;
+  // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
+  const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
   // do clique (o aluno pode abrir outro da biblioteca enquanto espera).
-  const making = !!busy && ['resumo', 'flashcards', 'quiz'].includes(busy.kind) && result === busy.prior;
+  const making = busy?.kind === 'gerar' && result === busy.prior;
   // A espera de busy fica no lugar da resposta quando esse lugar está na tela (o esqueleto do material, a explicação
   // do tópico ou da questão aberta, a revisão no retorno); senão, na faixa de cima. Decidido aqui, não no CSS: a faixa
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
@@ -1086,9 +1220,16 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
+  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
+  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
+  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
+    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
+    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  const problem = pause || error;
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
-      {error && (
+      {problem && (
         <m.div
           key="erro"
           ref={errorBox}
@@ -1102,7 +1243,7 @@ function App() {
           exit="exit"
         >
           <Icon name="alerta" />
-          <p>{error}</p>
+          <Problem error={problem} />
         </m.div>
       )}
     </AnimatePresence>
@@ -1121,10 +1262,7 @@ function App() {
           aria-selected={page === p}
           aria-controls={wait ? undefined : 'material-painel'}
           tabIndex={page === p ? 0 : -1}
-          onClick={() => {
-            setPage(p);
-            restart();
-          }}
+          onClick={() => setPage(p)}
         >
           {l}
         </button>
@@ -1142,7 +1280,7 @@ function App() {
       onClick={() => go(n)}
     >
       <Icon name={s} />
-      <span>{(short && SHORT[n]) || n}</span>
+      <span>{(short && SHORT[n]) || NAMES[n] || n}</span>
     </button>
   );
 
@@ -1153,7 +1291,6 @@ function App() {
         {user?.name || 'Visitante'}
         <small>{user ? 'Perfil local' : 'Criar perfil local'}</small>
       </span>
-      <Icon name="abaixo" />
     </button>
   );
 
@@ -1213,11 +1350,15 @@ function App() {
           <div className="top-actions">
             {/* O estado da IA vai sempre escrito: a cor do ponto sozinha não diz nada a quem não a distingue. */}
             {/* Enquanto confere, o ponto fica vazado e o texto diz isso; a troca de estado esmaece no lugar. */}
-            <p className="ai-status" data-tone={status.tone}>
+            {/* A dica (title) explica que a conta é deste computador e a cota, do projeto inteiro. Com a IA ativa, o modelo
+                vai à parte: com a barra estreita ele sai da vista e continua no leitor de tela (styles.css, @container). */}
+            <p className="ai-status" data-tone={status.tone} title={status.note}>
               <span className="status-dot" aria-hidden="true"></span>
               <AnimatePresence mode="popLayout" initial={false}>
                 <m.span key={status.text} className="status-text" variants={focusIn} initial="hidden" animate="show" exit="exit">
-                  {status.text}
+                  {status.model
+                    ? <>IA ativa<span className="status-model">{' · ' + status.model}</span>{status.count && ' · ' + status.count}</>
+                    : status.text}
                 </m.span>
               </AnimatePresence>
             </p>
@@ -1268,7 +1409,7 @@ function App() {
               {/* O Dúvidas tem o título dele, no herói do chat. */}
               {page !== 'Dúvidas' && (
                 <m.div className="page-head" variants={titleIn}>
-                  <h1 className="page-title" tabIndex={-1}>{TITLES[page] || page}</h1>
+                  <h1 className="page-title" tabIndex={-1}>{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
                     <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
                   )}
@@ -1280,7 +1421,8 @@ function App() {
                 <>
                   <m.div variants={rise}>
                     {/* A caixa do editor (prompt-composer.jsx): o campo, a área em chips, o nível no menu e, na última
-                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Enter). */}
+                        linha, as ferramentas abaixo, o contador e o "Perguntar ao Cérebro" (pelo botão ou pelo Ctrl +
+                        Enter). */}
                     <PromptComposer
                       value={input}
                       onChange={text => {
@@ -1296,7 +1438,7 @@ function App() {
                       level={level}
                       onLevel={setLevel}
                       waiting={waiting}
-                      touch={TOUCH}
+                      cost={cost}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1357,33 +1499,67 @@ function App() {
                     <p id="composer-keyboard-hint" className="hint">
                       {TOUCH
                         ? 'Use o botão para perguntar ao Cérebro'
-                        : <><kbd>Enter</kbd> para perguntar ao Cérebro · <kbd>Shift</kbd> + <kbd>Enter</kbd> para nova linha</>}
+                        : <><kbd>{MAC ? '⌘' : 'Ctrl'}</kbd> + <kbd>Enter</kbd> para perguntar ao Cérebro</>}
                     </p>
                   </m.div>
                   <m.div variants={rise}>
-                    <p className="note">
-                      <Icon name={API_BASE ? 'privacidade' : 'info'} />
-                      {API_BASE
+                    {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
+                        funciona sem IA. */}
+                    <p className="note" id="aviso-ia">
+                      <Icon name={API_BASE && !aiOff ? 'privacidade' : 'info'} />
+                      {aiOff ? (
+                        <span>
+                          A IA não está ligada neste computador: o botão de gerar fica desligado.{' '}
+                          <a href="?demo">Ver a demonstração</a>
+                        </span>
+                      ) : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
-                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada.'}
+                        : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
+                          'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
                     <div className="actions" role="group" aria-label="Gerar material">
-                      {ACTIONS.map(([k, s, title]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          className={'action' + (k === 'resumo' ? ' primary' : '')}
-                          data-tab={s}
-                          disabled={waiting}
-                          aria-busy={busy?.kind === k || undefined}
-                          onClick={() => (k === 'chat' ? openPage('Dúvidas', ASK_FOCUS) : generate(k))}
-                        >
-                          {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
-                              cima: aqui o botão só diz que está gerando. */}
-                          <Icon name={s} />
-                          {busy?.kind === k ? 'Gerando…' : title}
-                        </button>
-                      ))}
+                      {/* Uma chamada traz resumo, flashcards e quiz. Com o material deste texto aberto, as três partes
+                          só abrem, sem chamar a IA, e o botão de gerar vira o "Gerar de novo". A parte aberta tira o
+                          botão da tela com o Estudar: o foco vai para o título do material (na espera, o da página).
+                          Elas só trocam de página: continuam ligadas sem a chave da IA e na espera do limite por
+                          minuto, quando o botão de gerar fica desligado. */}
+                      {fresh && (
+                        <div className="open-parts" role="group" aria-labelledby="abrir-partes">
+                          <span id="abrir-partes">Abrir:</span>
+                          {TABS.map(([p, l]) => (
+                            <button
+                              key={p}
+                              type="button"
+                              className="action"
+                              data-tab={SLUG[p]}
+                              onClick={() => {
+                                go(p);
+                                focusAfter.current = ['#material-titulo', 'main h1'];
+                              }}
+                            >
+                              <Icon name={SLUG[p]} />
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        id="gerar"
+                        className={fresh ? 'action' : 'action primary'}
+                        disabled={waiting || aiOff}
+                        aria-describedby={aiOff ? 'aviso-ia' : undefined}
+                        aria-busy={busy?.kind === 'gerar' || undefined}
+                        onClick={() => generate()}
+                      >
+                        {/* A espera (o fio, os segundos e o Cancelar) fica na página do material ou na faixa de
+                            cima: aqui o botão só diz que está gerando. */}
+                        <Icon name={fresh ? 'refazer' : 'resumos'} />
+                        {busy?.kind === 'gerar'
+                          ? 'Gerando…'
+                          : fresh ? 'Gerar de novo' : 'Gerar resumo, flashcards e quiz'}
+                        {cost && busy?.kind !== 'gerar' && <small>1 chamada de IA</small>}
+                      </button>
                     </div>
                   </m.div>
                   {errorBanner}
@@ -1401,20 +1577,26 @@ function App() {
                       </button>
                     </div>
                     <div className="stats">
-                      <Stat value={streakDays + (streakDays === 1 ? ' dia' : ' dias')} label="de constância" />
-                      <Stat value={cards.total} label="flashcards revisados" />
-                      <Stat value={quizzes.total} label="questões respondidas" />
+                      <Stat
+                        value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
+                        label={plural(streakDays, 'seguido de estudo', 'seguidos de estudo')}
+                      />
+                      <Stat value={cards.total} label={plural(cards.total, 'cartão revisado', 'cartões revisados')} />
+                      <Stat
+                        value={quizzes.total}
+                        label={plural(quizzes.total, 'questão respondida', 'questões respondidas')}
+                      />
                       <Stat value={percent(quizzes)} label="de acerto no quiz" />
                       {/* Os dias de estudo da semana, com a mesma caneta: ✓ dia com estudo, ○ dia sem. */}
                       <div
                         className="stat days"
                         role="img"
-                        aria-label={'Dias com estudo nos últimos 5: ' + studied.filter(Boolean).length}
+                        aria-label={'Dias com estudo nos últimos 7: ' + studied.filter(Boolean).length}
                       >
                         <span className="day-marks">
                           {studied.map((day, i) => <Pen key={i} kind={day ? 'certo' : 'novo'} />)}
                         </span>
-                        <span>últimos 5 dias</span>
+                        <span>últimos 7 dias</span>
                       </div>
                     </div>
                   </m.section>
@@ -1454,7 +1636,14 @@ function App() {
                       <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
                         <h2>Seu próximo aprendizado está por aqui.</h2>
                         <p>Adicione um texto para criar seu material de estudo.</p>
-                        <button type="button" className="primary" onClick={() => openPage('Estudar')}>Adicionar conteúdo</button>
+                        <div className="row center">
+                          <button type="button" className="primary" onClick={() => openPage('Estudar')}>Adicionar conteúdo</button>
+                          {saved.length > 0 && (
+                            <button type="button" onClick={() => openPage('Biblioteca')}>
+                              Abrir da biblioteca ({saved.length})
+                            </button>
+                          )}
+                        </div>
                       </m.section>
                     ) : (
                       <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
@@ -1488,9 +1677,11 @@ function App() {
                             <>
                               <div className="row summary-tools">
                                 <label className="inline-field">
-                                  Tamanho
+                                  Mostrar
                                   <select value={size} onChange={e => setSize(e.target.value)}>
-                                    {['Curto', 'Médio', 'Detalhado'].map(s => <option key={s}>{s}</option>)}
+                                    <option value="todos">Todos os tópicos</option>
+                                    <option value="6">Os 6 primeiros</option>
+                                    <option value="3">Os 3 primeiros</option>
                                   </select>
                                 </label>
                                 <span className="topic-count">
@@ -1501,9 +1692,11 @@ function App() {
                                   type="button"
                                   onClick={async () => {
                                     try {
-                                      // Copia o resumo inteiro, não só os tópicos que o tamanho escolhido mostra.
+                                      // Copia o resumo inteiro, não só os tópicos que a lista "Mostrar" deixa na tela: o
+                                      // aviso diz quantos foram.
                                       await navigator.clipboard.writeText(summary.map(s => s.concept + ': ' + s.text).join('\n'));
-                                      toast('Resumo copiado');
+                                      toast('Resumo inteiro copiado: ' + summary.length +
+                                        (summary.length === 1 ? ' tópico' : ' tópicos'));
                                     } catch {
                                       toast('Cópia indisponível neste navegador');
                                     }
@@ -1518,7 +1711,7 @@ function App() {
                                   <li key={i}>
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
-                                      <h3>{s.concept}</h3>
+                                      <h3 tabIndex={-1}>{s.concept}</h3>
                                       <p>{s.text}</p>
                                       {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
                                       {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
@@ -1543,13 +1736,27 @@ function App() {
                                   </li>
                                 ))}
                               </ol>
+                              {/* Os flashcards e o quiz cobram também os tópicos escondidos: o fim da lista leva a eles.
+                                  O botão some com o clique, e o foco vai ao primeiro tópico que apareceu. */}
+                              {topics.length < summary.length && (
+                                <div className="row">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      focusAfter.current = ['.summary li:nth-child(' + (topics.length + 1) + ') h3'];
+                                      setSize('todos');
+                                    }}
+                                  >
+                                    {summary.length - topics.length === 1
+                                      ? 'Ver o outro tópico'
+                                      : 'Ver os outros ' + (summary.length - topics.length) + ' tópicos'}
+                                  </button>
+                                </div>
+                              )}
                               <button
                                 type="button"
                                 className="primary"
-                                onClick={() => {
-                                  openPage('Flashcards', ['.flashcard', 'main h1']);
-                                  restart();
-                                }}
+                                onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}
                               >
                                 Estudar flashcards deste resumo
                                 <Icon name="seta" />
@@ -1592,6 +1799,22 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Cartão {session.pos + 1} de {session.queue.length}</span>
+                                {/* Trocar de aba ou de página não recomeça o baralho: este botão recomeça. Antes do primeiro
+                                    cartão avaliado ele guarda o lugar invisível, e aparecer não empurra o cartão. No
+                                    "Refazer só os que errei" recomeça só esses (deckRestart). */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o baralho"
+                                  style={{ visibility: session.pos ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    setDeck(deckRestart(session));
+                                    setFlip(false);
+                                    focusAfter.current = ['.flashcard'];
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">{flip ? 'Resposta' : 'Pergunta'}</span>
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
@@ -1643,7 +1866,7 @@ function App() {
                             // Fim do quiz (Jhey): o painel sobe com um balanço curto e a caneta marca cada erro, em fila.
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
-                              <p>{right} de {answers.length} respostas corretas.</p>
+                              <p>Você acertou {right} de {answers.length}.</p>
                               {wrong.length > 0 ? (
                                 <ol className="review" role="list">
                                   {wrong.map((q, i) => (
@@ -1661,6 +1884,20 @@ function App() {
                               ) : (
                                 <p>Você acertou todas!</p>
                               )}
+                              {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
+                                  caderno". A frase só aparece enquanto vale: o fim do quiz continua na tela na volta de
+                                  outra página, e o aluno pode ter tirado do caderno uma das questões. */}
+                              {wrong.length > 0 && !result.virtual &&
+                                wrong.every(q => mistakes.some(e => e.key === mistakeKey(result.title, q.question))) && (
+                                <p>
+                                  {wrong.length === 1
+                                    ? 'A questão que você errou está no caderno de erros. '
+                                    : 'As ' + wrong.length + ' questões que você errou estão no caderno de erros. '}
+                                  <button type="button" className="link" onClick={() => openPage('Erros')}>
+                                    Abrir o caderno de erros
+                                  </button>
+                                </p>
+                              )}
                               {/* Recomeçar tira esta tela, com o botão: o foco vai para a primeira questão. */}
                               <div className="row center">
                                 {wrong.length > 0 && (
@@ -1668,7 +1905,7 @@ function App() {
                                     type="button"
                                     className="primary"
                                     onClick={() => {
-                                      restart(wrong);
+                                      restartQuiz(wrong);
                                       focusAfter.current = QUESTION_FOCUS;
                                     }}
                                   >
@@ -1679,7 +1916,7 @@ function App() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    restart();
+                                    restartQuiz();
                                     focusAfter.current = QUESTION_FOCUS;
                                   }}
                                 >
@@ -1688,13 +1925,7 @@ function App() {
                                 {result.virtual ? (
                                   <button type="button" onClick={() => openPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      openPage('Flashcards', ['.flashcard', 'main h1']);
-                                      restart();
-                                    }}
-                                  >
+                                  <button type="button" onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}>
                                     Ir para os flashcards
                                   </button>
                                 )}
@@ -1704,6 +1935,20 @@ function App() {
                             <>
                               <div className="study-head">
                                 <span>Questão {idx + 1} de {quizList.length}</span>
+                                {/* Como no baralho. No "Refazer as que errei" recomeça só as erradas (retry). O foco vai
+                                    para a primeira questão como no "Refazer o quiz todo" (QUESTION_FOCUS). */}
+                                <button
+                                  type="button"
+                                  className="link"
+                                  aria-label="Recomeçar o quiz"
+                                  style={{ visibility: answers.length ? undefined : 'hidden' }}
+                                  onClick={() => {
+                                    restartQuiz(retry);
+                                    focusAfter.current = QUESTION_FOCUS;
+                                  }}
+                                >
+                                  Recomeçar
+                                </button>
                                 <span className="tag">
                                   {quiz.type === 'short' ? 'Resposta curta'
                                     : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
@@ -1717,8 +1962,10 @@ function App() {
                                   leitor de tela lê a pergunta junto com elas. */}
                               <h2 id={'questao-' + idx} className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
                               {quiz.type === 'short' ? (
+                                // Questão nova ou recomeçada: o campo abre vazio. Respondida, ele mostra o que o aluno
+                                // escreveu, também na volta de outra aba ou página.
                                 <form
-                                  key={idx}
+                                  key={idx + '-' + answers.length}
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
@@ -1740,6 +1987,7 @@ function App() {
                                     required
                                     maxLength={500}
                                     placeholder="Sua resposta"
+                                    defaultValue={answer?.value}
                                     disabled={answer !== null}
                                   />
                                   <button disabled={answer !== null} className="primary">Responder</button>
@@ -1807,10 +2055,11 @@ function App() {
                                     <m.div variants={focusIn} initial={appear()} animate="show">
                                       <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
                                       <p>{answer.review.feedback}</p>
+                                      <p>{VERDICT_EFFECT[answer.review.verdict]}</p>
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
-                                  {answer.review?.error && <p role="alert" className="error">{answer.review.error}</p>}
+                                  {answer.review?.error && <div role="alert" className="error"><Problem error={answer.review.error} /></div>}
                                   {API_BASE && (
                                     <div className="ai-ask">
                                       <button
@@ -1873,17 +2122,30 @@ function App() {
                         type="button"
                         disabled={asking}
                         onClick={() => {
+                          // Limpa na hora, sem perguntar, e deixa desfazer, como as outras ações: as respostas custaram
+                          // chamadas de IA.
+                          const before = { chat, tips };
                           setChat([]);
                           setTips({ key: '', list: [] });
-                          // O botão sai com o cabeçalho compacto: o foco vai para a caixa (no toque, para o título,
-                          // sem abrir o teclado).
-                          focusAfter.current = [TOUCH ? '#chat-titulo' : '#pergunta'];
+                          // O botão sai com o cabeçalho compacto: o foco vai para o Desfazer que fica embaixo da
+                          // saudação. Desfeito, ele vai para a caixa (no toque, para o título, sem abrir o teclado).
+                          focusAfter.current = ['.chat-head .undo-row button', ...ASK_FOCUS];
+                          // A pergunta nova encerra o Desfazer (ask); se ainda assim ele chegar aqui, a conversa nova fica.
+                          offerUndo('conversa', 'Conversa apagada', () => {
+                            setChat(c => (c.length ? c : before.chat));
+                            setTips(t => (t.key ? t : before.tips));
+                          }, ASK_FOCUS);
                         }}
                       >
                         Nova conversa
                       </button>
                     ) : (
-                      <m.p className="chat-lead" variants={hero.lead}>{greeting}</m.p>
+                      <>
+                        <m.p className="chat-lead" variants={hero.lead}>{greeting}</m.p>
+                        <AnimatePresence mode="popLayout" custom={byKeyboard()}>
+                          {undo?.kind === 'conversa' && <UndoRow key="desfazer" undo={undo} onUndo={undoNow} pop={pop} />}
+                        </AnimatePresence>
+                      </>
                     )}
                   </div>
                   <div className="chat-thread">
@@ -1941,8 +2203,12 @@ function App() {
                       onArea={setArea}
                       level={level}
                       onLevel={setLevel}
+                      about={subject.title ? subject : null}
+                      swap={subject.swap}
+                      onSwap={() => setEditorChat(e => !e)}
                       waiting={waiting}
                       touch={TOUCH}
+                      cost={cost}
                       variants={hero.box}
                       pop={pop}
                       note={aiNote}
@@ -1992,13 +2258,14 @@ function App() {
                       <p className="hint">
                         Uma questão sai daqui quando você acerta em outro dia, ou quando você mesmo a tira.
                       </p>
+                      {/* As marcas são as da lista abaixo. A seta, como elas, fica fora do leitor de tela: ele lê os
+                          passos da lista em ordem. */}
                       <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
-                        <li><Pen kind="novo" /> novo</li>
                         <li><Pen kind="errei" /> errei</li>
-                        <li><Pen kind="refazer" /> refazer</li>
-                        <li><Pen kind="certo" /> certo em outro dia</li>
+                        <li><Icon name="seta" /><Pen kind="refazer" /> refazer em outro dia</li>
+                        <li><Icon name="seta" /><Pen kind="certo" /> certo em outro dia: sai do caderno</li>
                       </ol>
-                      <button type="button" className="primary" onClick={redoMistakes}>
+                      <button type="button" className="primary" onClick={() => redoMistakes()}>
                         <Icon name="refazer" />
                         Refazer meus erros ({mistakes.length})
                       </button>
@@ -2080,9 +2347,22 @@ function App() {
                     days={days}
                     busiest={busiest}
                     weakest={weakest}
+                    openWeak={weakMaterial && (() => {
+                      if (weakMaterial !== opened) return openSaved(weakMaterial);
+                      // O material já está aberto: nada vai para a biblioteca, e o quiz e o baralho ficam onde estavam.
+                      // Como no openSaved, o chat volta ao material, e o foco vai ao título dele (o botão sai da tela com
+                      // o Desempenho).
+                      setEditorChat(false);
+                      go('Resumos');
+                      focusAfter.current = ['#material-titulo'];
+                    })}
+                    hasMaterial={!!result}
+                    onStart={() => openPage(result ? 'Quizzes' : 'Estudar')}
                     mistakes={mistakes}
                     redoMistakes={redoMistakes}
                     events={events}
+                    backup={backupLine}
+                    onExport={exportBackup}
                   />
                 </Suspense>
               )}
@@ -2099,10 +2379,12 @@ function App() {
                     saved={saved}
                     undo={undo}
                     onUndo={undoNow}
+                    backup={backupLine}
                     onExport={exportBackup}
                     onImport={importBackup}
                     onOpen={openSaved}
                     onRemove={(material, item) => leave(item, () => remove(material))}
+                    onStart={() => openPage('Estudar')}
                   />
                 </Suspense>
               )}
@@ -2223,10 +2505,21 @@ function App() {
                 <Icon name="fechar" />
               </button>
               <BrandMark />
-              <h2 id="profile-title">Seu próximo aprendizado começa aqui.</h2>
-              <p>Crie um perfil local neste navegador. Não é uma conta com autenticação.</p>
+              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui.'}</h2>
+              <p>
+                {user
+                  ? 'Seu nome e sua área principal ficam só neste navegador. Não é uma conta com senha.'
+                  : 'Crie um perfil local neste navegador. Não é uma conta com autenticação.'}
+              </p>
+              {/* A lista começa na área do perfil, não na do editor: salvar só o nome não troca a área principal. */}
               <Suspense fallback={<PerfilSkeleton />}>
-                <Perfil name={name} setName={setName} area={area} onSave={saveProfile} />
+                <Perfil
+                  name={name}
+                  setName={setName}
+                  area={AREAS.includes(user?.area) ? user.area : area}
+                  fresh={!user}
+                  onSave={saveProfile}
+                />
               </Suspense>
               {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
                   WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
@@ -2407,7 +2700,11 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
     box.current?.scrollIntoView({ block: 'nearest' });
   }, [text, error]);
   if (error) {
-    return <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">{error}</m.div>;
+    return (
+      <m.div ref={box} role="alert" className="error why-error" variants={pop} initial={appear()} animate="show">
+        <Problem error={error} />
+      </m.div>
+    );
   }
   return (
     <m.div ref={box} className="why" role="status" variants={pop} initial={appear()} animate="show">
@@ -2428,6 +2725,26 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
         </>
       )}
     </m.div>
+  );
+}
+
+// Erro de um pedido (lib.js, errorText): a frase para o aluno e, embaixo, "Detalhes técnicos", fechado, com o código e a
+// frase do backend para quem instalou o Cérebro. No limite por minuto a frase conta os segundos até os botões da IA
+// voltarem (until, callAI).
+function Problem({ error }) {
+  return (
+    <div>
+      <p>
+        {error.message}
+        {error.until > 0 && <> <Countdown until={error.until} /></>}
+      </p>
+      {error.tech && (
+        <details>
+          <summary>Detalhes técnicos</summary>
+          <p>{error.tech}</p>
+        </details>
+      )}
+    </div>
   );
 }
 

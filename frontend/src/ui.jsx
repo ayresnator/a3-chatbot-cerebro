@@ -4,8 +4,8 @@ import { ThinkingOrb } from 'thinking-orbs';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
 
-// Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, o
-// "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
+// Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, a linha do
+// backup, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
 
 // Campo de várias linhas (field é o ref dele) que cresce com o texto entre o mínimo e o máximo do CSS e volta ao mínimo
 // quando esvazia: a caixa do Dúvidas e o editor do Estudar. Medir encolhe o campo por um instante: a rolagem da página
@@ -28,10 +28,28 @@ export function useFit(field, value) {
   }, []);
 }
 
-// Contador da faixa de progresso, em frase ("3 dias de constância"). No Estudar e no Desempenho cada contador é um
+// Contador da faixa de progresso, em frase ("3 dias seguidos de estudo"). No Estudar e no Desempenho cada contador é um
 // cartão de número, e o primeiro fica em destaque (styles.css, .stats).
 export function Stat({ value, label }) {
   return <p className="stat"><strong>{value}</strong> {label}</p>;
+}
+
+// Pé da Biblioteca e do Desempenho: os dados ficam só neste navegador, a data do último backup e o botão que baixa o
+// mesmo arquivo do Exportar. Quando há o que perder (lib.js, backupStatus), a linha lembra o backup e o botão ganha
+// destaque. variants: no Desempenho a linha é um bloco da página e entra como os outros.
+export function BackupNote({ status, onExport, variants }) {
+  return (
+    <m.div className="backup-note" variants={variants}>
+      <p>
+        Seus dados ficam só neste navegador. Limpar os dados do navegador apaga tudo. <strong>{status.text}.</strong>
+        {status.due && ' Faça um backup para não perder o que é novo.'}
+      </p>
+      <button type="button" className={status.due ? 'primary' : undefined} onClick={onExport}>
+        <Icon name="exportar" />
+        Fazer backup
+      </button>
+    </m.div>
+  );
 }
 
 // "Desfazer" que fica na lista até o aluno sair da página: o aviso some sozinho, este não. Fica dentro de um
@@ -69,6 +87,19 @@ export function Elapsed({ since }) {
       </span>
     </span>
   );
+}
+
+// Segundos que faltam para os botões da IA voltarem depois do limite por minuto (until: a hora da volta, App.jsx). Os
+// números ficam fora do leitor de tela, como no Elapsed; "Pode tentar de novo." entra no fim, dentro do alerta do erro,
+// e é lido uma vez.
+export function Countdown({ until }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.ceil((until - now) / 1000);
+  return seconds > 0 ? <span className="elapsed" aria-hidden="true">{'Faltam ' + seconds + ' s.'}</span> : 'Pode tentar de novo.';
 }
 
 // Orbe da IA (thinking-orbs): 20 px, no tema escuro e no ciano do --accent (styles.css), que a biblioteca recebe em JS.

@@ -114,11 +114,18 @@
         outline-color: var(--on-accent)
     }
 
-    /* A marca com a largura dela e o estado da IA no resto, encolhendo com reticências: o texto longo do backend ("IA
-       ativa · modelo · N chamadas hoje") não passa por cima da marca. */
+    /* A marca com a largura dela e o estado da IA no resto: o texto longo ("IA ativa · modelo · N chamadas deste
+       computador") não passa por cima da marca. Sem lugar, ele quebra a linha, equilibrada, em vez de cortar a conta de
+       chamadas com reticências; em duas linhas ele ainda cabe na altura da barra. */
     .topbar {
         grid-template-columns: auto minmax(0, 1fr);
         padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-2)
+    }
+
+    .status-text {
+        white-space: normal;
+        text-wrap: balance;
+        line-height: 1.2
     }
 
     .ask-pill,
@@ -193,6 +200,7 @@
 
     .composer-bar select,
     .composer-bar .primary,
+    .composer-bar .link,
     .shortcuts,
     .suggestions button,
     .chat-wait .link {
@@ -245,6 +253,15 @@
         flex: 1
     }
 
+    /* Desempenho: a coluna do gráfico fica estreita para "6 respostas" e "50% certas", e o rótulo vira "50% · 6". */
+    .chart .full {
+        display: none
+    }
+
+    .chart .short {
+        display: inline
+    }
+
     .mistakes li {
         grid-template-columns: minmax(0, 1fr) auto
     }
@@ -287,8 +304,8 @@
     }
 }
 
-/* Celular. O editor fica mais baixo e os quatro botões de gerar ficam em duas linhas: tudo até eles cabe na primeira
-   tela, acima da barra, de 360 × 780 para cima. */
+/* Celular. O editor fica mais baixo: tudo até os botões de gerar cabe na primeira tela, acima da barra, de 360 × 780
+   para cima. */
 @media (max-width: 550px) {
     :root {
         --fs-6: 2rem;
@@ -303,6 +320,17 @@
 
     .topbar {
         margin-bottom: var(--sp-3)
+    }
+
+    /* A barra de cima fica só com o logo da marca, para o estado da IA caber (sem o modelo: styles.css, @container); o
+       nome continua no link, fora da vista. */
+    .brand-name {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
     }
 
     /* No celular o palco não tem moldura: o conteúdo fica com a largura de antes (16 px das bordas) e os painéis de
@@ -385,9 +413,12 @@
     }
 
     /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
-       Dúvidas, "Enviar" fica só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. */
+       Dúvidas, "Enviar" e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O
+       custo do "Perguntar ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
     .tool .full,
-    .composer-bar .primary span {
+    .ask small,
+    .composer-bar .primary span,
+    .composer-bar .primary small {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -484,10 +515,30 @@
         font-size: var(--fs-1)
     }
 
-    /* Os botões de gerar enchem cada linha: duas linhas de dois na primeira tela, acima da barra, até 360 px. */
+    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. */
     .action {
         flex: 1 1 auto;
-        padding: 0 var(--sp-3)
+        padding: var(--sp-1) var(--sp-3)
+    }
+
+    /* Com o material do texto aberto, "Abrir:" fica em cima e as três partes em colunas iguais, só com o nome: numa
+       linha até 320 px (com o ícone, "Flashcards" não cabia). O "Gerar de novo" fica na linha de baixo. */
+    .open-parts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        flex: 1 1 100%
+    }
+
+    .open-parts > span {
+        grid-column: 1 / -1
+    }
+
+    .open-parts .action {
+        padding: 0 var(--sp-1)
+    }
+
+    .open-parts .icon {
+        display: none
     }
 
     .result-header h2 {
@@ -508,6 +559,22 @@
     .tabs [role=tab] {
         flex: 1 1 auto;
         padding: 0 var(--sp-2)
+    }
+
+    /* "Questão X de Y" e "Recomeçar" numa linha e a etiqueta do tipo sempre na de baixo: lado a lado, ela cabia ou não
+       conforme a largura e a questão, e o cabeçalho mudava de altura de uma questão para a outra. O esqueleto da
+       geração (ui.jsx) segue a mesma arrumação, com as linhas na altura da etiqueta. */
+    .study-head {
+        display: grid;
+        grid-template-columns: auto auto;
+        grid-auto-rows: minmax(1.5rem, auto);
+        justify-content: start
+    }
+
+    .study-head .tag,
+    .study-head .sk-tag {
+        grid-column: 1 / -1;
+        justify-self: start
     }
 
     .flashcard {
@@ -698,19 +765,6 @@
     /* A pílula de espera quebra a linha em vez de cortar em "Cérebro está escr…" e esconder os segundos. */
     .chat-wait .wait-text {
         white-space: normal
-    }
-}
-
-/* Em 320 px fica só o logo da marca na barra de cima, para o estado da IA caber inteiro; o nome continua no link, fora
-   da vista. */
-@media (max-width: 359px) {
-    .brand-name {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap
     }
 }
 

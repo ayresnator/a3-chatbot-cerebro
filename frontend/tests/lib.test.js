@@ -6,10 +6,12 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, dictate,
+  chatSubject,
+  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, EXAMPLES, pickExample,
-  opener, openers, typeDelay, rove, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, libraryCount,
+  opener, openers, typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
+  libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
 } from '../src/lib.js';
 
 // Evento em novembro de 2026 no fuso da máquina, gravado em ISO como o App grava.
@@ -159,6 +161,34 @@ test('quizRate e cardRate: percentual arredondado; sem respostas é zero', () =>
   );
 });
 
+// O caso da auditoria nos cartões: um baralho de 4, com o cartão 1 errado (ele volta no fim da fila e é acertado), e
+// depois "Revisar novamente" no mesmo dia. Contando cliques, davam 9 cartões revisados.
+const DECK = [[1, false], [2, true], [3, true], [4, true], [1, true], [1, true], [2, true], [3, true], [4, true]]
+  .map(([n, ok]) => cardAt(16, ok, { q: 'cartao ' + n }));
+
+test('cardRate: de cada cartão vale a primeira avaliação do dia; rever o baralho não muda o número', () => {
+  assert.deepEqual(cardRate(DECK), { total: 4, correct: 3, rate: 75 });
+  assert.deepEqual(firstAttempts(DECK, 'flashcard'), DECK.slice(0, 4));
+  assert.deepEqual(firstAttempts(DECK), [], 'sem o tipo, só o quiz');
+});
+
+test('cardRate: no dia seguinte o cartão conta de novo; em outro material é outro cartão', () => {
+  const next = cardAt(17, true, { q: 'cartao 1' });
+  const other = cardAt(16, true, { q: 'cartao 1', title: 'Juros' });
+  assert.deepEqual(cardRate([...DECK, next, other]), { total: 6, correct: 5, rate: 83 });
+});
+
+test('cardRate: registro antigo, sem a pergunta do cartão, conta como está', () => {
+  const old = cardAt(16, false);
+  assert.deepEqual(cardRate([old, old, { ...old, ok: true }, ...DECK]), { total: 7, correct: 4, rate: 57 });
+});
+
+test('plural: o singular só com 1; com 0 e com 2, o plural', () => {
+  assert.equal(plural(1, 'cartão', 'cartões'), 'cartão');
+  assert.equal(plural(0, 'cartão', 'cartões'), 'cartões');
+  assert.equal(plural(2, 'questão respondida', 'questões respondidas'), 'questões respondidas');
+});
+
 test('weakSpot: o material com a maior taxa de erro, não o que tem mais erros', () => {
   const events = [...answersOf('Juros', 16, 10, 4), ...answersOf('Fotossíntese', 15, 3, 2)];
   assert.deepEqual(weakSpot(events, today()), { name: 'Fotossíntese', wrong: 2, total: 3 });
@@ -273,6 +303,12 @@ test('areaLine: quiz e cartões da área, separados; sem resposta de quiz não h
   assert.equal(areaLine(SIX_ANSWERS, 'Economia'), '33% de acerto no quiz · 6 questões · 0 cartões');
 });
 
+test('areaLine: o cartão avaliado de novo no mesmo dia conta uma vez', () => {
+  assert.equal(areaLine(DECK, 'Economia'), 'Quiz sem respostas · 4 cartões');
+  const twice = [cardAt(16, false, { q: 'cartao 1' }), cardAt(16, true, { q: 'cartao 1' })];
+  assert.equal(areaLine(twice, 'Economia'), 'Quiz sem respostas · 1 cartão');
+});
+
 test('expectedText: o gabarito em texto, a opção certa ou as formas da resposta curta', () => {
   const short = answer => ({ type: 'short', question: 'Qual é a sigla?', options: [], answer });
   const multiple = { type: 'multiple', question: 'Quem fixa a Selic?', options: ['Senado', 'STF', 'Copom'], answer: 2 };
@@ -355,6 +391,11 @@ test('baralho: uma sessão inteira, com erro, "Revisar depois" e o último cart�
   assert.deepEqual(deckMissed(d), [0, 2]);
   assert.equal(deckSummary(d), '3 cartões revisados; 2 voltaram por erro.');
   assert.deepEqual(deckRedo(d), { queue: [0, 2], pos: 0 });
+});
+
+test('deckRestart: a sessão desde o início, com os cartões dela na ordem e sem as voltas por erro', () => {
+  assert.deepEqual(deckRestart(deck([0, 2, 0, 1], 2)), deckStart(3), 'baralho inteiro, com um erro e um "Revisar depois"');
+  assert.deepEqual(deckRestart(deck([2, 0, 2], 1)), { queue: [0, 2], pos: 0 }, '"Refazer só os que errei": só esses');
 });
 
 test('demo: texto de uma frase só vira um tópico, um flashcard e uma questão', () => {
@@ -554,6 +595,32 @@ test('rove: Home e End vão para as pontas, e outra tecla não anda', () => {
   for (const key of ['Enter', ' ', 'Tab', 'Escape', 'a', 'PageDown']) assert.equal(rove(key, 2, 6), -1, key);
 });
 
+// Tecla no editor do Estudar como o navegador manda (nativeEvent): Enter, sem modificador e fora da composição.
+const press = change => ({
+  key: 'Enter', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, isComposing: false, keyCode: 13,
+  ...change,
+});
+
+test('askKey: Ctrl + Enter e ⌘ + Enter perguntam ao Cérebro', () => {
+  assert.equal(askKey(press({ ctrlKey: true })), true);
+  assert.equal(askKey(press({ metaKey: true })), true);
+});
+
+test('askKey: Enter, Shift + Enter e Alt + Enter ficam com a caixa de texto (linha nova)', () => {
+  assert.equal(askKey(press({})), false);
+  assert.equal(askKey(press({ shiftKey: true })), false);
+  assert.equal(askKey(press({ altKey: true })), false);
+  assert.equal(askKey(press({ ctrlKey: true, shiftKey: true })), false);
+  assert.equal(askKey(press({ metaKey: true, altKey: true })), false);
+});
+
+test('askKey: tecla da composição de texto (acento, IME) e Ctrl com outra tecla não perguntam', () => {
+  assert.equal(askKey(press({ ctrlKey: true, isComposing: true })), false);
+  assert.equal(askKey(press({ ctrlKey: true, keyCode: 229 })), false);
+  assert.equal(askKey(press({ metaKey: true, isComposing: true })), false);
+  for (const key of ['a', 'Tab', 'Process', ' ']) assert.equal(askKey(press({ ctrlKey: true, key })), false, key);
+});
+
 // O retorno do quiz depois de errar (uns 315 px, com a faixa de "Próxima questão" de 69 px dentro dele): inteiro no
 // computador e no celular em pé. No celular deitado e no zoom de 200% a raiz reserva 155 px (a barra de baixo, a faixa
 // presa e o respiro); sem a faixa, que já está no bloco, sobram 86 px de reserva, e ele não cabe.
@@ -709,6 +776,69 @@ test('hello: na demonstração', () => {
     hello({ user: { name: 'Ana' }, area: 'Tecnologia', level: 'Intermediário', input: 'Um texto', api: false }),
     'Olá, Ana! Sou o Cérebro, seu tutor de Tecnologia no nível Intermediário. Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.'
   );
+});
+
+test('hello: com o material aberto como assunto, cita o material e não fala do editor', () => {
+  assert.equal(
+    hello({ user: null, area: 'Escolar', level: 'Básico', input: 'Revolução Francesa\nCausas: a crise', title: 'Revolução Francesa', api: true }),
+    'Olá! Sou o Cérebro, seu tutor das matérias escolares no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o material "Revolução Francesa".'
+  );
+});
+
+// Material aberto da biblioteca, de outra área e outro nível que os do editor.
+const OPENED = {
+  title: 'Revolução Francesa',
+  area: 'Escolar',
+  level: 'Intermediário',
+  summary: [{ concept: 'Causas', text: 'A crise financeira e a desigualdade.' }, { concept: '', text: 'A Queda da Bastilha.' }],
+};
+const EDITOR = { input: 'Hardware e software são as duas partes do computador.', area: 'Tecnologia', level: 'Básico' };
+
+test('chatSubject: com um material aberto, vão o título e o resumo dele, com a área e o nível do material', () => {
+  const got = chatSubject({ material: OPENED, made: '', editor: false, ...EDITOR });
+  assert.deepEqual(got, {
+    title: 'Revolução Francesa',
+    content: 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.',
+    area: 'Escolar',
+    level: 'Intermediário',
+    swap: 'Usar o texto do editor',
+  });
+  // Sem texto no editor não há outra fonte para escolher, nem com a escolha antiga pelo editor.
+  for (const editor of [false, true]) {
+    assert.equal(chatSubject({ material: OPENED, made: '', editor, ...EDITOR, input: '  ' }).swap, '');
+    assert.equal(chatSubject({ material: OPENED, made: '', editor, ...EDITOR, input: '  ' }).title, OPENED.title);
+  }
+});
+
+test('chatSubject: material antigo, sem área ou nível da lista, usa os do editor', () => {
+  const old = { ...OPENED, area: undefined, level: 'Expert' };
+  const got = chatSubject({ material: old, made: '', editor: false, ...EDITOR });
+  assert.equal(got.area, 'Tecnologia');
+  assert.equal(got.level, 'Básico');
+});
+
+test('chatSubject: sem material, com o texto escolhido ou com o material feito do texto do editor, vale o editor', () => {
+  const editorOnly = { title: '', content: EDITOR.input, area: 'Tecnologia', level: 'Básico' };
+  assert.deepEqual(chatSubject({ material: null, made: '', editor: false, ...EDITOR }), { ...editorOnly, swap: '' });
+  assert.deepEqual(
+    chatSubject({ material: OPENED, made: '', editor: true, ...EDITOR }),
+    { ...editorOnly, swap: 'Usar o material aberto' }
+  );
+  // Gerado deste texto em Escolar; depois o aluno trocou a área do editor: continua sendo o mesmo texto.
+  const made = JSON.stringify([EDITOR.input, 'Escolar', 'Intermediário']);
+  for (const editor of [false, true]) {
+    assert.deepEqual(chatSubject({ material: OPENED, made, editor, ...EDITOR }), { ...editorOnly, swap: '' });
+  }
+  // Outro texto no editor: o material volta a valer. Um texto que só começa igual não engana a comparação.
+  assert.equal(chatSubject({ material: OPENED, made, editor: false, ...EDITOR, input: 'Outro texto' }).title, OPENED.title);
+  assert.equal(chatSubject({ material: OPENED, made, editor: false, ...EDITOR, input: 'Hardware' }).title, OPENED.title);
+});
+
+test('chatSubject: material enorme vai cortado em 20.000 caracteres, o limite do backend', () => {
+  const huge = { ...OPENED, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] };
+  const { content } = chatSubject({ material: huge, made: '', editor: false, ...EDITOR });
+  assert.equal([...content].length, 20000);
+  assert.ok(content.startsWith('Revolução Francesa\nLongo: ááá'));
 });
 
 test('LEVELS: os três níveis do contrato da API', () => {
@@ -951,8 +1081,8 @@ test('readUser: perfil com nome em texto vale; o resto é visitante', () => {
 });
 
 const NO_DRAFT = {
-  input: '', exemplo: '', exemploPronto: '', area: '', level: '', result: null, made: { key: '', kinds: [] }, chat: [],
-  tips: NO_TIPS,
+  input: '', exemplo: '', exemploPronto: '', area: '', level: '', result: null, made: { key: '' }, chat: [],
+  tips: NO_TIPS, editorChat: false,
 };
 const DRAFT = {
   input: 'Inflação e juros',
@@ -961,9 +1091,10 @@ const DRAFT = {
   area: 'Economia',
   level: 'Avançado',
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
-  made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']), kinds: ['resumo', 'quiz'] },
+  made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']) },
   chat: ANSWERED,
   tips: { key: JSON.stringify(['Inflação e juros', 'Economia']), list: ['E o PIB per capita?', 'Como se mede?'] },
+  editorChat: true,
 };
 // O rascunho bom com alguns campos trocados, lido como o App lê na abertura.
 function draft(change) {
@@ -1016,7 +1147,7 @@ test('readDraft: área e nível só valem se forem da lista', () => {
   for (const level of LEVELS) assert.equal(draft({ level }).level, level);
 });
 
-test('readDraft: material que não passa na conferência sai, e o reaproveitamento sai junto', () => {
+test('readDraft: material que não passa na conferência sai, e a marca da última geração sai junto', () => {
   const { summary, ...noSummary } = GOOD;
   const got = draft({ result: noSummary });
   assert.equal(got.result, null);
@@ -1025,9 +1156,16 @@ test('readDraft: material que não passa na conferência sai, e o reaproveitamen
   assert.deepEqual(got.chat, DRAFT.chat);
 });
 
-test('readDraft: reaproveitamento fora do formato volta vazio', () => {
-  const bad = [null, 'k', { key: 5, kinds: [] }, { key: 'k' }, { key: 'k', kinds: 'resumo' }, { key: 'k', kinds: [1] }];
+test('readDraft: marca da última geração fora do formato volta vazia', () => {
+  const bad = [null, 'k', 5, {}, { key: 5 }, { key: null }, { key: ['k'] }, { kinds: ['resumo'] }];
   for (const made of bad) assert.deepEqual(draft({ made }).made, NO_DRAFT.made, JSON.stringify(made));
+});
+
+test('readDraft: rascunho de antes do botão só de gerar (com kinds) continua valendo, sem os kinds', () => {
+  const key = DRAFT.made.key;
+  assert.deepEqual(draft({ made: { key, kinds: ['resumo', 'quiz'] } }).made, { key });
+  assert.deepEqual(draft({ made: { key, kinds: 'resumo' } }).made, { key });
+  assert.deepEqual(draft({ made: { key: 'k', kinds: [1] } }).made, { key: 'k' });
 });
 
 test('readDraft: da conversa só ficam mensagens { role, text } de user ou assistant', () => {
@@ -1053,59 +1191,230 @@ test('readDraft: sugestões da IA precisam de chave em texto e lista de textos',
   for (const tips of bad) assert.deepEqual(draft({ tips }).tips, NO_TIPS, JSON.stringify(tips));
 });
 
-test('healthLabel: conferindo, backend desligado e IA não configurada', () => {
+test('readDraft: a escolha do texto do editor no chat só vale com true', () => {
+  for (const editorChat of [false, 'true', 1, null, undefined]) assert.equal(draft({ editorChat }).editorChat, false);
+});
+
+// O que esta aba guardou (sessionStorage), como browser() faz com o localStorage. Sem items, a aba fica sem
+// sessionStorage, como no Node: cada teste que usa tab() termina com tab().
+function tab(items) {
+  if (!items) {
+    delete globalThis.sessionStorage;
+    return;
+  }
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: { getItem: k => items[k] ?? null },
+    configurable: true,
+    writable: true,
+  });
+}
+
+// sessionStorage que o navegador bloqueia: ler o nome já lança erro.
+function blockedTab() {
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    get() {
+      throw Error('SecurityError');
+    },
+    configurable: true,
+  });
+}
+
+test('readDraft: o rascunho desta aba vale mais que o último que alguma aba gravou', () => {
+  try {
+    browser({ 'cerebro-rascunho': JSON.stringify({ ...DRAFT, input: 'Texto da outra aba' }) });
+    tab({ 'cerebro-rascunho': JSON.stringify(DRAFT) });
+    assert.deepEqual(readDraft(), DRAFT);
+  } finally {
+    tab();
+  }
+});
+
+test('readDraft: aba sem rascunho, sem sessionStorage ou com ele bloqueado lê o último gravado', () => {
+  const other = { ...DRAFT, input: 'Texto da outra aba' };
+  browser({ 'cerebro-rascunho': JSON.stringify(other) });
+  try {
+    tab({});
+    assert.deepEqual(readDraft(), other, 'aba nova');
+    blockedTab();
+    assert.deepEqual(readDraft(), other, 'sessionStorage bloqueado');
+    tab();
+    assert.deepEqual(readDraft(), other, 'sem sessionStorage');
+  } finally {
+    tab();
+  }
+});
+
+test('read: com session lê o que esta aba guardou; bloqueado ou ausente, devolve o padrão', () => {
+  browser({ 'cerebro-x': '"de todas as abas"' });
+  try {
+    tab({ 'cerebro-x': '"desta aba"' });
+    assert.equal(read('x', 'padrão', true), 'desta aba');
+    assert.equal(read('x', 'padrão'), 'de todas as abas');
+    blockedTab();
+    assert.equal(read('x', 'padrão', true), 'padrão');
+    tab();
+    assert.equal(read('x', 'padrão', true), 'padrão');
+  } finally {
+    tab();
+  }
+});
+
+test('demoStorage: a demonstração lê à parte, com o prefixo cerebro-demo-, e o app com IA não vê o que ela grava', () => {
+  assert.equal(storageKey('events'), 'cerebro-events');
+  browser({
+    'cerebro-saved': JSON.stringify([{ ...GOOD, title: 'Do app com IA' }]),
+    'cerebro-user': JSON.stringify({ name: 'Ana', area: 'Economia' }),
+    'cerebro-rascunho': JSON.stringify({ ...DRAFT, input: 'Texto do app com IA' }),
+    'cerebro-demo-saved': JSON.stringify([GOOD]),
+    'cerebro-demo-rascunho': JSON.stringify(DRAFT),
+  });
+  try {
+    demoStorage(true);
+    assert.equal(storageKey('events'), 'cerebro-demo-events');
+    assert.deepEqual(readList('saved'), [GOOD]);
+    assert.deepEqual(readDraft(), DRAFT);
+    assert.equal(readUser(), null, 'o perfil do app com IA não aparece na demonstração');
+  } finally {
+    demoStorage(false);
+  }
+  assert.equal(storageKey('events'), 'cerebro-events');
+  assert.deepEqual(readList('saved').map(m => m.title), ['Do app com IA']);
+  assert.equal(readDraft().input, 'Texto do app com IA');
+});
+
+test('storageKey: o "Fundo animado" é do aparelho, e a demonstração lê a mesma chave do app com IA', () => {
+  browser({ 'cerebro-fundo': 'false', 'cerebro-demo-fundo': 'true' });
+  try {
+    demoStorage(true);
+    assert.equal(storageKey('fundo'), 'cerebro-fundo');
+    assert.equal(read('fundo', true), false, 'as ondas paradas no app com IA continuam paradas na demonstração');
+  } finally {
+    demoStorage(false);
+  }
+  assert.equal(storageKey('fundo'), 'cerebro-fundo');
+});
+
+test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {
+  assert.equal(newId([], 1000), 1000);
+  assert.equal(newId([{ id: 5 }, { id: 9 }], 1000), 1000);
+  const kept = { id: newId([], 1000) };
+  assert.equal(newId([kept], 1000), 1001, 'o anterior e o novo no mesmo milissegundo');
+  assert.equal(newId([null, 'texto', { id: 'x' }, { id: 1.5 }, { id: 2000 }], 1000), 2001);
+});
+
+const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+
+test('healthLabel: conferindo, Cérebro desligado e IA não configurada', () => {
   assert.deepEqual(healthLabel(null), { text: 'Conferindo a IA…', tone: '' });
-  assert.deepEqual(healthLabel(false), { text: 'Backend desligado', tone: 'off' });
+  assert.deepEqual(healthLabel(false), { text: 'Cérebro desligado', tone: 'off' });
   assert.deepEqual(
     healthLabel({ status: 'ok', ai_configured: false, provider: 'gemini', model: 'gemini-flash', calls_today: 0 }),
     { text: 'IA não configurada', tone: 'warn' }
   );
 });
 
-test('healthLabel: IA ativa mostra o modelo em uso e as chamadas de hoje', () => {
+test('healthLabel: IA ativa mostra o modelo em uso e as chamadas deste computador, com a dica da cota', () => {
   const health = {
     status: 'ok',
     ai_configured: true,
     provider: 'gemini',
     model: 'gemini-flash-latest',
     model_in_use: 'gemini-2.5-flash',
+    quota_exhausted: false,
   };
+  assert.deepEqual(healthLabel({ ...health, calls_today: 12 }), {
+    text: 'IA ativa · gemini-2.5-flash · 12 chamadas deste computador',
+    tone: 'ok',
+    model: 'gemini-2.5-flash',
+    count: '12 chamadas deste computador',
+    note: QUOTA_NOTE,
+  });
+  assert.equal(healthLabel({ ...health, calls_today: 1 }).text, 'IA ativa · gemini-2.5-flash · 1 chamada deste computador');
+  assert.equal(healthLabel({ ...health, calls_today: 0 }).count, '0 chamadas deste computador');
+});
+
+test('healthLabel: com a cota esgotada o selo fica âmbar até a cota virar', () => {
+  const health = { ai_configured: true, model_in_use: 'gemini-2.5-flash', calls_today: 40, quota_exhausted: true };
+  assert.deepEqual(healthLabel(health), { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE });
+  // Sem a chave a cota nem chega a ser usada: vale "IA não configurada".
+  assert.equal(healthLabel({ ...health, ai_configured: false }).text, 'IA não configurada');
+});
+
+test('healthLabel: sem model_in_use vale model; sem calls_today não há contador; o modelo vem à parte do resto', () => {
+  const plain = healthLabel({ ai_configured: true, model: 'gemini-flash-latest', calls_today: 3 });
+  assert.equal(plain.text, 'IA ativa · gemini-flash-latest · 3 chamadas deste computador');
+  assert.equal(plain.model, 'gemini-flash-latest');
+  const quiet = healthLabel({ ai_configured: true, model_in_use: 'gemini-2.5' });
+  assert.deepEqual([quiet.text, quiet.model, quiet.count], ['IA ativa · gemini-2.5', 'gemini-2.5', '']);
+  const bare = healthLabel({ ai_configured: true });
+  assert.deepEqual([bare.text, bare.model, bare.count], ['IA ativa', '', '']);
+  // Nos outros estados não há modelo: o selo mostra só o text.
+  for (const health of [null, false, { ai_configured: false, model: 'x' }]) assert.equal(healthLabel(health).model, undefined);
+});
+
+test('errorText: cada código do mapa vira uma frase simples, e o código fica nos detalhes técnicos', () => {
+  const said = 'Limite de chamadas por minuto atingido. Tente de novo em 20 segundos.';
   assert.deepEqual(
-    healthLabel({ ...health, calls_today: 12 }),
-    { text: 'IA ativa · gemini-2.5-flash · 12 chamadas hoje', tone: 'ok' }
+    errorText({ code: 'AI_RATE_LIMITED', message: said, provider_status: 'RESOURCE_EXHAUSTED', retry_after: 20 }, 429),
+    {
+      message: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
+      tech: 'AI_RATE_LIMITED · RESOURCE_EXHAUSTED · ' + said,
+      wait: 20,
+    }
   );
-  assert.equal(healthLabel({ ...health, calls_today: 1 }).text, 'IA ativa · gemini-2.5-flash · 1 chamada hoje');
-  assert.equal(healthLabel({ ...health, calls_today: 0 }).text, 'IA ativa · gemini-2.5-flash · 0 chamadas hoje');
+  const cases = {
+    AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+    AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
+      'Enquanto isso, use a demonstração.',
+    AI_MODEL_NOT_FOUND: 'A IA recusou o pedido por um problema de configuração. Mostre os detalhes técnicos a quem ' +
+      'instalou o Cérebro.',
+  };
+  for (const [code, message] of Object.entries(cases)) {
+    const error = errorText({ code, message: 'Frase do backend com .env.', provider_status: 'NOT_FOUND' }, 502);
+    assert.deepEqual(error, { message, tech: code + ' · NOT_FOUND · Frase do backend com .env.', wait: 0 }, code);
+  }
+  for (const code of Object.keys(ERRORS)) {
+    const { message } = errorText({ code, message: 'x', provider_status: '' }, 502);
+    assert.equal(message, ERRORS[code]);
+    assert.doesNotMatch(message, /\[|AI_/, code);
+  }
 });
 
-test('healthLabel: sem model_in_use vale model; sem calls_today não há contador', () => {
-  assert.equal(
-    healthLabel({ ai_configured: true, model: 'gemini-flash-latest', calls_today: 3 }).text,
-    'IA ativa · gemini-flash-latest · 3 chamadas hoje'
-  );
-  assert.equal(healthLabel({ ai_configured: true, model_in_use: 'gemini-2.5' }).text, 'IA ativa · gemini-2.5');
-  assert.deepEqual(healthLabel({ ai_configured: true }), { text: 'IA ativa', tone: 'ok' });
-});
-
-test('errorText: frase do backend com o código e o estado do provedor entre colchetes', () => {
-  const limited = { code: 'AI_RATE_LIMITED', message: 'Muitas chamadas.', provider_status: '429', retry_after: 20 };
-  assert.equal(errorText(limited, 429), 'Muitas chamadas. [AI_RATE_LIMITED · 429]');
-  assert.equal(
+test('errorText: código fora do mapa fica com a frase do backend, sem repeti-la nos detalhes', () => {
+  assert.deepEqual(
     errorText({ code: 'INVALID_INPUT', message: 'O texto está curto demais.', provider_status: '' }, 422),
-    'O texto está curto demais. [INVALID_INPUT]'
+    { message: 'O texto está curto demais.', tech: 'INVALID_INPUT', wait: 0 }
   );
-  assert.equal(errorText('Serviço fora do ar', 503), 'Serviço fora do ar');
+  assert.deepEqual(
+    errorText({ code: 'AI_INCOMPLETE_RESPONSE', message: 'A IA interrompeu a resposta.', provider_status: 'MAX_TOKENS' }, 502),
+    { message: 'A IA interrompeu a resposta.', tech: 'AI_INCOMPLETE_RESPONSE · MAX_TOKENS', wait: 0 }
+  );
+  assert.deepEqual(errorText('Serviço fora do ar', 503), { message: 'Serviço fora do ar', tech: 'HTTP 503', wait: 0 });
 });
 
-test('errorText: detail em lista (formato antigo) vira uma frase em português', () => {
+test('errorText: detail em lista (formato antigo) ou ausente continua em português, com o HTTP nos detalhes', () => {
   const old = [{ type: 'string_too_short', loc: ['body', 'content'], msg: 'String should have at least 3 characters' }];
-  assert.equal(errorText(old, 422), 'Pedido recusado: confira o texto e tente de novo.');
+  assert.deepEqual(errorText(old, 422), { message: 'Pedido recusado: confira o texto e tente de novo.', tech: 'HTTP 422', wait: 0 });
+  const general = 'O Cérebro não conseguiu atender o pedido. Tente de novo.';
+  assert.deepEqual(errorText(undefined, 500), { message: general, tech: 'HTTP 500', wait: 0 });
+  assert.deepEqual(errorText(null, 502), { message: general, tech: 'HTTP 502', wait: 0 });
+  assert.deepEqual(errorText({ code: 'AI_ERROR' }, 502), { message: general, tech: 'AI_ERROR', wait: 0 });
 });
 
-test('errorText: sem frase do backend, diz o código HTTP', () => {
-  assert.equal(errorText(undefined, 500), 'Falha no backend (HTTP 500).');
-  assert.equal(errorText(null, 502), 'Falha no backend (HTTP 502).');
-  assert.equal(errorText({ code: 'AI_ERROR' }, 502), 'Falha no backend (HTTP 502). [AI_ERROR]');
+test('errorText: a espera vem do retry_after, em segundos inteiros; sem ele é zero', () => {
+  const wait = retry_after => errorText({ code: 'AI_RATE_LIMITED', message: 'x', retry_after }, 429).wait;
+  assert.deepEqual([wait(20), wait(1), wait(2.4), wait(undefined), wait(0), wait(-3), wait('logo')], [20, 1, 3, 0, 0, 0, 0]);
+});
+
+test('ERRORS e FAILS: nenhuma frase para o aluno fala de backend, Python, proxy, Vite, .env ou código entre colchetes', () => {
+  for (const text of [...Object.values(ERRORS), ...Object.values(FAILS)]) {
+    for (const word of ['backend', 'Python', 'proxy', 'Vite', '.env', 'Não foi possível', '[']) {
+      assert.ok(!text.includes(word), word + ' em: ' + text);
+    }
+  }
+  // A frase do Cérebro desligado diz o que fazer.
+  assert.equal(FAILS.off, 'O Cérebro não está ligado neste computador. Abra o iniciar.ps1 de novo e tente outra vez.');
 });
 
 test('dictate: soma o trecho ditado ao texto do editor e corta em 20.000 caracteres', () => {
@@ -1365,15 +1674,19 @@ const BACKUP = {
 // O arquivo lido de novo a cada teste, para um teste não mexer no que o outro usa.
 const backup = () => readBackup(JSON.stringify(BACKUP));
 const EMPTY = { saved: [], events: [], erros: [] };
+// Nada ficou de fora do arquivo.
+const NONE = { saved: 0, events: 0, erros: 0 };
 
-test('readBackup: arquivo bom devolve as três listas; o perfil não é importado', () => {
-  assert.deepEqual(backup(), { saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros });
+test('readBackup: arquivo bom devolve as três listas, nada de fora e o perfil', () => {
+  assert.deepEqual(backup(), {
+    saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros, fora: NONE, user: { name: 'Ana', area: 'Economia' },
+  });
 });
 
-test('readBackup: material sem summary fica de fora; o resto do arquivo entra', () => {
+test('readBackup: material sem summary fica de fora e é contado; o resto do arquivo entra', () => {
   const { summary, ...noSummary } = BACKUP.saved[0];
   const got = readBackup(JSON.stringify({ ...BACKUP, saved: [noSummary, ...BACKUP.saved, null, 'texto'] }));
-  assert.deepEqual(got, backup());
+  assert.deepEqual(got, { ...backup(), fora: { ...NONE, saved: 3 } });
 });
 
 test('readBackup: material sem data válida ou com área estragada, resposta e erro fora do formato ficam de fora', () => {
@@ -1384,7 +1697,21 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
     events: [{ ...BACKUP.events[0], ok: 'sim' }, BACKUP.events[1], { kind: 'quiz' }],
     erros: [{ ...BACKUP.erros[0], key: 'outra|chave' }, { ...BACKUP.erros[0], item: { type: 'short' } }, BACKUP.erros[0]],
   }));
-  assert.deepEqual(got, { saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros });
+  assert.deepEqual(got, {
+    saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros, fora: { saved: 3, events: 2, erros: 2 }, user: null,
+  });
+});
+
+test('readBackup: o perfil só vale com nome de 1 a 50 caracteres e área da lista; dele só entram o nome e a área', () => {
+  const user = value => readBackup(JSON.stringify({ ...BACKUP, user: value })).user;
+  assert.deepEqual(user({ name: '  Bia  ', area: 'Direito', admin: true }), { name: 'Bia', area: 'Direito' });
+  assert.deepEqual(user({ name: 'a'.repeat(50), area: 'Escolar' }), { name: 'a'.repeat(50), area: 'Escolar' });
+  const bad = [
+    null, 'Ana', 5, [], { area: 'Economia' }, { name: '', area: 'Economia' }, { name: '   ', area: 'Economia' },
+    { name: 'a'.repeat(51), area: 'Economia' }, { name: 5, area: 'Economia' }, { name: 'Ana' },
+    { name: 'Ana', area: 'Medicina' },
+  ];
+  for (const value of bad) assert.equal(user(value), null, JSON.stringify(value));
 });
 
 test('readBackup: material da demonstração mantém a marca semIA, e o de um exemplo, as marcas ia e pronto', () => {
@@ -1407,13 +1734,15 @@ test('readBackup: texto que não é JSON, JSON que é lista e objeto sem versao 
   for (const text of notBackup) assert.equal(readBackup(text), null, text);
 });
 
-test('readBackup: lista ausente ou fora do formato vale lista vazia', () => {
-  assert.deepEqual(readBackup('{"versao":1}'), EMPTY);
-  assert.deepEqual(readBackup('{"versao":1,"saved":{},"events":"x","erros":5}'), EMPTY);
+test('readBackup: lista ausente ou fora do formato vale lista vazia, sem nada contado de fora', () => {
+  const none = { ...EMPTY, fora: NONE, user: null };
+  assert.deepEqual(readBackup('{"versao":1}'), none);
+  assert.deepEqual(readBackup('{"versao":1,"saved":{},"events":"x","erros":5}'), none);
 });
 
 test('mergeBackup: num navegador vazio, entra tudo o que o arquivo trouxe', () => {
-  assert.deepEqual(mergeBackup(EMPTY, backup()), backup());
+  const { saved, events, erros } = backup();
+  assert.deepEqual(mergeBackup(EMPTY, backup()), { saved, events, erros });
 });
 
 test('mergeBackup: importar duas vezes o mesmo arquivo não duplica', () => {
@@ -1509,4 +1838,78 @@ test('backupNote: quantos materiais entraram; só respostas ou erros; nada novo'
   assert.equal(backupNote(once, mergeBackup(once, moreAnswers)), 'Desempenho e caderno de erros atualizados');
   const newerMistake = { ...backup(), erros: [mistake(Q_SHORT, 'Inflação', 16)] };
   assert.equal(backupNote(once, mergeBackup(once, newerMistake)), 'Desempenho e caderno de erros atualizados');
+});
+
+test('backupNote: o que ficou de fora e o perfil que entrou vêm depois, e então cada frase termina com ponto', () => {
+  const junto = mergeBackup(EMPTY, backup());
+  assert.equal(backupNote(EMPTY, junto, NONE), '1 material importado', 'nada de fora: a frase de sempre');
+  assert.equal(
+    backupNote(EMPTY, junto, { ...NONE, saved: 2 }),
+    '1 material importado. Ficaram de fora, por estarem incompletos: 2 materiais.'
+  );
+  assert.equal(
+    backupNote(EMPTY, junto, { saved: 1, events: 1, erros: 3 }, 'Bia'),
+    '1 material importado. Ficaram de fora, por estarem incompletos: 1 material, 1 resposta e 3 questões do ' +
+      'caderno de erros. Perfil de Bia importado.'
+  );
+  assert.equal(
+    backupNote(junto, junto, { ...NONE, events: 2, erros: 1 }),
+    'Nada novo neste arquivo. Ficaram de fora, por estarem incompletos: 2 respostas e 1 questão do caderno de erros.'
+  );
+  assert.equal(backupNote(junto, junto, NONE, 'Bia'), 'Nada novo neste arquivo. Perfil de Bia importado.');
+});
+
+test('backupSummary: o que foi no arquivo, no singular e no plural, contado como a tela mostra', () => {
+  const one = { saved: BACKUP.saved, events: [BACKUP.events[0]], erros: BACKUP.erros };
+  assert.equal(backupSummary(one), 'Backup gerado: 1 material, 1 resposta e 1 questão do caderno de erros.');
+  assert.equal(backupSummary(EMPTY), 'Backup gerado: 0 materiais, 0 respostas e 0 questões do caderno de erros.');
+  const two = {
+    saved: [...BACKUP.saved, { ...BACKUP.saved[0], id: 2 }, null],
+    events: [...BACKUP.events, { kind: 'quiz' }],
+    erros: [...BACKUP.erros, mistake(Q_MULTIPLE, 'Juros', 14), 'texto'],
+  };
+  assert.equal(backupSummary(two), 'Backup gerado: 2 materiais, 2 respostas e 2 questões do caderno de erros.');
+});
+
+// A linha do backup com "agora" em 16/11/2026 às 22h, como today().
+const backupLine = (saved, events, last, now = today()) => backupStatus({ saved, events, last, now });
+const datedOn = days => days.map(day => ({ date: at(day) }));
+
+test('backupStatus: sem material nem resposta não lembra', () => {
+  assert.deepEqual(backupLine([], [], null), { text: 'Você ainda não fez backup', due: false });
+  assert.deepEqual(backupLine([], [], at(1)), { text: 'Último backup: há 15 dias', due: false });
+});
+
+test('backupStatus: sem backup, lembra com 5 materiais ou com o registro mais antigo de 7 dias ou mais', () => {
+  assert.deepEqual(backupLine(datedOn([16]), [], null), { text: 'Você ainda não fez backup', due: false });
+  assert.equal(backupLine(datedOn([16, 16, 16, 16, 16]), [], null).due, true, '5 materiais de hoje');
+  assert.equal(backupLine([], datedOn([8]), null).due, true, 'resposta de 8 dias atrás');
+  assert.equal(backupLine([], datedOn([10, 16]), null).due, false, 'a mais antiga é de 6 dias atrás');
+  assert.equal(backupLine([{}, {}, {}, {}, { date: 'ontem' }], [], null).due, false, 'sem data não conta como novo');
+});
+
+test('backupStatus: com backup, só conta o que veio depois dele', () => {
+  assert.equal(backupLine(datedOn([14, 14, 15, 16, 16]), [], at(13)).due, true, '5 materiais depois do backup');
+  assert.equal(backupLine(datedOn([12, 14, 15, 16, 16]), [], at(13)).due, false, 'só 4 depois do backup');
+  assert.equal(backupLine([], datedOn([12]), at(6)).due, true, 'backup de 10 dias atrás e uma resposta depois');
+  assert.equal(backupLine([], [{ date: at(9, 13) }], at(9, 10)).due, true, '7 dias e uma resposta depois');
+  assert.equal(backupLine([], [{ date: at(10, 13) }], at(10, 10)).due, false, '6 dias e uma resposta depois');
+  assert.equal(backupLine(datedOn([5]), datedOn([2, 5]), at(6)).due, false, 'backup de 10 dias atrás e nada depois');
+});
+
+test('backupStatus: os dias contam pelo calendário, não por 24 horas', () => {
+  assert.equal(backupLine([], [], at(16, 8)).text, 'Último backup: hoje');
+  assert.equal(backupLine([], [], at(15)).text, 'Último backup: há 1 dia');
+  assert.equal(backupLine([], [], at(4)).text, 'Último backup: há 12 dias');
+  assert.equal(
+    backupLine([], [], at(15, 23), new Date(2026, 10, 16, 1)).text,
+    'Último backup: há 1 dia',
+    'backup ontem às 23h, conferido à 1h'
+  );
+});
+
+test('backupStatus: data do backup inválida vale como nunca', () => {
+  for (const last of ['ontem', 5, null, undefined, {}, '']) {
+    assert.deepEqual(backupLine([], datedOn([8]), last), { text: 'Você ainda não fez backup', due: true }, String(last));
+  }
 });

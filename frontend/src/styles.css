@@ -859,10 +859,6 @@ select {
     font-weight: 500
 }
 
-.profile .icon {
-    color: var(--ink-3)
-}
-
 .avatar {
     display: grid;
     place-items: center;
@@ -893,10 +889,6 @@ select {
     white-space: nowrap
 }
 
-.topbar .profile > .icon {
-    display: none
-}
-
 /* Sem caixa: a barra de cima, o dock e o palco são células do .app. */
 .shell {
     display: contents
@@ -904,7 +896,7 @@ select {
 
 /* Barra de cima: pílula de vidro em três colunas, a marca, o atalho "Pergunte ao Cérebro" e as ações. As laterais
    dividem o que sobra por igual, com o atalho no meio (até 25 rem e 30vw), mas nunca ficam menores que o conteúdo: o
-   estado da IA vai inteiro, também o texto longo do backend ("IA ativa · modelo · N chamadas hoje"), e quem cede é o
+   estado da IA vai inteiro, também o texto longo ("IA ativa · modelo · N chamadas deste computador"), e quem cede é o
    atalho, que encolhe e sai um pouco do meio. Ela não fica presa ao rolar: a faixa de espera (.busy) é que fica. */
 .topbar {
     grid-column: 2;
@@ -1039,6 +1031,23 @@ select {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis
+}
+
+/* Com a barra estreita para o estado inteiro numa linha, o nome do modelo sai da vista e continua no leitor de tela: no
+   celular e, com a letra a 200%, no computador (a medida em rem cresce com a letra). Assim a conta de chamadas cabe. */
+.topbar {
+    container-type: inline-size
+}
+
+@container (max-width: 45rem) {
+    .status-model {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
 }
 
 /* No Dúvidas (#57) o chat chama mais atenção que o resto: a barra de cima e o dock das seções perdem o vidro forte, a
@@ -1203,6 +1212,18 @@ main:focus {
 .error .icon {
     margin-top: .05rem;
     color: var(--pen)
+}
+
+/* Os detalhes técnicos do erro (App.jsx, Problem): fechados, em tinta fraca, para quem instalou o Cérebro. */
+.error details {
+    margin-top: var(--sp-1);
+    color: var(--ink-2)
+}
+
+.error summary {
+    width: fit-content;
+    padding: var(--sp-1) 0;
+    cursor: pointer
 }
 
 /* ---------- Estudar ---------- */
@@ -1557,16 +1578,36 @@ main:focus {
     margin-top: .05rem
 }
 
-/* As ações de gerar: um grupo de botões comuns, Resumir em destaque. O ícone das outras leva a cor da seção onde o
-   material abre (--tab, hoje o ciano em todas). */
+/* O grupo de gerar: o botão principal ou, com o material do texto aberto, as três partes, que só abrem, e o "Gerar de
+   novo", à direita. O ícone de cada parte leva a cor da seção dela (--tab, hoje o ciano em todas). */
 .actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--sp-2)
 }
 
-.action:not(.primary):not(:disabled) .icon {
+/* Sem lugar na linha, o custo desce para uma linha dele, embaixo do nome. */
+.action {
+    flex-wrap: wrap;
+    row-gap: var(--sp-0)
+}
+
+.action[data-tab]:not(:disabled) .icon {
     color: var(--tab)
+}
+
+.open-parts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-right: auto
+}
+
+.open-parts > span {
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
 }
 
 /* Faixa "Seu progresso": números honestos, os mesmos do Desempenho. */
@@ -1640,13 +1681,17 @@ main:focus {
     color: var(--on-accent)
 }
 
+/* As 7 marcas numa linha só, com até 20 px cada: no cartão estreito todas encolhem por igual (15 px no cartão de
+   138 px, em 900 px), em vez de vazar dele. Quebrando a linha, a última marca, a de hoje, ficava sozinha embaixo. */
 .day-marks {
-    display: flex
+    display: grid;
+    grid-auto-columns: minmax(0, 1.25rem);
+    grid-auto-flow: column
 }
 
 .day-marks .pen svg {
-    width: 1.25rem;
-    height: 1.25rem
+    width: 100%;
+    height: auto
 }
 
 /* ---------- Material: Resumos, Flashcards, Quizzes ---------- */
@@ -1802,8 +1847,16 @@ main:focus {
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
 .ai-ask small,
-.tool small {
+.tool small,
+.ask small,
+.action small {
     color: var(--ink-2);
+    font-weight: 400
+}
+
+/* No botão ciano o custo fica no preto do texto: o cinza não chegava a 4,5:1 sobre o ciano. */
+.primary small {
+    color: inherit;
     font-weight: 400
 }
 
@@ -1838,6 +1891,14 @@ main:focus {
     color: var(--ink-2);
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums
+}
+
+/* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
+   negativa deixa o alvo de 36 px na altura da etiqueta (24 px): o cabeçalho fica do tamanho do esqueleto da geração.
+   No toque o alvo tem 44 px, e a margem acompanha (pointer: coarse, no fim do arquivo). */
+.study-head .link {
+    margin-block: calc((1.5rem - var(--control-h-inline)) / 2);
+    margin-inline: 0 auto
 }
 
 /* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
@@ -2738,6 +2799,27 @@ main:focus {
     margin-left: auto
 }
 
+/* "Sobre:" e o material aberto no lugar da área e do nível (chat-composer.jsx), numa linha só: o título longo termina
+   em reticências. A base de 12rem manda o botão da fonte para a linha de baixo antes de o título sumir. */
+.composer-about {
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+.composer-about strong {
+    color: var(--ink);
+    font-weight: 600
+}
+
+.composer-bar .link {
+    min-height: var(--control-h-tool)
+}
+
 .shortcuts {
     width: var(--control-h-tool);
     min-height: var(--control-h-tool);
@@ -2906,7 +2988,8 @@ main:focus {
     margin-left: auto
 }
 
-/* A escada de uma questão no caderno: ○ novo, ✗ errei, ↻ refazer, ✓ certo em outro dia. */
+/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ refazer em outro dia, ✓ certo em outro
+   dia: sai do caderno. */
 .ladder {
     display: flex;
     flex-wrap: wrap;
@@ -3050,6 +3133,16 @@ main:focus {
     text-align: center
 }
 
+/* O rótulo que diz o que mede, em duas linhas: em 13 px "20 respostas" e "100% certas" cabem inteiros na coluna de
+   5 rem (em 14 px quebravam em quatro). O curto ("50% · 6") fica para o celular (mobile.css). */
+.chart .full {
+    font-size: var(--fs-1)
+}
+
+.chart .short {
+    display: none
+}
+
 /* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. A barra cresce do chão
    quando o gráfico aparece (só ela, por transform); a do esqueleto fica parada. */
 .chart-bar {
@@ -3073,6 +3166,16 @@ main:focus {
     margin-top: var(--sp-3);
     color: var(--ink-2);
     font-size: var(--fs-2)
+}
+
+/* Os botões do próximo passo levam o título do material. Palavra longa quebra dentro do botão: sem isso a largura
+   mínima do botão, item flex da .row, é a palavra inteira, e a página rolava de lado em 320 px. No celular o nome
+   quebra em várias linhas: o respiro de 8 px e o canto da metade da altura de uma linha tiram o texto da borda (com
+   uma linha o botão continua a pílula de 44 px). */
+.next-step button {
+    padding-block: var(--sp-2);
+    border-radius: calc(var(--control-h) / 2);
+    overflow-wrap: anywhere
 }
 
 .subjects {
@@ -3171,6 +3274,32 @@ main:focus {
    (o Desfazer protege a exclusão). */
 .library-item .icon-button:hover:not(:disabled) {
     color: var(--ink)
+}
+
+/* Pé da Biblioteca e do Desempenho (ui.jsx, BackupNote): onde os dados ficam, o último backup e o botão, no tom da
+   frase de apoio (.hint), separados do resto por um fio como a faixa "Seu progresso". O botão desce para a linha de
+   baixo quando não cabe ao lado. */
+.backup-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3) var(--sp-4);
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
+    border-top: var(--hair) solid var(--line);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.backup-note p {
+    flex: 1 1 20rem;
+    max-width: var(--measure)
+}
+
+.backup-note strong {
+    color: var(--ink);
+    font-weight: 650
 }
 
 /* ---------- Avisos, espera e janelas ---------- */
@@ -3470,6 +3599,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     .mistakes .drop,
     .toast button {
         min-height: var(--control-h)
+    }
+
+    /* "Recomeçar" do quiz e do baralho: com o alvo de 44 px, o cabeçalho continua na altura da etiqueta (24 px), a do
+       esqueleto da geração. */
+    .study-head .link {
+        margin-block: calc((1.5rem - var(--control-h)) / 2)
     }
 }
 
