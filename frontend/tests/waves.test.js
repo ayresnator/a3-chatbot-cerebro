@@ -201,46 +201,69 @@ test('o shader declara cada uniform que startWaves preenche', () => {
   }
 });
 
-// O mínimo que o começo de startWaves toca fora do navegador: ouvintes que não fazem nada, a folga da página (idle) e
-// os pedidos de quadro (frames), que ficam guardados para o teste rodar quando quiser. O temporizador é o do teste.
+// O mínimo que o começo de startWaves toca fora do navegador: ouvintes que não fazem nada, os pedidos de quadro
+// (frames), que ficam guardados para o teste rodar quando quiser, e o aviso da primeira pintura da página, que o
+// teste dá com begin() (watching diz se alguém ainda espera por ele). O temporizador é o do teste.
 function fakeBrowser(t) {
   const quiet = { addEventListener() {}, removeEventListener() {} };
-  const env = { quiet, idle: null, frames: [] };
+  const env = { quiet, frames: [], watching: false, begin: null };
+  const real = globalThis.PerformanceObserver;
   const fake = {
-    window: { ...quiet, devicePixelRatio: 1, matchMedia: () => quiet, requestIdleCallback: true },
+    window: { ...quiet, devicePixelRatio: 1, matchMedia: () => quiet },
     document: quiet,
-    requestIdleCallback: begin => (env.idle = begin),
-    cancelIdleCallback() {},
     requestAnimationFrame: frame => env.frames.push(frame),
     cancelAnimationFrame() {},
+    PerformanceObserver: class {
+      static supportedEntryTypes = ['paint'];
+      constructor(seen) { env.begin = seen; }
+      observe() { env.watching = true; }
+      disconnect() { env.watching = false; }
+    },
   };
   Object.assign(globalThis, fake);
-  t.after(() => Object.keys(fake).forEach(name => delete globalThis[name]));
+  t.after(() => {
+    Object.keys(fake).forEach(name => delete globalThis[name]);
+    globalThis.PerformanceObserver = real;
+  });
   t.mock.timers.enable({ apis: ['setTimeout'] });
   return env;
 }
 
-test('startWaves: a primeira vez num canvas espera a folga da página; no que já tem contexto, começa na chamada', t => {
+test('startWaves: o contexto espera a primeira pintura da página, sem espera fixa; com ela já feita, sai na chamada', t => {
   const env = fakeBrowser(t);
   // O contexto já chega perdido: o link() para no aviso sem chamar o WebGL.
   let contexts = 0;
   const reports = [];
   const canvas = { ...env.quiet, getContext: () => (contexts++, { isContextLost: () => true }) };
   const options = { onActive: active => reports.push(active) };
+  // Um só substituto, trocado pela variável: dois no mesmo método deixariam um para os testes seguintes.
+  let painted = [];
+  t.mock.method(performance, 'getEntriesByName', () => painted);
 
-  const stop = startWaves(canvas, options);
-  t.mock.timers.tick(999);
-  assert.equal(env.idle, null, 'antes de 1 s, nem o pedido da folga sai');
-  t.mock.timers.tick(1500);
-  assert.equal(contexts, 0, 'o contexto espera a página ficar livre');
-  env.idle();
-  assert.deepEqual([contexts, reports], [1, [false]]);
-  stop();
+  startWaves(canvas, options);
+  assert.deepEqual([contexts, env.watching], [0, true], 'antes da primeira pintura o contexto não sai');
+  env.begin();
+  assert.deepEqual([contexts, reports, env.watching], [1, [false], false], 'sai com ela, sem 1,5 s nem a folga da página');
 
-  env.idle = null;
   startWaves(canvas, options)();
-  assert.equal(env.idle, null, 'o começo novo não passa pelo requestIdleCallback');
-  assert.deepEqual([contexts, reports], [2, [false, false]]);
+  assert.deepEqual([contexts, env.watching], [1, false], 'parado antes da pintura, deixa de esperar por ela');
+
+  painted = [{}];
+  startWaves(canvas, options)();
+  assert.deepEqual([contexts, reports], [2, [false, false]], 'com a página já pintada, o começo novo sai na chamada');
+
+  painted = [];
+  PerformanceObserver.supportedEntryTypes = [];
+  startWaves(canvas, options)();
+  assert.equal(contexts, 3, 'no navegador que não avisa da pintura, também');
+});
+
+test('o fundo parado fica atrás do canvas: data-waves mostra o --waves-rest, e o canvas só aparece com data-waves="on"', () => {
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /--waves-rest: linear-gradient\(/);
+  assert.match(css, /:root\[data-waves\] body::before \{\s*background: var\(--waves-rest\)/);
+  assert.match(css, /:root\[data-waves=on\] \.waves \{\s*visibility: visible/);
+  assert.doesNotMatch(css, /:root\[data-waves\] \.waves \{/, 'sem o "on", o canvas com contexto e sem desenho cobriria o fundo de preto');
 });
 
 test('startWaves: desligado com o shader ainda ligando, só apaga o programa quando a ligação acaba', t => {
@@ -258,8 +281,7 @@ test('startWaves: desligado com o shader ainda ligando, só apaga o programa qua
   }, { get: (real, name) => real[name] ?? (() => null) });
   const reports = [];
   const stop = startWaves({ ...env.quiet, getContext: () => gl }, { onActive: active => reports.push(active) });
-  t.mock.timers.tick(1500);
-  env.idle();
+  env.begin();
   assert.equal(env.frames.length, 1, 'com a ligação em andamento, um quadro fica pedido para perguntar de novo');
 
   stop();
@@ -303,8 +325,7 @@ test('startWaves: cada quadro animado limpa o canvas inteiro no tom do palco ant
   ];
 
   const stop = startWaves(canvas);
-  t.mock.timers.tick(1500);
-  env.idle();
+  env.begin();
   assert.deepEqual(calls, [...setup, ...frame], 'o primeiro quadro');
   calls = [];
   env.frames.shift()(1000);
@@ -312,6 +333,8 @@ test('startWaves: cada quadro animado limpa o canvas inteiro no tom do palco ant
   stop();
 
   calls = [];
-  startWaves(canvas, { animate: false })();
+  const still = startWaves(canvas, { animate: false });
+  env.begin();
+  still();
   assert.deepEqual(calls, [...setup, ['scissor', 0, 0, 1351, 768], ['drawArrays', TRIANGLES, 0, 3]], 'parado: a tela inteira');
 });

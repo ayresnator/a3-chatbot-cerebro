@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Countdown, Waves, useWavesAllowed, useWavesStill,
+  PerfilSkeleton, Countdown, StudyPlan, ExamDate, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
@@ -25,7 +25,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
-  stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
+  stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   originNote, virtualNote, findSource, markPieces, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
@@ -735,7 +735,9 @@ function App() {
   // Outra aba pode ter gravado depois que esta abriu: a lista nova parte do que está no navegador, não da cópia
   // desta aba, que apagaria o que a outra gravou. Se o navegador recusar a gravação, o evento fica só nesta tela.
   // q é o enunciado da questão do quiz: com ele o desempenho conta só a primeira resposta de cada questão no dia.
-  // extra leva campos a mais da resposta, como a certeza marcada no quiz (conf, #80).
+  // extra leva campos a mais da resposta: a certeza marcada no quiz (conf, #80) e caderno: true, quando a questão estava
+  // no caderno de erros antes da resposta. É por ele que a véspera da prova sabe o que o caderno tinha no começo do dia
+  // (lib.js, studyPlan).
   function event(kind, ok, topic = area, q, title = result?.title, extra) {
     const entry = { kind, ok, area: topic, title, q, ...extra, date: new Date().toISOString() };
     const next = [...readList('events'), entry];
@@ -931,6 +933,42 @@ function App() {
     toast('Material salvo na biblioteca');
   }
 
+  // "Data da prova" (ui.jsx, ExamDate): a data vai para o material na biblioteca, a partir da lista do navegador, como no
+  // store(). O material que ainda não está lá é salvo com ela, e o aviso diz isso. Sem data, o campo prova sai.
+  // provaMarcada é a hora em que a data foi marcada: com ela marcada hoje, a véspera conta dali (lib.js, studyPlan).
+  // O rascunho é gravado junto: na saída da página (ExamDate grava no pagehide) não há outro desenho, e ele já tinha
+  // sido gravado sem a data.
+  function setExam(day) {
+    const stored = readList('saved');
+    const at = result.id ? stored.findIndex(s => s?.id === result.id) : -1;
+    const { prova, provaMarcada, ...rest } = at < 0 ? result : stored[at];
+    const material = day ? { ...rest, prova: day, provaMarcada: new Date().toISOString() } : rest;
+    const note = day ? 'Prova marcada para ' + day.slice(8) + '/' + day.slice(5, 7) + ': o plano do dia fica no Estudar.'
+      : 'Data da prova apagada.';
+    const open = (opened, text) => {
+      setResult(opened);
+      toast(text);
+      if (draft.current) {
+        draft.current = { ...draft.current, result: opened };
+        saveDraft();
+      }
+    };
+    if (at < 0 && day) {
+      const entry = store(material);
+      if (entry) open(entry, 'Material salvo na biblioteca. ' + note);
+      return;
+    }
+    if (at >= 0) {
+      stored[at] = material;
+      if (!persist('saved', stored)) return;
+      setSaved(stored.filter(validMaterial));
+    }
+    // A cópia lida da biblioteca tem outros objetos. Com o resumo igual, a tela fica com os do material aberto, que o
+    // campo do "Explicar com minhas palavras" (#82) segue: marcar a data não fecha o campo nem perde o comentário pedido.
+    const same = JSON.stringify(material.summary) === JSON.stringify(result.summary);
+    open(same ? { ...material, summary: result.summary } : material, note);
+  }
+
   // Material aberto que ainda não foi para a biblioteca é guardado antes de outro tomar o lugar: ele custou uma
   // chamada de IA. Quem já tem id foi salvo ou veio de lá. Devolve true se guardou.
   function keep(previous) {
@@ -1067,12 +1105,14 @@ function App() {
     const q = quizList[idx];
     const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
     const from = origin(q);
+    const key = mistakeKey(from.title, q.question);
     const now = new Date();
     // before é o erro do caderno de antes da resposta: a revisão da IA que aceita um chute o devolve (review).
-    const before = readList('erros').find(e => e?.key === mistakeKey(from.title, q.question));
+    const before = readList('erros').find(e => e?.key === key);
     setAnswer({ value, ok, conf, before });
     setAnswers([...answers, { ...q, ok, given: value, conf }]);
-    event('quiz', ok, from.area, fold(q.question), from.title, { conf });
+    const listed = mistakes.some(e => e.key === key);
+    event('quiz', ok, from.area, fold(q.question), from.title, { conf, ...(listed && { caderno: true }) });
     notebook(list => noteAnswer(list, q, from.title, from.area, ok, conf, now));
     // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
     if (blind) {
@@ -1152,9 +1192,9 @@ function App() {
 
   // "Revisão do dia": os cartões que voltam hoje, de todos os materiais, num baralho temporário, como o quiz do caderno:
   // no máximo 20 por vez, os mais atrasados primeiro. O material que estava aberto fica guardado e volta quando o aluno
-  // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está.
-  function dayDeck() {
-    const cards = dayCards(cardsDue);
+  // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está. O plano
+  // até a prova (openTask) passa os cartões de hoje de um material.
+  function dayDeck(cards = dayCards(cardsDue)) {
     setParked(opened);
     setResult({
       virtual: 'Flashcards',
@@ -1169,6 +1209,23 @@ function App() {
     restart();
     setNotice(null);
     say('Revisão do dia: ' + cards.length + ' ' + plural(cards.length, 'cartão', 'cartões') + '.');
+  }
+
+  // O botão do plano até a prova (ui.jsx, StudyPlan) abre a tarefa de hoje: as questões do material no caderno; os
+  // cartões que faltam, numa revisão como a do dia, ou o baralho do material quando faltam todos; o quiz dele; ou, no dia
+  // da prova, o resumo.
+  function openTask({ material, task, left, whole }) {
+    if (task === 'erros') return redoMistakes(left);
+    if (task === 'cartoes' && !whole) return dayDeck(dayCards(left));
+    const to = task === 'quiz' ? 'Quizzes' : task === 'cartoes' ? 'Flashcards' : 'Resumos';
+    const focus = task === 'quiz' ? QUESTION_FOCUS : task === 'cartoes' ? ['.flashcard', 'main h1'] : ['#material-titulo'];
+    if (opened?.id !== material.id) return openSaved(material, to, focus);
+    // Já aberto, como no "Abrir" do Desempenho: o quiz e o baralho ficam onde estavam, e os que tinham terminado recomeçam.
+    setEditorChat(false);
+    go(to);
+    focusAfter.current = focus;
+    if (task === 'quiz' && done) restartQuiz();
+    if (task === 'cartoes' && session.pos >= session.queue.length) setDeck(null);
   }
 
   // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
@@ -1679,13 +1736,14 @@ function App() {
   }
 
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
-  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho.
-  function openSaved(material) {
+  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho. O plano até a
+  // prova (openTask) abre a parte da tarefa (to), com o foco nela.
+  function openSaved(material, to = 'Resumos', focus = ['#material-titulo']) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
     made.current = { key: '' };
     setEditorChat(false);
     setResult(material);
-    openPage('Resumos', ['#material-titulo']);
+    openPage(to, focus);
     if (!result || !sameMaterial(result, material)) restart();
   }
 
@@ -1729,6 +1787,11 @@ function App() {
     [boxes, opened, saved, today]
   );
   const mistakesDue = useMemo(() => dueMistakes(mistakes, new Date()), [mistakes, today]);
+  // O plano até a prova (lib.js, studyPlan): só no Estudar e no Desempenho, fora do caminho de cada resposta.
+  const plan = useMemo(
+    () => (page === 'Estudar' || page === 'Desempenho' ? studyPlan(saved, { events, mistakes, boxes }, new Date()) : []),
+    [page, saved, events, mistakes, boxes, today]
+  );
   // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
@@ -2281,6 +2344,7 @@ function App() {
                         <Icon name="seta" />
                       </button>
                     </div>
+                    {plan.length > 0 && <StudyPlan rows={plan} onOpen={openTask} />}
                     <div className="stats">
                       <Stat
                         value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
@@ -2368,7 +2432,8 @@ function App() {
                             <p className="meta">
                               {result.exam ? examLine(result.quiz)
                                 : result.virtual === 'Quizzes' ? 'Questões que você errou'
-                                : result.virtual ? 'Cartões de vários materiais'
+                                : result.virtual ? (new Set(result.flashcards.map(c => c.title)).size === 1
+                                  ? 'Cartões de "' + result.flashcards[0].title + '"' : 'Cartões de vários materiais')
                                 : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
@@ -2381,11 +2446,16 @@ function App() {
                                 <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
+                          {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela e o Salvar ficam
+                              juntos: na tela estreita, os dois descem para baixo do título. */}
                           {!result.virtual && (
-                            <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
-                              <Icon name={isSaved ? 'check' : 'salvar'} />
-                              {isSaved ? 'Salvo' : 'Salvar material'}
-                            </button>
+                            <div className="header-actions">
+                              <ExamDate key={result.title} value={provaOf(result)} today={today} onSave={setExam} say={say} />
+                              <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
+                                <Icon name={isSaved ? 'check' : 'salvar'} />
+                                {isSaved ? 'Salvo' : 'Salvar material'}
+                              </button>
+                            </div>
                           )}
                         </div>
                         {!result.virtual && tablist(false)}
@@ -3612,6 +3682,8 @@ function App() {
                     mistakes={mistakes}
                     due={mistakesDue}
                     redoMistakes={redoMistakes}
+                    plan={plan}
+                    onPlan={openTask}
                     events={events}
                     backup={backupLine}
                     onExport={exportBackup}
