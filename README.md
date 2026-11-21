@@ -23,7 +23,7 @@ O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` n
 
 O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
 
-O que a IA não faz: corrigir múltipla escolha, calcular o desempenho e montar o caderno de erros. Essas partes são código comum, sem chamada ao modelo.
+O que a IA não faz: corrigir múltipla escolha, calcular o desempenho, montar o caderno de erros e marcar o dia em que cada cartão e cada questão do caderno voltam. Essas partes são código comum, sem chamada ao modelo.
 
 **Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
@@ -98,7 +98,11 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
 
-Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
+Cada cartão avaliado também ganha uma caixa de 1 a 4 e um dia de volta, como nas caixas de Leitner: a caixa 1 volta em 1 dia, a 2 em 3 dias, a 3 em 7 dias e a 4 em 16 dias. O cartão avaliado pela primeira vez entra na caixa 1. "Acertei" no dia marcado ou depois sobe uma caixa, e a 4 continua na 4; antes do dia marcado não muda nada, e rever o baralho no mesmo dia não empurra o cartão para longe. "Errei" leva o cartão de volta à caixa 1, e "Revisar depois" não muda a caixa.
+
+Os cartões que voltam hoje, do material aberto e de todos os materiais da biblioteca, formam a revisão do dia: no máximo 20 por vez, os mais atrasados primeiro, cada um com o material de onde veio. Ela abre pelo link "N cartões para hoje" em "Seu progresso", no Estudar, e pelo botão "Revisão do dia (N)" da página Flashcards, também sem material aberto. Sair da página Flashcards fecha a revisão e devolve o material que estava aberto. Cartão de material excluído da biblioteca sai da revisão. Quem diz se lembrou é o próprio estudante, e a tela pede: "A caixa sobe pelo seu Acertei. Marque só o que você lembrou de verdade." O baralho de um material continua com todos os cartões, na ordem do material.
+
+Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros ou da revisão do dia. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
 ### 4. Quiz
 
@@ -142,10 +146,13 @@ Reúne as questões que o estudante errou nos quizzes, de todos os materiais.
 O estudante pode:
 
 - Ver a resposta certa e a explicação de cada questão;
-- Refazer todas as questões do caderno de uma vez;
+- Refazer as questões de hoje, em "Refazer os de hoje", no máximo 10 por vez e as mais atrasadas primeiro;
+- Treinar todas as questões do caderno de uma vez;
 - Tirar uma questão da lista.
 
-A questão sai sozinha quando é acertada em outro dia. Acertar logo depois de ler a explicação não tira a questão do caderno. Ela também sai na hora quando a revisão da IA aceita a resposta.
+Cada questão volta num dia marcado. Errou: ela volta amanhã. Cada acerto no dia marcado ou depois sobe um degrau: depois do primeiro a questão volta em 3 dias, depois do segundo em 7, e o terceiro a tira do caderno. São 3 acertos em dias diferentes, cada um no dia marcado. Acertar antes do dia, como logo depois de ler a explicação ou no "Treinar todas", não muda nada, e errar em qualquer degrau volta a questão ao começo. A página mostra quando cada questão volta ("para hoje", "volta amanhã" ou "volta em 23/11") e quantos acertos ela já tem ("1 de 3 acertos"); sem nenhuma para hoje, diz quando volta a próxima. Em "Seu progresso", no Estudar, o link mostra quantas questões são para hoje.
+
+A questão também sai na hora quando a revisão da IA aceita a resposta ou quando o estudante a tira. Erro gravado antes dessa regra, ou vindo de um backup antigo, começa no primeiro degrau e volta no dia seguinte ao do erro.
 
 ### 7. Desempenho
 
@@ -165,8 +172,8 @@ O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer 
 "Seu próximo passo" tem três casos:
 
 - Sem resposta no quiz: um botão para fazer o quiz do material aberto ou, sem material aberto, para gerar um;
-- Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões, fica o "Refazer meus erros";
-- Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca.
+- Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões para hoje, fica o "Refazer os de hoje";
+- Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca. Se o caderno de erros tem questões para hoje, o principal é o "Refazer os de hoje", e "Refazer os erros de ..." fica ao lado, como treino: o acerto antes do dia marcado não sobe degrau.
 
 Ao abrir o app e ao importar um backup, o histórico perde as repetições de dias passados: de cada questão do quiz, em cada dia, ficam a primeira resposta e, se ela foi um erro, o primeiro acerto. As avaliações dos cartões ficam todas. Os números da tela não mudam, e o histórico ocupa menos espaço no navegador.
 
@@ -180,10 +187,10 @@ O estudante pode:
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
 - Excluir materiais, com a opção de desfazer;
-- Exportar a biblioteca, o desempenho, o caderno de erros e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
-- Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto.
+- Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
+- Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
 
-Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, perfil) aparece na outra sem recarregar.
+Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
 
 No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só neste navegador e diz quando foi o último backup. O botão "Fazer backup" baixa o mesmo arquivo do Exportar e ganha destaque quando há 5 materiais novos desde o último backup, ou 7 dias ou mais sem backup com algum material ou resposta nova.
 
@@ -220,7 +227,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -330,7 +337,7 @@ A interface local ficará disponível em:
 
 **http://localhost:5173**
 
-Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, o perfil e o rascunho dela não se misturam com os do app com IA.
+Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil e o rascunho dela não se misturam com os do app com IA.
 
 Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
 
@@ -362,7 +369,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 
 - O perfil é local, sem autenticação real ou login com Google.
 - Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar (ou "Fazer backup") e Importar na Biblioteca.
-- Limpar os dados do navegador apaga materiais, desempenho e caderno de erros que não foram exportados.
+- Limpar os dados do navegador apaga materiais, desempenho, caderno de erros e caixas dos cartões que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.

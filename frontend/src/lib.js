@@ -264,6 +264,15 @@ export function localDay(date) {
   return day;
 }
 
+// Um dia no formato de localDay mais n dias do calendário (n negativo volta): 30/11 mais 1 dá 01/12. A conta é feita ao
+// meio-dia, longe da virada do dia.
+export function addDays(day, n) {
+  return localDay(new Date(+day.slice(0, 4), day.slice(5, 7) - 1, +day.slice(8, 10) + n, 12));
+}
+
+// Dia no formato de localDay que existe no calendário: '2026-02-30' não vale.
+const isDay = v => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && addDays(v, 0) === v;
+
 // Compara texto sem ligar para maiúsculas e acentos ("fotossintese" vale como "Fotossíntese").
 export function fold(text) {
   return String(text).toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -377,10 +386,11 @@ const questionDay = e => localDay(e.date) + '\n' + e.title + '\n' + e.q;
 
 // Histórico enxuto, na abertura do app e depois de importar um backup: nos dias passados, de cada questão do quiz
 // ficam a primeira resposta do dia e, se ela foi erro, o primeiro acerto do dia. As outras repetições ("Refazer o quiz
-// todo", "Refazer meus erros") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
+// todo", "Treinar todas") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
 // Biblioteca. Ficam como estão o dia de hoje, todos os cartões (a regra aqui é a das questões do quiz), a resposta antiga
-// sem enunciado e o item estragado. Nada é resumido por dia, área ou material: a revisão espaçada e o acerto que ficou
-// (#77 e #78) precisam, por questão e por cartão, da resposta de cada dia. Devolve outra lista, na mesma ordem.
+// sem enunciado e o item estragado. Nada é resumido por dia, área ou material: o acerto que ficou (#78) precisa, por
+// questão, da resposta de cada dia. A revisão espaçada não usa o histórico: o estado dela fica em cada erro do caderno
+// e em cerebro-cartoes. Devolve outra lista, na mesma ordem.
 export function compactEvents(events, now) {
   const today = localDay(now);
   // A questão no dia: a resposta que ficou dela já é um acerto?
@@ -684,30 +694,119 @@ export function deckSummary(deck) {
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
 }
 
+// Revisão espaçada dos cartões, nas caixas de Leitner: cada cartão avaliado fica em cerebro-cartoes como { key, title,
+// box, due, date }: a chave (mistakeKey, o material e a pergunta), o título do material, a caixa de 1 a 4, o dia em que
+// ele volta e a hora da última mudança. Cada caixa volta em BOX_DAYS dias: a 1 em 1, a 2 em 3, a 3 em 7 e a 4 em 16.
+const BOX_DAYS = [1, 3, 7, 16];
+// Cartões por vez na revisão do dia: quem fica dias sem estudar acha uma pilha, e ela vem aos poucos.
+const DAY_CARDS = 20;
+
+// Cartão lido do navegador ou de um backup. A chave tem de ser do material: é por ela que o cartão volta.
+export function validCardReview(e) {
+  return !!e && isText(e.title) && e.title.trim() !== '' && isText(e.key) && e.key.startsWith(fold(e.title) + '|') &&
+    [1, 2, 3, 4].includes(e.box) && isDay(e.due) && isDate(e.date);
+}
+
+// O aluno avaliou o cartão (ok é o "Acertei"). O cartão novo entra na caixa 1, e o "Errei" o leva de volta a ela.
+// "Acertei" no dia marcado ou depois sobe uma caixa (a 4 continua na 4); antes dele não muda nada: rever o baralho no
+// mesmo dia não empurra o cartão para longe. Entrada estragada com a mesma chave é trocada no lugar.
+export function scheduleCard(list, title, question, ok, now) {
+  const key = mistakeKey(title, question);
+  const today = localDay(now);
+  const old = list.find(e => e?.key === key && validCardReview(e));
+  if (old && ok && today < old.due) return list;
+  const box = old && ok ? Math.min(old.box + 1, 4) : 1;
+  const entry = { key, title, box, due: addDays(today, BOX_DAYS[box - 1]), date: new Date(now).toISOString() };
+  return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
+}
+
+// Revisão do dia: os cartões vencidos (que voltam hoje ou antes) e que ainda estão num dos materiais, do mais atrasado
+// ao mais novo, e na mesma data na ordem da lista. Cada um leva a pergunta, a resposta e o título e a área do material.
+// Cartão de material excluído fica de fora. A tela conta todos e abre os de dayCards.
+export function dueCards(list, materials, now) {
+  const today = localDay(now);
+  const due = list.filter(e => validCardReview(e) && e.due <= today)
+    .sort((a, b) => (a.due > b.due) - (a.due < b.due));
+  if (!due.length) return [];
+  const cards = new Map();
+  for (const m of materials) {
+    for (const c of m.flashcards) {
+      const key = mistakeKey(m.title, c.question);
+      if (!cards.has(key)) cards.set(key, { question: c.question, answer: c.answer, title: m.title, area: m.area });
+    }
+  }
+  const seen = new Set();
+  return due.filter(e => cards.has(e.key) && !seen.has(e.key) && seen.add(e.key)).map(e => cards.get(e.key));
+}
+
+// A revisão do dia que abre agora: os DAY_CARDS primeiros de dueCards, os mais atrasados.
+export const dayCards = due => due.slice(0, DAY_CARDS);
+
 // Caderno de erros: as questões erradas de todos os materiais, para refazer. Cada erro é { key, item, title, area,
-// date }: a questão inteira, o material e a área de onde veio e quando o aluno a errou por último.
+// date, step, due }: a questão inteira, o material e a área de onde veio, quando o aluno a errou por último, o degrau
+// da escada (0, 1 ou 2) e o dia em que ela volta.
 // As funções recebem a lista como está gravada no navegador: item que a tela ignora fica onde está.
+
+// A escada do caderno: depois do erro a questão volta em 1 dia, depois do 1º acerto em 3 e depois do 2º em 7. O 3º
+// acerto a tira. Cada acerto só conta no dia marcado ou depois: são 3 acertos em dias diferentes.
+const STEP_DAYS = [1, 3, 7];
+// Questões por vez no "Refazer os de hoje", como os cartões da revisão do dia.
+const DAY_MISTAKES = 10;
+
+// Degrau do erro. O erro gravado antes da escada, ou com degrau estragado, está no 0.
+export function stepOf(e) {
+  return [0, 1, 2].includes(e?.step) ? e.step : 0;
+}
+
+// Dia em que a questão volta. O erro gravado antes da escada, ou com dia estragado, volta no dia seguinte ao do erro.
+export function dueOf(e) {
+  return isDay(e?.due) ? e.due : addDays(localDay(e?.date), 1);
+}
 
 // Chave de uma questão no caderno: o material e o enunciado, sem acentos nem maiúsculas.
 export function mistakeKey(title, question) {
   return fold(title) + '|' + fold(question);
 }
 
-// Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova.
+// Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova. Nos dois casos ela começa a
+// escada: degrau 0, e volta amanhã.
 // item leva só os campos da questão: a que vem da tela traz junto a resposta dada na sessão.
 export function addMistake(list, item, title, area, now) {
   const { type, question, options, answer, explanation, steps } = item;
   const key = mistakeKey(title, question);
   const entry = {
     key, item: { type, question, options, answer, explanation, steps }, title, area, date: new Date(now).toISOString(),
+    step: 0, due: addDays(localDay(now), 1),
   };
   return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
 }
 
-// Acertou: a questão só sai do caderno se o erro guardado é de outro dia. Acertar no mesmo dia, logo depois de
-// ver a explicação, não prova que aprendeu.
+// Acertou: no dia marcado ou depois, a questão sobe um degrau e volta mais tarde; no último degrau ela sai do caderno.
+// Acertar antes do dia marcado não muda nada: logo depois de ver a explicação, a resposta certa não prova que ficou.
 export function clearMistake(list, key, now) {
-  return list.filter(e => e?.key !== key || localDay(e.date) === localDay(now));
+  const today = localDay(now);
+  return list.flatMap(e => {
+    if (e?.key !== key || today < dueOf(e)) return [e];
+    const step = stepOf(e) + 1;
+    return step < STEP_DAYS.length ? [{ ...e, step, due: addDays(today, STEP_DAYS[step]) }] : [];
+  });
+}
+
+// As questões para hoje: as que voltam hoje ou já deviam ter voltado, das mais atrasadas às mais novas (na mesma data,
+// na ordem da lista). Item estragado fica de fora.
+export function dueMistakes(list, now) {
+  const today = localDay(now);
+  return list.filter(e => validMistake(e) && dueOf(e) <= today)
+    .sort((a, b) => (dueOf(a) > dueOf(b)) - (dueOf(a) < dueOf(b)));
+}
+
+// O "Refazer os de hoje" que abre agora: as DAY_MISTAKES primeiras de dueMistakes, as mais atrasadas.
+export const dayMistakes = due => due.slice(0, DAY_MISTAKES);
+
+// Quando a questão volta, para a página do caderno: "para hoje" (também a atrasada), "volta amanhã" ou "volta em 23/11".
+export function backOn(due, today) {
+  if (due <= today) return 'para hoje';
+  return due === addDays(today, 1) ? 'volta amanhã' : 'volta em ' + due.slice(8) + '/' + due.slice(5, 7);
 }
 
 // O aluno tirou a questão do caderno, ou a revisão da IA aceitou a resposta: sai na hora.
@@ -770,7 +869,8 @@ export function fixLastQuizEvent(events, title, q, until) {
 // objeto com versao 1). O arquivo vem de fora: cada item passa pela mesma conferência da leitura do navegador, e
 // o que não passa fica de fora e é contado em fora, para o aviso dizer o que não entrou. Material sem data válida
 // também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
-// limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área.
+// limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
+// espaçada não tem cartoes (as caixas dos cartões): vale lista vazia.
 export function readBackup(text) {
   let data;
   try {
@@ -783,13 +883,18 @@ export function readBackup(text) {
   const saved = list(data.saved, m => validMaterial(m) && isDate(m.date));
   const events = list(data.events, validEvent);
   const erros = list(data.erros, validMistake);
+  const cartoes = list(data.cartoes, validCardReview);
   const left = (value, kept) => (Array.isArray(value) ? value.length - kept.length : 0);
   const name = isText(data.user?.name) ? data.user.name.trim() : '';
   return {
     saved,
     events,
     erros,
-    fora: { saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros) },
+    cartoes,
+    fora: {
+      saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros),
+      cartoes: left(data.cartoes, cartoes),
+    },
     user: name && name.length <= 50 && AREAS.includes(data.user.area) ? { name, area: data.user.area } : null,
   };
 }
@@ -826,15 +931,25 @@ export function mergeBackup(atual, novo) {
   }
   const time = e => Date.parse(e?.date) || 0;
   events.sort((a, b) => time(a) - time(b));
-  // Erro com a mesma chave fica com a data mais recente.
-  const erros = [...atual.erros];
-  for (const e of novo.erros) {
-    const at = erros.findIndex(old => old?.key === e.key);
-    if (at < 0) erros.push(e);
-    else if (!(time(erros[at]) >= time(e))) erros[at] = e;
-  }
+  // Erros e cartões juntam pela chave: o que tem chave nova entra no fim, e o que já está gravado só dá lugar ao do
+  // arquivo quando newer diz que ele é mais novo.
+  const byKey = (current, incoming, newer) => {
+    const merged = [...current];
+    for (const e of incoming) {
+      const at = merged.findIndex(old => old?.key === e.key);
+      if (at < 0) merged.push(e);
+      else if (newer(e, merged[at])) merged[at] = e;
+    }
+    return merged;
+  };
+  // Erro com a mesma chave fica com a data mais recente (errar de novo volta a questão ao degrau 0) e, com a mesma
+  // data, com o degrau mais alto: os acertos que vieram depois do erro.
+  const erros = byKey(atual.erros, novo.erros, (e, old) =>
+    time(e) > time(old) || (time(e) === time(old) && stepOf(e) > stepOf(old)));
+  // Cartão com a mesma chave fica com a mudança mais recente.
+  const cartoes = byKey(atual.cartoes, novo.cartoes, (e, old) => time(e) > time(old));
   // O que entra fica no topo da biblioteca, como o material recém-salvo.
-  return { saved: [...fresh, ...atual.saved], events, erros };
+  return { saved: [...fresh, ...atual.saved], events, erros, cartoes };
 }
 
 // Contagens numa frase: "2 materiais, 1 resposta e 3 questões do caderno de erros", cada palavra no singular ou no
@@ -844,11 +959,12 @@ function countList(items) {
   return said.length > 1 ? said.slice(0, -1).join(', ') + ' e ' + said[said.length - 1] : said.join('');
 }
 
-// As três partes do backup, cada uma com o seu número, para countList.
-const backupItems = ({ saved, events, erros }) => [
+// As quatro partes do backup, cada uma com o seu número, para countList.
+const backupItems = ({ saved, events, erros, cartoes }) => [
   [saved, 'material', 'materiais'],
   [events, 'resposta', 'respostas'],
   [erros, 'questão do caderno de erros', 'questões do caderno de erros'],
+  [cartoes, 'cartão com data de volta', 'cartões com data de volta'],
 ];
 
 // Aviso depois de exportar: o que foi no arquivo, contado como a tela mostra (só o que passa na conferência).
@@ -857,19 +973,22 @@ export function backupSummary(backup) {
     saved: backup.saved.filter(validMaterial).length,
     events: backup.events.filter(validEvent).length,
     erros: backup.erros.filter(validMistake).length,
+    cartoes: backup.cartoes.filter(validCardReview).length,
   })) + '.';
 }
 
-// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas ou erros. Depois,
-// só quando houver, o que ficou de fora por estar incompleto (fora, de readBackup) e o nome do perfil que entrou.
+// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas, erros ou caixas de
+// cartões. Depois, só quando houver, o que ficou de fora por estar incompleto (fora, de readBackup) e o nome do perfil
+// que entrou.
 // As respostas que a tela usa valem pelo conteúdo, não pelo tamanho: no histórico compactado (compactEvents), a resposta
 // anterior que o backup traz toma o lugar da que ficou e muda o acerto sem mudar o tamanho da lista. O item estragado
 // fica de fora: mergeBackup o leva para o começo da lista, e a tela não o mostra.
 export function backupNote(atual, junto, fora = {}, perfil = '') {
   const materials = junto.saved.length - atual.saved.length;
   const shown = list => JSON.stringify(list.filter(validEvent));
+  const same = k => JSON.stringify(junto[k]) === JSON.stringify(atual[k]);
   const main = materials ? (materials === 1 ? '1 material importado' : materials + ' materiais importados')
-    : shown(junto.events) !== shown(atual.events) || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
+    : shown(junto.events) !== shown(atual.events) || !same('erros') || !same('cartoes')
       ? 'Desempenho e caderno de erros atualizados'
       : 'Nada novo neste arquivo';
   const left = countList(backupItems(fora).filter(([n]) => n > 0));
