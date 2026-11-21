@@ -13,7 +13,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 ## Dez minutos antes
 
 1. Abra os dois terminais (backend e frontend) e o endereço http://localhost:5173. Use sempre `localhost`: os dados ficam guardados por endereço.
-2. Confira o cabeçalho: tem de aparecer "IA ativa", o nome do modelo e as chamadas do dia. "IA não configurada" é chave faltando no `.env`. "Backend desligado" é o terminal do Python parado.
+2. Confira o cabeçalho: tem de aparecer "IA ativa", o nome do modelo e as chamadas deste computador. "IA não configurada" é chave faltando no `.env`. "Cérebro desligado" é o terminal do Python parado. "Cota de hoje esgotada" é a cota do Google que acabou. O número conta só as chamadas deste computador: a cota é do projeto inteiro, e o saldo real fica no painel de uso do Google AI Studio.
 3. Em um terceiro terminal, na pasta `backend`, rode `.\.venv\Scripts\python.exe -m app.check` uma vez. Ele faz uma chamada real e mostra se a chave e a cota respondem.
 4. Na Biblioteca, clique em "Importar" e escolha o arquivo da véspera. O Desempenho e o caderno de erros já aparecem com dados.
 5. Aumente o zoom do navegador para 125% (Ctrl e +) se for usar projetor. Se o menu da esquerda virar uma barra embaixo, a janela ficou estreita para esse zoom: diminua o zoom até o menu voltar.
@@ -23,8 +23,8 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 1. Diga em uma frase o que é o Cérebro: transforma um texto em resumo, flashcards e quiz, e mostra onde o aluno erra.
 2. Na página Estudar, escolha a área e o nível e clique em "Usar um exemplo". A IA escreve um texto curto sobre um tema sorteado da área, e o aviso no pé da tela diz o tema. Se ele disser que a IA não respondeu, entrou um exemplo pronto da área: siga com ele. Mostre o aviso embaixo do editor: o texto vai para o Google Gemini.
-3. Clique em "Resumir".
-4. No resumo, mostre um tópico com "No seu texto: ...". Se algum tópico ficou sem trecho, ele traz a etiqueta "Explicação da IA: confira"; ela pode não aparecer, porque na rodada de 17/11 os 64 tópicos vieram com trecho. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
+3. Clique em "Gerar resumo, flashcards e quiz". Uma chamada traz as três partes, e o material abre no Resumo.
+4. No resumo, mostre um tópico com o trecho que o sustenta. Como o texto veio da IA, o trecho aparece como "No exemplo escrito pela IA: ...", com a etiqueta "Explicação da IA: confira", e o aviso sob o título diz que o material foi feito de um exemplo escrito pela IA: a IA citando o próprio texto não confere nada. Com o exemplo pronto, o trecho aparece como "No texto de exemplo: ...", e com um texto do aluno, como "No seu texto: ..."; nos dois casos, só o tópico sem trecho leva a etiqueta. Explique: quem confere o trecho é o backend, com código. O modelo pode inventar um trecho, e o trecho inventado não aparece.
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
 
@@ -39,8 +39,8 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
-3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada.
-4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e o botão "Refazer meus erros".
+3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
+4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 
@@ -50,7 +50,7 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).
-5. Custo: uma chamada por pedido no caso normal, novas tentativas com teto, e o contador no cabeçalho.
+5. Custo: uma chamada por pedido no caso normal, novas tentativas com teto, e o contador no cabeçalho, com as chamadas deste computador no dia da cota.
 6. Testes: mostre a aba Actions com os testes do backend e do frontend passando.
 7. Feche com os limites: o conteúdo pode estar errado, a revisão da IA também, e nada disso tem checagem automática de fatos.
 
@@ -58,20 +58,20 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
 | O que aparece | O que fazer |
 |---|---|
-| "Limite de chamadas por minuto atingido" (`AI_RATE_LIMITED`) | A mensagem diz quantos segundos esperar. Siga falando e tente de novo. |
+| "Muitos pedidos em pouco tempo" (`AI_RATE_LIMITED`) | Os botões da IA ficam desligados e a mensagem conta os segundos. Siga falando; quando ela disser "Pode tentar de novo.", os botões já voltaram. |
 | "O serviço de IA está temporariamente indisponível" (`AI_PROVIDER_UNAVAILABLE`) | É erro do lado do Gemini. Tente de novo uma vez. Se repetir, abra um material importado na Biblioteca. |
-| `AI_QUOTA_EXCEEDED` ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
-| "Backend desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat, os botões "Não entendi, me explique" e "Pedir revisão da IA" e o trecho "No seu texto". Diga que é a demonstração. |
+| "A cota de hoje da IA acabou" (`AI_QUOTA_EXCEEDED`, e o cabeçalho fica "Cota de hoje esgotada") ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
+| "Cérebro desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre e no fim de cada pedido à IA. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho e o caderno de erros dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
-Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
+A mensagem de erro mostra uma frase simples; o código entre parênteses na tabela fica embaixo dela, em "Detalhes técnicos". Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
 
 ## Perguntas prováveis
 
 **Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
-**Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, o tópico que fica sem trecho ao lado de outros com trecho ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
+**Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 
 **E se o aluno colar "ignore as instruções" no texto?** O texto do aluno vai separado das instruções, como dado. O formato da resposta é garantido por código. Se o modelo obedece ou não à ordem escondida, a rodada de avaliação mede com uma palavra-canário. Na rodada de 17/11 ele ignorou a ordem no chat e em uma geração, e obedeceu em outra: os 6 flashcards vieram com a palavra como resposta.
 
@@ -79,6 +79,6 @@ Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICI
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas e as respostas enviadas para revisão.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.

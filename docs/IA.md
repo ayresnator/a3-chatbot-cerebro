@@ -8,21 +8,21 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 | Rota | O que a IA faz | O que dispara |
 |---|---|---|
-| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Gerar o material na página Estudar |
-| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Enter, fora de tela de toque) e o botão "Não entendi, me explique" |
+| `POST /api/generate` | Monta título, resumo, flashcards e quiz a partir de um texto ou de um tema | Botão "Gerar resumo, flashcards e quiz" na página Estudar e, com o material do mesmo texto aberto, "Gerar de novo". Os botões de "Abrir" ao lado só abrem o material |
+| `POST /api/chat` | Responde uma dúvida e sugere até três perguntas seguintes | Página Dúvidas, o botão "Perguntar ao Cérebro" no editor (ou Ctrl + Enter, ⌘ + Enter no Mac) e o botão "Não entendi, me explique" |
 | `POST /api/grade` | Julga o sentido de uma resposta curta que a comparação de texto marcou como errada | Botão "Pedir revisão da IA" |
 | `POST /api/example` | Escreve um texto curto de estudo sobre um tema sorteado da área | Botão "Usar um exemplo" na página Estudar. Na demonstração, com a IA desligada ou quando ela falha, a tela usa um exemplo pronto da área, sem chamar o modelo |
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e os botões que gastam cota fora do fluxo principal avisam ao lado: "1 chamada de IA".
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 
 Toda chamada tem duas partes, montadas em `backend/app/providers.py`:
 
 - `systemInstruction`: o texto fixo `SYSTEM` mais a instrução da rota (`GENERATE`, `CHAT`, `GRADE` ou `EXAMPLE`). Os cinco estão em `backend/app/prompts.py`. `SYSTEM` define o papel de tutor, pede português com acentos, proíbe inventar fontes, leis ou fatos, manda situar Direito no Brasil e resolver matemática passo a passo.
-- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno. No exemplo vão só a área, o nível e o tema. O backend sorteia o tema de uma lista fixa de 10 por área (`TOPICS`, em `prompts.py`), sem o tema do exemplo que já está na tela: a tela manda esse tema para o sorteio, e ele não vai para o modelo.
+- `contents`: uma única mensagem de usuário com os dados do aluno em JSON. Na geração vão o texto, a área e o nível. No chat vão também a pergunta e as últimas 6 mensagens; com um material aberto, no lugar do texto do editor vão o título e o resumo dele, com a área e o nível do material. O botão "Não entendi, me explique" usa a rota do chat sem histórico: no lugar do texto do editor vai o texto do tópico ou a explicação da questão, e a pergunta é montada pela tela (numa questão errada, ela leva a resposta que o aluno deu). Na revisão vão o enunciado, o gabarito e a resposta do aluno. No exemplo vão só a área, o nível e o tema. O backend sorteia o tema de uma lista fixa de 10 por área (`TOPICS`, em `prompts.py`), sem o tema do exemplo que já está na tela: a tela manda esse tema para o sorteio, e ele não vai para o modelo.
 
 A área (seis opções) e o nível (três) fazem parte dos dados, e `SYSTEM` manda adaptar vocabulário, profundidade e exemplos a eles.
 
@@ -59,7 +59,9 @@ A entrada é conferida antes de gastar cota: texto de até 20.000 caracteres, at
 
 O resumo deve sair do texto que o aluno colou. Para mostrar isso, a instrução pede em cada tópico do resumo um trecho curto copiado do texto (`source`). O modelo pode inventar ou reescrever esse trecho, então o backend só mantém o que existe mesmo no texto enviado. A comparação ignora maiúsculas, acentos e espaços a mais, exige pelo menos 15 caracteres e corta o trecho em 200 (`grounded`, em `backend/app/main.py`). Se o modelo fecha a cópia com ponto, reticências ou aspas que não estão no texto, vale o trecho sem essas pontas. Pontuação no meio do trecho tem de bater. O texto chega ao modelo e a essa conferência já sem os caracteres invisíveis de formatação (ver "Ordens escondidas no texto do aluno"): o hífen invisível de uma página hifenizada e o espaço de largura zero não apagam mais o trecho.
 
-Na tela, o tópico com trecho mostra `No seu texto: "..."`. Se o material tem algum tópico com trecho, os que ficaram sem ganham a etiqueta "Explicação da IA: confira". Quando o aluno informa só um tema, a instrução pede `source` vazio, e sem trecho nenhum a tela não mostra nada disso.
+Na tela, o tópico com trecho mostra `No seu texto: "..."`. O texto do "Usar um exemplo" não é do aluno. Com a IA ligada, é a própria IA que o escreve, e um trecho dele não confere nada: a IA estaria citando a si mesma. Na demonstração, com a IA desligada ou quando ela não responde, entra um exemplo pronto, escrito pelo grupo (`EXAMPLES`, em `frontend/src/lib.js`). Por isso a tela guarda o último exemplo que entrou no editor, da IA ou pronto, também no rascunho, até o Limpar ou o próximo exemplo. Ela compara cada trecho com esse exemplo pela regra do backend e ignora também os caracteres invisíveis (`inText` e `markExample`, em `frontend/src/lib.js`). O trecho que está no exemplo da IA mostra `No exemplo escrito pela IA: "..."`, e o tópico leva a marca `ia`. O trecho que está no exemplo pronto mostra `No texto de exemplo: "..."`, e o tópico leva a marca `pronto`. As marcas vão com o material para a biblioteca e o backup. Se o aluno reescreveu parte do exemplo, o trecho que ele escreveu continua `No seu texto`. Na demonstração, o trecho de cada tópico é a própria frase do texto, com o mesmo rótulo: `No texto de exemplo` para a frase do exemplo pronto, `No seu texto` para a do aluno.
+
+Todo tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O trecho do exemplo pronto confere o tópico como o do aluno, e o tópico não ganha a etiqueta. Quando o aluno informa só um tema, a instrução pede `source` vazio, e todos os tópicos ganham a etiqueta. O aviso sob o título do material diz a origem: com trecho do aluno, "Gerado por IA. Pode conter erros: confira com o seu material."; feito de um exemplo pronto, "Gerado por IA. Pode conter erros: confira com o texto de exemplo."; sem nenhum trecho, "Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável."; feito do exemplo da IA, "Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável." O aviso segue o material, e não o modo do app: o material da demonstração leva a marca `semIA` e não mostra aviso nem etiqueta, e todo material sem ela mostra o aviso, com a IA ligada ou não, inclusive o importado de um backup.
 
 A conferência prova que o trecho está no texto. Ela não prova que a explicação do tópico decorre dele. Na rodada real, os 64 tópicos dos 11 materiais voltaram com trecho conferido.
 
@@ -68,9 +70,9 @@ A conferência prova que o trecho está no texto. Ela não prova que a explicaç
 O que foi feito para reduzir o problema e para deixá-lo visível:
 
 - Os trechos de origem são conferidos por código, como descrito acima.
-- No chat, quando há texto no editor, a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
+- No chat, quando vai um texto (o do editor, ou o título e o resumo do material aberto), a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
 - A instrução proíbe citar conversa, aula ou estudo que não esteja no histórico. O caso que motivou a regra: uma resposta "com base na nossa conversa anterior" quando o histórico só tinha a explicação do próprio Cérebro. Na rodada real de 17/11/2026 a regra não segurou: à pergunta "Como você disse na aula passada...", o modelo continuou a explicação em vez de pedir que o aluno repetisse o ponto.
-- A tela avisa sob o título do material, sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." A revisão leva o aviso "Revisão feita por IA: pode errar."
+- A tela avisa sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." Sob o título do material, o aviso diz de onde ele veio, como descrito acima. A revisão leva o aviso "Revisão feita por IA: pode errar."
 
 O que não dá para garantir é que o conteúdo esteja certo. Nos 17 materiais conferidos à mão apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). O Cérebro não faz checagem automática de fatos.
 
@@ -109,13 +111,13 @@ As situações se somam no mesmo pedido, até o teto. Cada ida ao provedor faz n
 
 No 429 o backend lê o corpo do erro. Espera de até 90 segundos, sem marca de cota diária, vira `AI_RATE_LIMITED` com os segundos a aguardar. O resto vira `AI_QUOTA_EXCEEDED`.
 
-O cabeçalho da tela mostra o modelo em uso e quantas chamadas o backend fez no dia. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota no Google.
+O cabeçalho da tela mostra o modelo em uso e quantas chamadas este computador fez no dia da cota, que vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), junto com a cota do Google. O número é contado no processo do backend e zera quando ele reinicia: não é o saldo da cota, que é do projeto inteiro e fica no painel de uso do Google AI Studio. Depois de um `AI_QUOTA_EXCEEDED`, o cabeçalho diz "Cota de hoje esgotada", em âmbar, até um pedido passar ou a cota virar.
 
 Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável mais novo. Ele nunca escolhe Pro, prévia ou experimental.
 
 ## Privacidade
 
-O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. O nome e o desempenho não saem: ficam no navegador.
+O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. Nas perguntas do chat sobre o material aberto vão o título e o resumo dele. O nome e o desempenho não saem: ficam no navegador.
 
 Dois pedidos não passam pelo backend. Ao abrir o aplicativo, o navegador busca as fontes da tela no Google Fonts. E o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador: alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever.
 
@@ -153,7 +155,7 @@ A primeira rodada real foi em 17/11/2026, com o gemini-3.5-flash-lite e teto de 
 - O trecho de origem prova que a frase existe no texto, não que o tópico está certo.
 - A revisão da IA pode errar. Ela só muda o resultado quando diz "correta"; "parcial" e "incorreta" deixam a questão como estava.
 - O embaralhamento não reconhece toda forma de citar uma opção: "alternativa 2", "Alternativa correta: A" e opção que já começa com "A)" passam sem ser percebidas.
-- O exemplo escrito pela IA (`/api/example`) só tem teste simulado: ainda não rodou na API real, e a rodada de avaliação não tem casos dele.
+- O exemplo escrito pela IA (`/api/example`) só tem teste simulado: ainda não rodou na API real, e a rodada de avaliação não tem casos dele. As marcas "No exemplo escrito pela IA" e "No texto de exemplo" são da tela, que só conhece o exemplo que ela pôs no editor: texto de IA ou de exemplo colado de fora do Cérebro continua como "No seu texto". Se o aluno troca o texto do editor sem usar o Limpar, o trecho do texto novo igual a uma frase do exemplo sai como do exemplo, e, se o exemplo era da IA, com a etiqueta.
 - O caminho com `AI_PROVIDER=openai` só tem teste simulado e não manda o esquema da resposta: pede só um objeto JSON, e o formato fica por conta da validação.
 - Na rodada real a instrução não segurou o modelo em dois casos: a ordem escondida no texto do aluno (flashcards com a palavra-canário) e a aula que não existiu (o chat continuou a explicação). O código confere o primeiro: metade ou mais dos cartões com a mesma resposta ganha uma nova chamada, mas a repetição que volta fica, e uma ordem mais sutil passa. A aula que não existiu continua sem conferência.
 - A revisão da IA acertou o veredito nos 4 casos da rodada real, inclusive na resposta que pedia para ser considerada certa. Quatro casos são pouco para dizer que ela não erra.

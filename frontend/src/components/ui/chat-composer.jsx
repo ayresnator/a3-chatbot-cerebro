@@ -7,8 +7,9 @@ import { appear, byKeyboard } from '../../anim.js';
 import { AREAS, LEVELS, slashHints } from '../../lib.js';
 
 // Caixa de pergunta da tela Dúvidas (#57), o Animated AI Chat do 21st.dev adaptado ao Cérebro: o campo de várias linhas
-// que cresce com o texto, a faixa com os atalhos, a área, o nível e o Enviar, a lista de atalhos que abre com "/" e o
-// brilho que segue o ponteiro. Quem pergunta continua sendo o App (ask); aqui ficam o texto, o teclado e a lista.
+// que cresce com o texto, a faixa com os atalhos, a área e o nível (ou o material aberto, about), o botão que troca a
+// fonte (swap) e o Enviar, a lista de atalhos que abre com "/" e o brilho que segue o ponteiro. Quem pergunta continua
+// sendo o App (ask); aqui ficam o texto, o teclado e a lista.
 
 // Mouse ou caneta: no toque não há ponteiro parado sobre a tela para o brilho seguir.
 const FINE = window.matchMedia('(pointer: fine)').matches;
@@ -16,7 +17,8 @@ const FINE = window.matchMedia('(pointer: fine)').matches;
 const FOLLOW = { damping: 25, stiffness: 150, mass: 0.5 };
 
 export function ChatComposer({
-  value, onChange, onSend, hints, area, onArea, level, onLevel, waiting, touch, status, note, variants, pop,
+  value, onChange, onSend, hints, area, onArea, level, onLevel, about, swap, onSwap, waiting, touch, cost, status, note,
+  variants, pop,
 }) {
   const field = useRef(null);
   const list = useRef(null);
@@ -126,8 +128,9 @@ export function ChatComposer({
       setOpen(false);
       return;
     }
-    // Enter envia e Shift + Enter quebra a linha. No toque o Enter só quebra a linha (o teclado do celular não tem
-    // Shift + Enter) e quem envia é o botão, como no editor do Estudar. O Enter repetido de uma tecla presa não envia.
+    // Enter envia e Shift + Enter quebra a linha: aqui é um chat (no editor do Estudar o Enter quebra a linha). No
+    // toque o Enter só quebra a linha (o teclado do celular não tem Shift + Enter) e quem envia é o botão. O Enter
+    // repetido de uma tecla presa não envia.
     if (!touch && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!waiting && !e.repeat && value.trim()) onSend();
@@ -182,7 +185,7 @@ export function ChatComposer({
           id="pergunta"
           rows={1}
           aria-label="Sua dúvida"
-          aria-describedby="chat-dica"
+          aria-describedby={about ? 'chat-sobre chat-dica' : 'chat-dica'}
           aria-controls={shown ? 'atalhos' : undefined}
           aria-activedescendant={current}
           value={value}
@@ -220,15 +223,28 @@ export function ChatComposer({
           >
             <Icon name="atalhos" />
           </button>
-          {/* A mesma área e o mesmo nível do Estudar (App.jsx): trocar aqui troca lá. */}
-          <select aria-label="Área de conhecimento" value={area} onChange={e => onArea(e.target.value)}>
-            {AREAS.map(a => <option key={a}>{a}</option>)}
-          </select>
-          <select aria-label="Nível de aprendizado" value={level} onChange={e => onLevel(e.target.value)}>
-            {LEVELS.map(l => <option key={l}>{l}</option>)}
-          </select>
+          {/* Com o material aberto como assunto, a área e o nível são os dele: no lugar das listas, o título. O campo
+              também é descrito por esta linha, para o leitor de tela dizer sobre o que vai a pergunta. */}
+          {about ? (
+            <p id="chat-sobre" className="composer-about">
+              Sobre: <strong>{about.title}</strong> · {about.area} · {about.level}
+            </p>
+          ) : (
+            <>
+              {/* A mesma área e o mesmo nível do Estudar (App.jsx): trocar aqui troca lá. */}
+              <select aria-label="Área de conhecimento" value={area} onChange={e => onArea(e.target.value)}>
+                {AREAS.map(a => <option key={a}>{a}</option>)}
+              </select>
+              <select aria-label="Nível de aprendizado" value={level} onChange={e => onLevel(e.target.value)}>
+                {LEVELS.map(l => <option key={l}>{l}</option>)}
+              </select>
+            </>
+          )}
+          {/* Fica no mesmo lugar nas duas fontes: o foco continua nele depois do clique, com o nome da outra fonte. */}
+          {swap && <button type="button" className="link" onClick={onSwap}>{swap}</button>}
           <button type="submit" className="primary" disabled={waiting || !value.trim()}>
             <span>Enviar</span>
+            {cost && <small>1 chamada de IA</small>}
             <Icon name="seta" />
           </button>
         </div>
