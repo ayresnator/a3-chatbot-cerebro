@@ -79,9 +79,12 @@ O estudante pode:
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
 - Acessar os flashcards relacionados;
-- Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página.
+- Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
+- Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto".
 
 Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. O texto do "Usar um exemplo" não é do estudante: trecho que saiu do texto que a IA escreveu aparece como "No exemplo escrito pela IA: ...", e trecho de um exemplo pronto, como "No texto de exemplo: ...". O tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, de um exemplo pronto, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta; o trecho de cada tópico dele é a própria frase do texto.
+
+O material guarda o texto de onde saiu, com até 20.000 caracteres. Embaixo de cada trecho, "Ver no texto" abre esse texto inteiro numa janela, com o trecho marcado e já à vista; o título da janela diz se o texto é do estudante, de um exemplo pronto ou do exemplo da IA. A tela acha o trecho pela mesma regra do backend, sem diferença de maiúsculas e acentos e com os espaços juntos; se não achar, a janela abre sem marca e diz isso. Na janela, "Levar este texto ao editor" põe o texto de volta no Estudar, para gerar de novo, e o texto que estava no editor pode voltar com "Desfazer". Nada disso chama a IA. O material salvo antes dessa função não guardou o texto e fica sem o botão.
 
 ### 3. Flashcards
 
@@ -177,7 +180,7 @@ O estudante pode:
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
 - Excluir materiais, com a opção de desfazer;
-- Exportar a biblioteca, o desempenho, o caderno de erros e o perfil para um arquivo;
+- Exportar a biblioteca, o desempenho, o caderno de erros e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto.
 
 Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, perfil) aparece na outra sem recarregar.
@@ -217,7 +220,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 

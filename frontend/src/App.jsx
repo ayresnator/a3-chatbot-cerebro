@@ -24,7 +24,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote,
+  originNote, findSource, textOrigin,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -217,6 +217,10 @@ function App() {
   // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
   // Só com item, a resposta ainda não chegou.
   const [why, setWhy] = useState(null);
+  // Janela "Ver no texto" de um tópico do resumo: { texto, range, origin, concept }, ou null. range é onde o trecho
+  // está no texto (lib.js, findSource), ou null; origin, de onde o texto veio (lib.js, textOrigin). Tudo é guardado no
+  // clique: o material aberto pode mudar com a janela aberta (a geração que terminou longe do Estudar).
+  const [passage, setPassage] = useState(null);
   // Ditado em andamento: o botão vira "Parar ditado".
   const [listening, setListening] = useState(false);
   // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
@@ -370,8 +374,9 @@ function App() {
     if (page === 'Erros') mistakes.forEach(m => penned.add(m.key + m.date));
   }, [page, mistakes]);
 
-  // O desfazer que fica na tela é da página onde a ação aconteceu: trocar de página encerra a chance.
-  useEffect(() => setUndo(null), [page]);
+  // O desfazer que fica na tela é da página onde a ação aconteceu: trocar de página encerra a chance. O do texto que a
+  // janela "Ver no texto" leva ao editor nasce junto com a troca para o Estudar e fica (textToEditor).
+  useEffect(() => setUndo(u => (u?.kind === 'texto' && page === 'Estudar' ? u : null)), [page]);
 
   // O aviso de erro do Estudar (texto curto, geração que falhou) sai quando o texto do editor muda: digitado, ditado,
   // trocado pelo exemplo ou desfeito. Antes ele ficava na tela com o texto já certo. O do limite por minuto fica até a
@@ -654,7 +659,8 @@ function App() {
       // o rascunho de uma podia apagar o material que a outra gerou e não salvou. O que já está lá com o mesmo
       // conteúdo, a mesma área e o mesmo nível (a demonstração, no "Gerar de novo" com o mesmo texto) abre sem cópia.
       // Se o navegador recusar, ele abre sem id, e o "Salvar material" continua lá para tentar de novo.
-      const material = { ...data, area, level };
+      // O texto do clique vai junto (texto): é nele que a janela "Ver no texto" mostra o trecho de cada tópico.
+      const material = { ...data, area, level, texto: input };
       const twin = readList('saved').find(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       setResult(twin || store(material) || material);
@@ -1087,6 +1093,27 @@ function App() {
         setInput(input);
       }, ['#limpar', 'main h1']);
     } else toast(note);
+  }
+
+  // "Levar este texto ao editor", na janela "Ver no texto": o texto do material volta ao Estudar, para gerar de novo.
+  // Com outro texto no editor dá para desfazer, como no exemplo, e o texto anterior volta com os exemplos dele. O texto
+  // de um exemplo continua valendo como exemplo: o material gerado dele de novo não diz "No seu texto" (markExample).
+  // A janela fecha junto com a troca de página, e o foco vai para o título do Estudar (Modal, back).
+  function textToEditor({ texto, origin }) {
+    const before = input;
+    const examples = [aiExample.current, readyExample.current];
+    aiExample.current = origin === 'ia' ? texto : '';
+    readyExample.current = origin === 'pronto' ? texto : '';
+    setInput(texto);
+    setPassage(null);
+    go('Estudar');
+    if (before === texto) toast('Este texto já está no editor');
+    else if (before.trim()) {
+      offerUndo('texto', 'Texto do material no editor', () => {
+        [aiExample.current, readyExample.current] = examples;
+        setInput(before);
+      }, ['#limpar', 'main h1']);
+    } else toast('Texto do material no editor');
   }
 
   // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto. O quiz e o baralho ficam
@@ -1729,6 +1756,26 @@ function App() {
                                       <h3 tabIndex={-1}>{s.concept}</h3>
                                       <p>{s.text}</p>
                                       {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                      {/* O trecho dentro do texto inteiro, numa janela que abre nele. Material de antes do
+                                          campo texto não guardou o texto e fica sem o botão. */}
+                                      {s.source?.trim() && result.texto && (
+                                        <button
+                                          type="button"
+                                          className="link source-link"
+                                          aria-haspopup="dialog"
+                                          onClick={() => {
+                                            setPassage({
+                                              texto: result.texto,
+                                              range: findSource(result.texto, s.source),
+                                              origin: textOrigin(summary),
+                                              concept: s.concept,
+                                            });
+                                            focusAfter.current = ['.source-text mark', '.source-text'];
+                                          }}
+                                        >
+                                          Ver no texto
+                                        </button>
+                                      )}
                                       {/* Sem trecho, ou com trecho do exemplo da própria IA, nada conferiu o tópico. O
                                           exemplo pronto não é da IA: o trecho dele confere, como o do aluno. */}
                                       {result.semIA !== true && (s.ia || !s.source?.trim()) && (
@@ -2548,6 +2595,48 @@ function App() {
           </Modal>
         )}
       </AnimatePresence>
+      {/* "Ver no texto": o texto inteiro do material, com o trecho do tópico marcado. Só o texto rola, e ele abre no
+          trecho: o foco vai para a marca (focusAfter, no clique), e o navegador a traz à vista. Sem o trecho no texto,
+          a janela diz isso e abre no começo. O título diz de onde o texto veio (lib.js, textOrigin). */}
+      <AnimatePresence>
+        {passage && (
+          <Modal
+            key="texto"
+            className="source-dialog"
+            labelledBy="texto-titulo"
+            describedBy="texto-nota"
+            back="main h1"
+            onClose={() => setPassage(null)}
+          >
+            <div className="dialog-body">
+              <button type="button" className="icon-button close" aria-label="Fechar" onClick={() => setPassage(null)}>
+                <Icon name="fechar" />
+              </button>
+              <h2 id="texto-titulo">
+                {passage.origin === 'ia' ? 'Exemplo escrito pela IA' : passage.origin === 'pronto' ? 'Texto de exemplo' : 'Seu texto'}
+              </h2>
+              <p id="texto-nota">
+                {passage.range
+                  ? 'O trecho do tópico "' + passage.concept + '" está marcado.'
+                  : 'Não achei este trecho exato no texto.'}
+              </p>
+              <div className="source-text" tabIndex={0} role="region" aria-label="Texto inteiro">
+                {passage.range ? (
+                  <>
+                    {passage.texto.slice(0, passage.range[0])}
+                    <mark tabIndex={-1}>{passage.texto.slice(...passage.range)}</mark>
+                    {passage.texto.slice(passage.range[1])}
+                  </>
+                ) : passage.texto}
+              </div>
+              <button type="button" onClick={() => textToEditor(passage)}>
+                <Icon name="estudar" />
+                Levar este texto ao editor
+              </button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2660,7 +2749,7 @@ function Meter({ value, max, label }) {
 // Movimento: a janela nasce do botão que a abriu (transform-origin no centro dele) e a folha sobe da barra de baixo;
 // a saída é mais curta, com o fundo escuro esmaecendo junto (styles.css, [data-closing]). Pelo teclado (Enter, Esc)
 // ela abre e fecha parada. Fica dentro de um AnimatePresence: a saída roda antes de ela sair da árvore.
-function Modal({ className, labelledBy, back, sheet = false, onClose, children }) {
+function Modal({ className, labelledBy, describedBy, back, sheet = false, onClose, children }) {
   const box = useRef(null);
   const [present, safeToRemove] = usePresence();
   useLayoutEffect(() => {
@@ -2683,8 +2772,9 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
     return () => {
       if (dialog.open) dialog.close();
       // Quem abriu pode estar na página e fora da vista: com o celular girado para 600 px ou mais, o "Mais" some
-      // (mobile.css). Aí vale o primeiro de back que está na tela.
-      const shown = el => el?.isConnected && el.getClientRects().length > 0;
+      // (mobile.css). Aí vale o primeiro de back que está na tela. O que está no que sai da tela (popLayout) também não
+      // vale: o "Levar este texto ao editor" troca de página com a janela aberta.
+      const shown = el => el?.isConnected && el.getClientRects().length > 0 && !el.closest('[data-motion-pop-id]');
       const to = shown(opener) ? opener : back && [...document.querySelectorAll(back)].find(shown);
       if (!document.querySelector('dialog[open]')) to?.focus?.({ preventScroll: true });
     };
@@ -2714,6 +2804,7 @@ function Modal({ className, labelledBy, back, sheet = false, onClose, children }
       ref={box}
       className={className}
       aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
       onCancel={e => {
         e.preventDefault();
         onClose();

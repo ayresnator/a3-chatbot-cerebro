@@ -801,4 +801,10 @@
         min-height: 10rem;
         padding: var(--sp-4)
     }
+
+    /* A janela "Ver no texto" com menos respiro: a altura que sobra vai para o texto. */
+    .source-dialog .dialog-body {
+        gap: var(--sp-3);
+        padding: var(--sp-4) var(--sp-5)
+    }
 }
