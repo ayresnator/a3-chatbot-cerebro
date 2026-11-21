@@ -605,6 +605,104 @@ export function guessLine(answers) {
   return n ? n + ' dos seus acertos ' + plural(n, 'foi chute.', 'foram chute.') : '';
 }
 
+// Acerto que ficou (#78): a primeira resposta do dia a uma questão que o aluno já tinha respondido em outro dia. Para
+// saber o resultado do outro dia sem reler o histórico, cerebro-questoes guarda uma linha por questão, { key, day, ok }:
+// a chave (mistakeKey), o último dia em que ela foi respondida e se a primeira resposta desse dia foi certa.
+export function validSeen(e) {
+  return !!e && isText(e.key) && e.key.includes('|') && isDay(e.day) && typeof e.ok === 'boolean';
+}
+
+// Uma resposta do quiz passa pelo índice. prev vai na resposta gravada: null quando a questão aparece pela primeira vez,
+// ou o ok da primeira resposta do último dia em que ela foi respondida. A resposta que não é a primeira do dia (linha
+// de hoje, ou de um dia depois de hoje, com o relógio mudado) não ganha prev, e o índice fica igual. Linha estragada com
+// a mesma chave vale como questão nova e é trocada no lugar.
+export function seenStep(list, key, ok, now) {
+  const day = localDay(now);
+  const old = list.find(e => e?.key === key && validSeen(e));
+  if (old && old.day >= day) return { list, prev: undefined };
+  const entry = { key, day, ok };
+  return {
+    list: list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry],
+    prev: old ? old.ok : null,
+  };
+}
+
+// O índice montado das respostas gravadas: no navegador que ainda não tem um e no backup que não o traz. De cada
+// questão vale a primeira resposta do último dia, como faria seenStep. Resposta antiga, sem material ou sem enunciado,
+// avaliação de cartão e item estragado ficam de fora. A compactação do histórico (compactEvents) guarda a primeira
+// resposta de cada dia: o índice sai igual do histórico enxuto.
+export function seenIndex(events) {
+  const index = new Map();
+  // A chave de cada material e enunciado sai uma vez: mistakeKey dobra o texto, e o histórico repete a questão.
+  const keys = new Map();
+  for (const e of events) {
+    if (!validEvent(e) || e.kind !== 'quiz' || !isText(e.title) || !e.title || !isText(e.q) || !e.q) continue;
+    const id = JSON.stringify([e.title, e.q]);
+    if (!keys.has(id)) keys.set(id, mistakeKey(e.title, e.q));
+    const key = keys.get(id);
+    const day = localDay(e.date);
+    if (!(index.get(key)?.day >= day)) index.set(key, { key, day, ok: e.ok });
+  }
+  return [...index.values()];
+}
+
+// O índice gravado no navegador ou, se ainda não há um, o montado das respostas gravadas.
+export function readSeen() {
+  const list = read('questoes', null);
+  return Array.isArray(list) ? list : seenIndex(readList('events'));
+}
+
+// O acerto que ficou nos últimos days dias, contando hoje, pela primeira resposta de cada questão no dia, como os
+// outros números. right e wrong separam as revistas que o aluno tinha acertado e as que tinha errado da última vez;
+// fresh é o acerto na hora, das questões que apareceram pela primeira vez. Resposta sem prev (gravada antes do índice)
+// fica de fora dos três.
+export function retention(events, now, days = 30) {
+  const span = new Set(recentDays(days, now));
+  const recent = firstAttempts(events).filter(e => span.has(localDay(e.date)));
+  const back = recent.filter(e => typeof e.prev === 'boolean');
+  return {
+    ...tally(back),
+    right: tally(back.filter(e => e.prev)),
+    wrong: tally(back.filter(e => !e.prev)),
+    fresh: tally(recent.filter(e => e.prev === null)),
+  };
+}
+
+// O acerto que ficou só aparece com KEPT_MIN respostas revistas: com menos ele engana. Antes disso a tela diz quantas
+// faltam.
+const KEPT_MIN = 5;
+const revisited = n => n + ' ' + plural(n, 'questão revista', 'questões revistas');
+const keptMissing = total => plural(KEPT_MIN - total, 'falta ', 'faltam ') + revisited(KEPT_MIN - total);
+
+// O número no topo do Desempenho, ao lado do acerto no quiz.
+export function keptStat({ total, rate }) {
+  return total >= KEPT_MIN
+    ? { value: rate + '%', label: 'acerto que ficou · ' + revisited(total) + ' depois de 1 dia ou mais' }
+    : { value: '—', label: 'acerto que ficou · ' + keptMissing(total) };
+}
+
+// Os dois acertos dos últimos 30 dias lado a lado, na nota do gráfico: na hora e o que ficou. Contam todas as áreas,
+// como o número do topo, e não a "Área do gráfico". Sem questão nova contada, a frase não diz "nenhuma": as respostas
+// gravadas antes do índice não têm prev e ficam de fora.
+export function keptLine({ total, rate, fresh }) {
+  const first = fresh.total
+    ? fresh.rate + '% na hora (' + fresh.total + ' ' + plural(fresh.total, 'questão nova', 'questões novas') + ')'
+    : 'acerto na hora: ainda sem questões novas contadas';
+  return 'Nos últimos 30 dias, em todas as áreas: ' + first + ' · ' +
+    (total >= KEPT_MIN ? rate + '% que ficou (' + revisited(total) + ')' : 'acerto que ficou: ' + keptMissing(total)) + '.';
+}
+
+// As revistas nos dois casos, as que o aluno tinha acertado e as que tinha errado da última vez, só com o número à
+// vista. Cada caso diz de quantas veio o percentual: "Refazer os de hoje" só traz erros, e um caso pode ter poucas.
+export function keptSplit({ total, right, wrong }) {
+  if (total < KEPT_MIN) return '';
+  const part = ({ total: n, correct, rate }) => rate + '% (' + correct + ' de ' + n + ').';
+  return [
+    right.total && 'Das que você tinha acertado, ainda acerta ' + part(right),
+    wrong.total && 'Das que ' + (right.total ? '' : 'você ') + 'tinha errado, agora acerta ' + part(wrong),
+  ].filter(Boolean).join(' ');
+}
+
 // Busca só no texto do material: JSON.stringify também casava nomes de campo ("quiz", "answer") e datas.
 // O texto de cada material é dobrado uma vez só (SEARCH): a busca roda a cada tecla, e dobrar de novo o texto inteiro de
 // todos os materiais pesava com a Biblioteca cheia.
@@ -1256,6 +1354,8 @@ export function savedCopy(m, saved) {
 // A revisão da IA aceitou a resposta que a comparação de texto marcou como errada: a última resposta de quiz
 // gravada para a questão (mesmo material e mesmo enunciado) passa a valer como acerto.
 // until é a hora do pedido de revisão: resposta gravada depois dela não é a que a IA viu.
+// O índice do acerto que ficou (seenStep) não muda: se a resposta aceita foi a primeira do dia, a próxima resposta a
+// essa questão, em outro dia, conta como "tinha errado". Limite conhecido da #78.
 export function fixLastQuizEvent(events, title, q, until) {
   const at = events
     .map(e => e?.kind === 'quiz' && e.title === title && e.q === q && !(Date.parse(e.date) > Date.parse(until)))
@@ -1269,8 +1369,10 @@ export function fixLastQuizEvent(events, title, q, until) {
 // o que não passa fica de fora e é contado em fora, para o aviso dizer o que não entrou. Material sem data válida
 // também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
 // limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
-// espaçada não tem cartoes (as caixas dos cartões): vale lista vazia. A data da prova estragada sai do material, que
-// entra sem ela (provaOf); a hora em que ela foi marcada (provaMarcada) só fica com a data e sendo data.
+// espaçada não tem cartoes (as caixas dos cartões), e o de antes do acerto que ficou não tem questoes (o índice,
+// seenStep): vale lista vazia. A linha estragada do índice só fica de fora: mergeBackup traz a questão dela de volta
+// pelas respostas. A data da prova estragada sai do material, que entra sem ela (provaOf); a hora em que ela foi
+// marcada (provaMarcada) só fica com a data e sendo data.
 export function readBackup(text) {
   let data;
   try {
@@ -1293,6 +1395,7 @@ export function readBackup(text) {
     events,
     erros,
     cartoes,
+    questoes: list(data.questoes, validSeen),
     fora: {
       saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros),
       cartoes: left(data.cartoes, cartoes),
@@ -1350,8 +1453,14 @@ export function mergeBackup(atual, novo) {
     time(e) > time(old) || (time(e) === time(old) && stepOf(e) > stepOf(old)));
   // Cartão com a mesma chave fica com a mudança mais recente.
   const cartoes = byKey(atual.cartoes, novo.cartoes, (e, old) => time(e) > time(old));
+  // Questão do índice do acerto que ficou com a mesma chave fica com o dia mais recente; no mesmo dia, a daqui. O índice
+  // de cada lado são as linhas válidas gravadas, completadas pelo montado das respostas dele, que só troca a linha de um
+  // dia mais antigo: a questão da linha estragada, ou da gravação do índice que falhou depois da resposta, volta.
+  const newer = (e, old) => e.day > old.day;
+  const index = side => byKey((side.questoes || []).filter(validSeen), seenIndex(side.events), newer);
+  const questoes = byKey(index(atual), index(novo), newer);
   // O que entra fica no topo da biblioteca, como o material recém-salvo.
-  return { saved: [...fresh, ...atual.saved], events, erros, cartoes };
+  return { saved: [...fresh, ...atual.saved], events, erros, cartoes, questoes };
 }
 
 // Contagens numa frase: "2 materiais, 1 resposta e 3 questões do caderno de erros", cada palavra no singular ou no

@@ -182,6 +182,7 @@ Entre as informações disponíveis estão:
 
 - Dias seguidos de estudo;
 - Quantidade de questões respondidas e percentual de acerto no quiz;
+- Acerto que ficou: nos últimos 30 dias, o acerto na primeira resposta do dia a questões que o estudante já tinha respondido em outro dia ("64% · 14 questões revistas depois de 1 dia ou mais"). Com menos de 5 questões revistas, o número fica vazio e a tela diz quantas faltam;
 - Autoavaliação nos flashcards, separada do quiz;
 - Respostas e acertos dos últimos 7 dias: a altura da barra é o número de respostas do dia, e o rótulo diz quantas foram e o percentual de acerto;
 - Acerto por área;
@@ -189,6 +190,8 @@ Entre as informações disponíveis estão:
 - Sua certeza: nos últimos 30 dias, quanto o estudante acertou com cada marca do quiz ("Quando marcou certeza, acertou 81% (17 de 21)"). O percentual de cada marca só aparece com 10 respostas ou mais; antes disso, a linha diz quantas faltam. A resposta sem marca, antiga ou dada com a caixa "Marcar certeza" desligada, fica de fora.
 
 O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não aumenta o número. Nos cartões vale a mesma regra: conta a primeira avaliação de cada cartão no dia, e revisar o baralho de novo no mesmo dia não muda o número de cartões revisados nem a autoavaliação.
+
+O acerto no quiz junta a resposta dada logo depois de ler o resumo e a resposta à mesma questão dias depois, e só a segunda mostra o que ficou na memória. Por isso a nota do gráfico mostra os dois números dos últimos 30 dias lado a lado: "na hora" é a primeira vez que a questão aparece, e "que ficou" é a mesma questão em outro dia. Embaixo, uma linha separa as questões revistas que o estudante tinha acertado das que tinha errado ("Das que você tinha acertado, ainda acerta 85% (11 de 13). Das que tinha errado, agora acerta 50% (1 de 2)."). Para saber o resultado do outro dia, o app guarda no navegador um índice com uma linha por questão: o último dia em que ela foi respondida e se a primeira resposta desse dia foi certa. O índice vai no Exportar e volta no Importar; o backup antigo, sem ele, continua valendo, e o índice sai das respostas do arquivo. As respostas gravadas antes dessa mudança ficam fora do número novo.
 
 Quando um material da biblioteca tem a data da prova, "Seu próximo passo" começa pela linha do plano até a prova, a mesma do Estudar (veja a seção 8). Depois dela, "Seu próximo passo" tem três casos:
 
@@ -256,7 +259,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos (com a data da prova, quando marcada), o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards, a escolha da caixa "Marcar certeza" do quiz e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos (com a data da prova, quando marcada), o perfil local, os registros de desempenho, o índice das questões respondidas (o acerto que ficou), o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards, a escolha da caixa "Marcar certeza" do quiz e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`; o modo estudo do celular grava nas mesmas chaves do app com IA, no navegador do celular. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 

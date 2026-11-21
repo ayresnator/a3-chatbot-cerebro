@@ -1745,6 +1745,18 @@ main:focus {
     margin-bottom: 0
 }
 
+/* No Desempenho são cinco cartões (com o acerto que ficou, #78): na grade, onde cabiam quatro colunas (no tablet, de
+   650 a 790 px), o quinto ficava sozinho num quarto da linha. Em linhas que quebram, a última se estica: no celular o
+   acerto no quiz e o que ficou ficam lado a lado, e a autoavaliação numa linha inteira embaixo. */
+.app[data-page=desempenho] .stats {
+    display: flex;
+    flex-wrap: wrap
+}
+
+.app[data-page=desempenho] .stat {
+    flex: 1 1 8.5rem
+}
+
 /* Plano até a prova (ui.jsx, StudyPlan), no Estudar e no Desempenho: uma linha por material, a frase à esquerda e o
    botão da tarefa à direita, que desce para baixo dela quando não cabe. Os fios separam as linhas, como na lista de
    áreas do Desempenho. */

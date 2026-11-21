@@ -2,7 +2,9 @@ import React from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { Stat, BackupNote, StudyPlan } from './ui.jsx';
-import { AREAS, spokenDay, areaLine, plural, dayMistakes, CONF, calibration, sureText } from './lib.js';
+import {
+  AREAS, spokenDay, areaLine, plural, dayMistakes, CONF, calibration, sureText, retention, keptStat, keptLine, keptSplit,
+} from './lib.js';
 
 // Cada marca de certeza do quiz no painel "Sua certeza" (#80), na ordem dos botões.
 const SURE_WHEN = { certeza: 'Quando marcou certeza', acho: 'Quando achou que sabia', chute: 'Quando chutou' };
@@ -18,6 +20,9 @@ export default function Desempenho({
   const own = weakest ? mistakes.filter(e => e.title === weakest.name) : [];
   // O acerto de cada marca de certeza nos últimos 30 dias (lib.js, calibration).
   const sure = calibration(events, new Date());
+  // O acerto que ficou nos últimos 30 dias (#78, lib.js: retention), ao lado do acerto na hora.
+  const kept = retention(events, new Date());
+  const split = keptSplit(kept);
   // As questões do caderno para hoje (due, lib.js: dueMistakes), no máximo 10 por vez, como no caderno.
   const redoToday = due.length > 0 && (
     <button type="button" className="primary" onClick={() => redoMistakes(dayMistakes(due))}>
@@ -31,6 +36,7 @@ export default function Desempenho({
         <Stat value={streakDays} label={plural(streakDays, 'dia seguido de estudo', 'dias seguidos de estudo')} />
         <Stat value={quizzes.total} label={plural(quizzes.total, 'questão respondida', 'questões respondidas')} />
         <Stat value={percent(quizzes)} label="acerto no quiz" />
+        <Stat {...keptStat(kept)} />
         <Stat
           value={percent(cards)}
           label={'autoavaliação nos cartões · ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
@@ -66,6 +72,13 @@ export default function Desempenho({
         <p className="chart-note">
           A altura da barra é o número de respostas do dia; o percentual é o acerto. Conta a primeira resposta de cada
           questão do quiz no dia. Os cartões ficam à parte: são autoavaliação.
+        </p>
+        <p className="chart-note">
+          {keptLine(kept)} "Na hora" é a primeira vez que a questão aparece; "que ficou" é a mesma questão em outro dia.
+        </p>
+        <p className="chart-note">
+          {split || 'Para medir o que ficou, refaça amanhã ou depois o quiz de um material da Biblioteca ou as questões ' +
+            'do caderno de erros: a primeira resposta de cada questão no dia conta.'}
         </p>
       </m.section>
       <m.section className="panel" variants={rise}>

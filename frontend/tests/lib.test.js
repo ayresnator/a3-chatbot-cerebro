@@ -19,6 +19,7 @@ import {
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   examPool, mockExam, examScore, examLine, provaOf, daysUntil, inDays, planTask, studyPlan, planLine, virtualNote,
   CONF, noteAnswer, calibration, sureText, guessLine, restoreMistake,
+  validSeen, seenStep, seenIndex, readSeen, retention, keptStat, keptLine, keptSplit,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -430,6 +431,201 @@ test('guessLine: quantos acertos foram chute, no singular e no plural; sem nenhu
   assert.equal(guessLine([]), '');
 });
 
+// Acerto que ficou (#78). KEY é uma questão no índice; day, um dia de novembro de 2026 no fuso da máquina.
+const KEY = mistakeKey('Inflação', 'O que é a Selic?');
+const day = (d, hour = 12) => new Date(2026, 10, d, hour);
+
+test('seenStep: a primeira resposta dá prev null; no dia seguinte, o resultado do outro dia; no mesmo dia, nada', () => {
+  const first = seenStep([], KEY, false, day(15));
+  assert.deepEqual(first, { list: [{ key: KEY, day: '2026-11-15', ok: false }], prev: null });
+  const again = seenStep(first.list, KEY, true, day(15, 13));
+  assert.equal(again.prev, undefined);
+  assert.equal(again.list, first.list, 'a segunda resposta do dia não muda o índice');
+  const next = seenStep(first.list, KEY, true, day(16));
+  assert.deepEqual(next, { list: [{ key: KEY, day: '2026-11-16', ok: true }], prev: false });
+  assert.equal(seenStep(next.list, KEY, false, day(19)).prev, true, 'dias depois, o resultado do último dia');
+});
+
+test('seenStep: a resposta às 22h conta no dia do aluno, e não no dia em UTC', () => {
+  const night = seenStep([], KEY, true, day(15, 22));
+  assert.equal(night.list[0].day, '2026-11-15');
+  const morning = seenStep(night.list, KEY, false, day(16, 8));
+  assert.equal(morning.prev, true);
+  assert.equal(seenStep(morning.list, KEY, true, today()).prev, undefined, '16/11 às 22h ainda é o dia 16');
+});
+
+test('seenStep: as outras questões ficam no lugar; linha estragada vale questão nova; dia depois de hoje vale hoje', () => {
+  const other = { key: mistakeKey('Juros', 'Quem fixa a Selic?'), day: '2026-11-10', ok: true };
+  const list = [other, { key: KEY, day: 'ontem', ok: true }, null];
+  assert.deepEqual(seenStep(list, KEY, true, day(16)), {
+    list: [other, { key: KEY, day: '2026-11-16', ok: true }, null], prev: null,
+  });
+  const ahead = [{ key: KEY, day: '2026-11-20', ok: false }];
+  assert.deepEqual(seenStep(ahead, KEY, true, day(16)), { list: ahead, prev: undefined });
+});
+
+test('validSeen: chave de questão, dia que existe no calendário e ok sim ou não', () => {
+  assert.equal(validSeen({ key: KEY, day: '2026-11-16', ok: false }), true);
+  const bad = [
+    null, 'texto', { key: KEY, day: '2026-11-16' }, { key: KEY, day: '2026-11-16', ok: 'sim' },
+    { key: KEY, day: '2026-02-30', ok: true }, { key: KEY, day: '16/11/2026', ok: true },
+    { key: 'sem-material', day: '2026-11-16', ok: true }, { key: 5, day: '2026-11-16', ok: true },
+  ];
+  for (const e of bad) assert.equal(validSeen(e), false, JSON.stringify(e));
+});
+
+test('seenIndex: monta o índice das respostas antigas, na ordem, com a primeira resposta do último dia', () => {
+  const events = [
+    quizAt(14, 1, true), quizAt(14, 1, false, { date: at(14, 13) }), // refeita no dia: vale a primeira
+    quizAt(15, 2, false), quizAt(15, 1, false), quizAt(15, 1, true, { date: at(15, 13) }),
+    quizAt(15, 2, true, { title: 'INFLAÇÃO', date: at(15, 13) }), // a mesma chave no mesmo dia: vale a primeira
+    quizAt(16, 2, true, { title: 'Juros' }),
+    (({ q, ...e }) => e)(quizAt(16, 3, true)), // sem enunciado
+    (({ title, ...e }) => e)(quizAt(16, 4, true)), // sem material
+    cardAt(16, true, { q: 'cartao 1' }), null, 'texto', { kind: 'quiz', ok: 'sim', date: 'ontem', q: 'x', title: 'y' },
+  ];
+  assert.deepEqual(seenIndex(events), [
+    { key: mistakeKey('Inflação', 'questao 1'), day: '2026-11-15', ok: false },
+    { key: mistakeKey('Inflação', 'questao 2'), day: '2026-11-15', ok: false },
+    { key: mistakeKey('Juros', 'questao 2'), day: '2026-11-16', ok: true },
+  ]);
+  assert.deepEqual(seenIndex([]), []);
+});
+
+test('seenIndex: a chave guardada de cada questão não mistura materiais e enunciados que juntos dão o mesmo texto', () => {
+  // "A\nB" com "c" e "A" com "B\nc": numa chave de texto corrido as duas seriam a mesma questão.
+  const one = { title: 'A\nB', q: 'c' };
+  const other = { title: 'A', q: 'B\nc' };
+  const events = [quizAt(14, 0, true, one), quizAt(15, 0, false, other), quizAt(16, 0, false, one)];
+  assert.deepEqual(seenIndex(events), [
+    { key: mistakeKey(one.title, one.q), day: '2026-11-16', ok: false },
+    { key: mistakeKey(other.title, other.q), day: '2026-11-15', ok: false },
+  ]);
+});
+
+test('readSeen: o índice gravado; sem índice, ou com um que não é lista, o montado das respostas gravadas', () => {
+  const events = JSON.stringify([quizAt(15, 1, false)]);
+  const line = { key: mistakeKey('Inflação', 'questao 1'), day: '2026-11-15', ok: false };
+  browser({ 'cerebro-events': events });
+  assert.deepEqual(readSeen(), [line]);
+  browser({ 'cerebro-events': events, 'cerebro-questoes': '{"x":1}' });
+  assert.deepEqual(readSeen(), [line]);
+  browser({ 'cerebro-events': events, 'cerebro-questoes': JSON.stringify([{ ...line, ok: true }]) });
+  assert.deepEqual(readSeen(), [{ ...line, ok: true }]);
+  delete globalThis.localStorage;
+  assert.deepEqual(readSeen(), [], 'sem localStorage');
+});
+
+// Uma resposta do quiz pelo caminho do App (submit): o prev sai do índice lido antes de gravar a resposta, e o JSON do
+// navegador não guarda o prev undefined.
+function answer({ events, index }, n, ok, date) {
+  const seen = seenStep(index, mistakeKey('Inflação', 'Questão ' + n), ok, date);
+  const entry = {
+    kind: 'quiz', ok, area: 'Economia', title: 'Inflação', q: fold('Questão ' + n), prev: seen.prev,
+    date: date.toISOString(),
+  };
+  return { events: JSON.parse(JSON.stringify([...events, entry])), index: seen.list };
+}
+
+test('acerto que ficou: prev null na primeira resposta, o resultado de ontem no dia seguinte, nada na segunda do dia', () => {
+  let state = { events: [], index: [] };
+  state = answer(state, 1, false, day(15));
+  state = answer(state, 1, true, day(15, 13));
+  state = answer(state, 1, true, day(16));
+  state = answer(state, 1, false, day(16, 13));
+  assert.deepEqual(state.events.map(e => ('prev' in e ? e.prev : 'sem')), [null, 'sem', false, 'sem']);
+  assert.deepEqual(state.index, [{ key: mistakeKey('Inflação', 'Questão 1'), day: '2026-11-16', ok: true }]);
+  assert.deepEqual(seenIndex(state.events), state.index, 'o índice montado das respostas é o mesmo');
+  assert.deepEqual(retention(state.events, today()), {
+    total: 1, correct: 1, rate: 100, right: { total: 0, correct: 0, rate: 0 },
+    wrong: { total: 1, correct: 1, rate: 100 }, fresh: { total: 1, correct: 0, rate: 0 },
+  });
+});
+
+test('retention: só a primeira resposta do dia com prev; separa tinha acertado, tinha errado e as novas', () => {
+  const events = [
+    quizAt(16, 1, true, { prev: true }), quizAt(16, 1, false, { date: at(16, 13) }), // refeita no dia: não conta
+    quizAt(16, 2, false, { prev: true }),
+    quizAt(16, 3, true, { prev: false }),
+    quizAt(16, 4, true, { prev: null }), quizAt(16, 5, false, { prev: null }),
+    quizAt(16, 6, true), // gravada antes do índice, sem prev
+    quizAt(16, 7, true, { prev: 'sim' }),
+    cardAt(16, true, { prev: true, q: 'cartao 1' }),
+  ];
+  assert.deepEqual(retention(events, today()), {
+    total: 3, correct: 2, rate: 67,
+    right: { total: 2, correct: 1, rate: 50 },
+    wrong: { total: 1, correct: 1, rate: 100 },
+    fresh: { total: 2, correct: 1, rate: 50 },
+  });
+});
+
+test('retention: só os últimos 30 dias, contando hoje', () => {
+  const october = d => new Date(2026, 9, d, 12).toISOString();
+  const events = [
+    quizAt(16, 1, true, { prev: true }),
+    quizAt(16, 2, true, { prev: false, date: october(18) }), // 18/10: o 30º dia
+    quizAt(16, 3, true, { prev: true, date: october(17) }), // 17/10: fora
+    quizAt(17, 4, true, { prev: true }), // amanhã: fora
+    quizAt(16, 5, true, { prev: null, date: october(17) }), // a nova também
+  ];
+  assert.deepEqual([retention(events, today()).total, retention(events, today()).fresh.total], [2, 0]);
+  assert.equal(retention(events, today(), 1).total, 1);
+});
+
+test('quizRate e firstAttempts: o campo prev não muda as contas', () => {
+  const withPrev = SIX_ANSWERS.map((e, i) => ({ ...e, prev: [null, true, false][i % 3] }));
+  const redone = [...withPrev, ...redo(16)];
+  assert.deepEqual(quizRate(redone), quizRate([...SIX_ANSWERS, ...redo(16)]));
+  assert.deepEqual(firstAttempts(redone), withPrev);
+});
+
+test('keptStat: com menos de 5 revistas o número fica vazio e diz quantas faltam', () => {
+  const revisits = n => Array.from({ length: n }, (_, i) => quizAt(16, i, i % 3 > 0, { prev: true }));
+  assert.deepEqual(keptStat(retention([], today())), { value: '—', label: 'acerto que ficou · faltam 5 questões revistas' });
+  assert.deepEqual(keptStat(retention(revisits(3), today())), {
+    value: '—', label: 'acerto que ficou · faltam 2 questões revistas',
+  });
+  assert.deepEqual(keptStat(retention(revisits(4), today())), {
+    value: '—', label: 'acerto que ficou · falta 1 questão revista',
+  });
+  assert.deepEqual(keptStat(retention(revisits(5), today())), {
+    value: '60%', label: 'acerto que ficou · 5 questões revistas depois de 1 dia ou mais',
+  });
+  assert.deepEqual(keptStat({ total: 14, correct: 9, rate: 64 }), {
+    value: '64%', label: 'acerto que ficou · 14 questões revistas depois de 1 dia ou mais',
+  });
+});
+
+test('keptLine: o acerto na hora e o que ficou, lado a lado, em todas as áreas, no singular e no plural', () => {
+  const none = { total: 0, correct: 0, rate: 0 };
+  // Sem questão nova contada: nenhuma resposta ainda, ou só respostas de antes do índice, sem prev.
+  assert.equal(
+    keptLine({ ...none, fresh: none }),
+    'Nos últimos 30 dias, em todas as áreas: acerto na hora: ainda sem questões novas contadas · acerto que ficou: ' +
+      'faltam 5 questões revistas.'
+  );
+  assert.equal(
+    keptLine({ total: 4, correct: 1, rate: 25, fresh: { total: 1, correct: 1, rate: 100 } }),
+    'Nos últimos 30 dias, em todas as áreas: 100% na hora (1 questão nova) · acerto que ficou: falta 1 questão revista.'
+  );
+  assert.equal(
+    keptLine({ total: 14, correct: 9, rate: 64, fresh: { total: 40, correct: 31, rate: 78 } }),
+    'Nos últimos 30 dias, em todas as áreas: 78% na hora (40 questões novas) · 64% que ficou (14 questões revistas).'
+  );
+});
+
+test('keptSplit: tinha acertado e tinha errado, cada um com de quantas veio; com menos de 5 revistas, nada', () => {
+  const t = (total, correct) => ({ total, correct, rate: total ? Math.round(correct / total * 100) : 0 });
+  assert.equal(
+    keptSplit({ ...t(15, 12), right: t(13, 11), wrong: t(2, 1) }),
+    'Das que você tinha acertado, ainda acerta 85% (11 de 13). Das que tinha errado, agora acerta 50% (1 de 2).'
+  );
+  assert.equal(keptSplit({ ...t(5, 2), right: t(0, 0), wrong: t(5, 2) }), 'Das que você tinha errado, agora acerta 40% (2 de 5).');
+  assert.equal(keptSplit({ ...t(6, 6), right: t(6, 6), wrong: t(0, 0) }), 'Das que você tinha acertado, ainda acerta 100% (6 de 6).');
+  assert.equal(keptSplit({ ...t(4, 4), right: t(4, 4), wrong: t(0, 0) }), '');
+});
+
 // Histórico com repetições, como o App grava, com "hoje" em 16/11 às 22h. OLD é a resposta antiga, sem o enunciado.
 const OLD = (({ q, ...e }) => e)(quizAt(14, 9, false));
 const BROKEN = { kind: 'quiz', ok: 'sim', date: 'ontem' };
@@ -489,6 +685,15 @@ test('compactEvents: o painel "Sua certeza" não muda com o histórico enxuto', 
   const marked = HISTORY.map((e, i) => (e.kind === 'quiz' ? { ...e, conf: CONF[i % 3] } : e));
   assert.deepEqual(calibration(compactEvents(marked, today()), today()), calibration(marked, today()));
   assert.ok(calibration(marked, today()).certeza.total > 0);
+});
+
+test('compactEvents: o acerto que ficou e o índice montado das respostas não mudam com o histórico enxuto', () => {
+  const withPrev = HISTORY.map((e, i) => (e.kind === 'quiz' && e.q ? { ...e, prev: [null, true, false][i % 3] } : e));
+  const ok = list => list.filter(validEvent);
+  const compact = compactEvents(withPrev, today());
+  assert.deepEqual(retention(ok(compact), today()), retention(ok(withPrev), today()));
+  assert.deepEqual(seenIndex(compact), seenIndex(withPrev));
+  assert.ok(retention(ok(withPrev), today()).total > 0);
 });
 
 test('expectedText: o gabarito em texto, a opção certa ou as formas da resposta curta', () => {
@@ -2952,18 +3157,19 @@ const BACKUP = {
   events: [quizAt(15, 1, false), cardAt(16, true)],
   erros: [mistake(Q_SHORT, 'Inflação', 15)],
   cartoes: [boxOf('Fotossíntese', 'Onde ocorre?', 2, '2026-11-18', at(15))],
+  questoes: [{ key: mistakeKey('Inflação', 'questao 1'), day: '2026-11-15', ok: false }],
   user: { name: 'Ana', area: 'Economia' },
 };
 // O arquivo lido de novo a cada teste, para um teste não mexer no que o outro usa.
 const backup = () => readBackup(JSON.stringify(BACKUP));
-const EMPTY = { saved: [], events: [], erros: [], cartoes: [] };
+const EMPTY = { saved: [], events: [], erros: [], cartoes: [], questoes: [] };
 // Nada ficou de fora do arquivo.
 const NONE = { saved: 0, events: 0, erros: 0, cartoes: 0 };
 
 test('readBackup: arquivo bom devolve as quatro listas, nada de fora e o perfil', () => {
   assert.deepEqual(backup(), {
-    saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros, cartoes: BACKUP.cartoes, fora: NONE,
-    user: { name: 'Ana', area: 'Economia' },
+    saved: BACKUP.saved, events: BACKUP.events, erros: BACKUP.erros, cartoes: BACKUP.cartoes,
+    questoes: BACKUP.questoes, fora: NONE, user: { name: 'Ana', area: 'Economia' },
   });
 });
 
@@ -2996,7 +3202,7 @@ test('readBackup: material sem data válida ou com área estragada, resposta e e
     erros: [{ ...BACKUP.erros[0], key: 'outra|chave' }, { ...BACKUP.erros[0], item: { type: 'short' } }, BACKUP.erros[0]],
   }));
   assert.deepEqual(got, {
-    saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros, cartoes: [],
+    saved: [], events: [BACKUP.events[1]], erros: BACKUP.erros, cartoes: [], questoes: [],
     fora: { saved: 3, events: 2, erros: 2, cartoes: 0 }, user: null,
   });
 });
@@ -3074,8 +3280,8 @@ test('readBackup: lista ausente ou fora do formato vale lista vazia, sem nada co
 });
 
 test('mergeBackup: num navegador vazio, entra tudo o que o arquivo trouxe', () => {
-  const { saved, events, erros, cartoes } = backup();
-  assert.deepEqual(mergeBackup(EMPTY, backup()), { saved, events, erros, cartoes });
+  const { saved, events, erros, cartoes, questoes } = backup();
+  assert.deepEqual(mergeBackup(EMPTY, backup()), { saved, events, erros, cartoes, questoes });
 });
 
 test('mergeBackup: importar duas vezes o mesmo arquivo não duplica', () => {
@@ -3182,6 +3388,54 @@ test('backup: a certeza das respostas e a marca dos erros vão e voltam; certeza
   assert.equal(merged.erros[0].sure, true);
 });
 
+test('backup: o índice do acerto que ficou vai e volta; linha estragada fica de fora sem ser contada', () => {
+  const line = BACKUP.questoes[0];
+  const got = readBackup(JSON.stringify({ ...BACKUP, questoes: [{ ...line, day: 'ontem' }, null, line] }));
+  assert.deepEqual([got.questoes, got.fora], [[line], NONE]);
+  assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, questoes: 'x' })).questoes, [], 'questoes que não é lista');
+});
+
+test('mergeBackup: a mesma questão do índice fica com o dia mais recente; no mesmo dia, a daqui', () => {
+  const key = BACKUP.questoes[0].key;
+  const other = { key: mistakeKey('Juros', 'questao 1'), day: '2026-11-10', ok: true };
+  const merge = (here, file) => mergeBackup({ ...EMPTY, questoes: here }, { ...EMPTY, questoes: file }).questoes;
+  const old = { key, day: '2026-11-14', ok: true };
+  const recent = { key, day: '2026-11-15', ok: false };
+  assert.deepEqual(merge([old], [recent, other]), [recent, other]);
+  assert.deepEqual(merge([recent], [old]), [recent]);
+  assert.deepEqual(merge([{ ...recent, ok: true }], [recent]), [{ ...recent, ok: true }]);
+  assert.deepEqual(merge([{ key, day: 'ontem' }], [old]), [old], 'a linha estragada daqui dá lugar à do arquivo');
+});
+
+test('mergeBackup: uma linha estragada entre linhas boas não tira a questão dela do índice', () => {
+  const events = [quizAt(14, 1, true), quizAt(15, 2, false), quizAt(15, 3, true)];
+  const line = n => ({ key: mistakeKey('Inflação', 'questao ' + n), day: '2026-11-15', ok: n !== 2 });
+  const file = readBackup(JSON.stringify({ ...BACKUP, events, questoes: [line(1), { ...line(2), day: '30/02/2026' }, line(3)] }));
+  assert.deepEqual(file.questoes, [line(1), line(3)]);
+  // A questão 2 volta pelas respostas; a linha gravada da 1, de um dia mais recente que a resposta, fica.
+  assert.deepEqual(mergeBackup(EMPTY, file).questoes, [line(1), line(3), line(2)]);
+  // A gravação do índice falhou depois da resposta: a resposta mais recente vale mais que a linha antiga gravada.
+  const here = { ...EMPTY, events: [quizAt(16, 1, false)], questoes: [{ ...line(1), day: '2026-11-14' }] };
+  assert.deepEqual(mergeBackup(here, { ...EMPTY }).questoes, [{ ...line(1), day: '2026-11-16', ok: false }]);
+  // No mesmo dia, a linha gravada vale mais que a montada das respostas (a revisão da IA não muda o índice).
+  const same = { ...EMPTY, events: [quizAt(15, 1, true)], questoes: [{ ...line(1), ok: false }] };
+  assert.deepEqual(mergeBackup(same, { ...EMPTY }).questoes, [{ ...line(1), ok: false }]);
+});
+
+test('mergeBackup: sem questoes no arquivo, o índice sai das respostas importadas; sem índice aqui, das daqui', () => {
+  const { questoes, ...old } = BACKUP;
+  const file = readBackup(JSON.stringify(old));
+  assert.deepEqual(file.questoes, []);
+  assert.deepEqual(mergeBackup(EMPTY, file).questoes, questoes);
+  const here = { ...EMPTY, events: [quizAt(16, 1, true), quizAt(14, 2, false)] };
+  assert.deepEqual(mergeBackup(here, file).questoes, [
+    { key: questoes[0].key, day: '2026-11-16', ok: true },
+    { key: mistakeKey('Inflação', 'questao 2'), day: '2026-11-14', ok: false },
+  ]);
+  const once = mergeBackup(here, backup());
+  assert.deepEqual(mergeBackup(once, backup()), once, 'importar de novo não muda nada');
+});
+
 test('mergeBackup: o que a tela ignora continua gravado, e nada do que entra na função é alterado', () => {
   const current = Object.freeze({
     saved: frozen([null, 'texto']), events: frozen(['texto', { kind: 'quiz' }]), erros: frozen([null, { key: 5 }]),
@@ -3196,6 +3450,7 @@ test('mergeBackup: o que a tela ignora continua gravado, e nada do que entra na 
     events: ['texto', { kind: 'quiz' }, ...BACKUP.events],
     erros: [null, { key: 5 }, ...BACKUP.erros],
     cartoes: [null, { key: 5 }, ...BACKUP.cartoes],
+    questoes: BACKUP.questoes,
   });
 });
 
