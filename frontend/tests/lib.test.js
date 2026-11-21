@@ -10,8 +10,9 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
-  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, textOrigin,
+  gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
+  typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, markPieces,
+  textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
@@ -1411,6 +1412,49 @@ test('findSource: os 64 trechos da rodada real são achados no texto de cada cas
   }
 });
 
+const TOPIC = 'A clorofila absorve a luz do Sol. A água é decomposta e libera oxigênio. O açúcar sai do ciclo de Calvin.';
+
+test('markPieces: marca cada trecho que faltou no lugar dele no texto do tópico, na ordem do texto', () => {
+  // Os trechos vêm na ordem da IA, sem acento e com outras maiúsculas: a marca é a parte do texto original.
+  assert.deepEqual(markPieces(TOPIC, ['o acucar sai do ciclo de calvin', 'A clorofila absorve a luz']), [
+    { text: 'A clorofila absorve a luz', mark: true },
+    { text: ' do Sol. A água é decomposta e libera oxigênio. ', mark: false },
+    { text: 'O açúcar sai do ciclo de Calvin', mark: true },
+    { text: '.', mark: false },
+  ]);
+  // As partes juntas refazem o texto inteiro.
+  const parts = markPieces(TOPIC, ['A água é decomposta']);
+  assert.equal(parts.map(p => p.text).join(''), TOPIC);
+  assert.deepEqual(parts.filter(p => p.mark).map(p => p.text), ['A água é decomposta']);
+});
+
+test('markPieces: o trecho com as pontas que o backend tirou (aspas e ponto) é achado, como no findSource', () => {
+  assert.deepEqual(markPieces(TOPIC, ['"A água é decomposta e libera oxigênio."']).filter(p => p.mark),
+    [{ text: 'A água é decomposta e libera oxigênio', mark: true }]);
+});
+
+test('markPieces: trecho que não está no texto fica de fora, e lista vazia deixa o texto sem marca', () => {
+  assert.deepEqual(markPieces(TOPIC, []), [{ text: TOPIC, mark: false }]);
+  assert.deepEqual(markPieces(TOPIC, ['A clorofila reflete a luz verde', '', '   ']), [{ text: TOPIC, mark: false }]);
+  assert.deepEqual(markPieces(TOPIC, ['A clorofila reflete a luz verde', 'libera oxigênio']).filter(p => p.mark),
+    [{ text: 'libera oxigênio', mark: true }]);
+  assert.deepEqual(markPieces('', []), []);
+});
+
+test('markPieces: trechos que se cruzam, encostam ou se repetem viram uma marca só', () => {
+  const marks = pieces => {
+    const parts = markPieces(TOPIC, pieces);
+    // O texto continua inteiro, uma vez só.
+    assert.equal(parts.map(p => p.text).join(''), TOPIC, JSON.stringify(pieces));
+    return parts.filter(p => p.mark).map(p => p.text);
+  };
+  assert.deepEqual(marks(['A clorofila absorve a luz', 'absorve a luz do Sol']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['absorve a luz do Sol', 'A clorofila absorve a luz']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['A clorofila absorve a luz do Sol', 'absorve a luz']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['A clorofila absorve', ' a luz do Sol']), ['A clorofila absorve a luz do Sol']);
+  assert.deepEqual(marks(['libera oxigênio', 'LIBERA OXIGENIO']), ['libera oxigênio']);
+});
+
 test('originNote: o aviso do material diz de onde ele veio', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
@@ -2328,6 +2372,32 @@ test('gradeRequest: corta os textos nos limites do backend (500, 200 e 500) sem 
   assert.equal(sent.expected, 'g'.repeat(200));
   assert.equal(sent.answer, 'r'.repeat(499) + '😀');
   assert.equal([...sent.answer].length, 500, 'o backend conta caracteres, não unidades UTF-16');
+});
+
+test('explainRequest: título e texto do tópico, a explicação sem os espaços das pontas, área e nível', () => {
+  const topic = { concept: 'Condensação', text: 'O vapor se condensa em gotículas e forma as nuvens.', source: 'trecho' };
+  assert.deepEqual(explainRequest(topic, '  É o vapor que esfria.\n', 'Escolar', 'Básico'), {
+    concept: 'Condensação',
+    content: 'O vapor se condensa em gotículas e forma as nuvens.',
+    answer: 'É o vapor que esfria.',
+    area: 'Escolar',
+    level: 'Básico',
+  });
+});
+
+test('explainRequest: corta nos limites do backend (300, 3.000 e 1.000) por caractere inteiro, sem deixar meio emoji', () => {
+  const topic = { concept: 'c'.repeat(299) + '🌧️', text: 't'.repeat(2999) + '😀😀' };
+  const sent = explainRequest(topic, 'e'.repeat(999) + '😀😀', 'Escolar', 'Avançado');
+  assert.equal(sent.concept, 'c'.repeat(299) + '🌧');
+  assert.equal(sent.content, 't'.repeat(2999) + '😀');
+  assert.equal(sent.answer, 'e'.repeat(999) + '😀');
+  for (const [field, size] of [['concept', 300], ['content', 3000], ['answer', 1000]]) {
+    assert.equal([...sent[field]].length, size, field);
+    assert.ok(!/[\uD800-\uDBFF]$/.test(sent[field]), field + ' sem meio emoji no fim');
+  }
+  // Dentro dos limites, nada é cortado.
+  assert.equal(explainRequest({ concept: 'Luz', text: 'A planta usa luz.' }, '😀'.repeat(1000), 'Escolar', 'Básico').answer,
+    '😀'.repeat(1000));
 });
 
 test('fixLastQuizEvent: a última resposta de quiz da questão vira acerto; as outras não mudam', () => {

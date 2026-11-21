@@ -62,6 +62,21 @@ class GradeOutput(Trimmed):
     verdict: Literal["correta", "parcial", "incorreta"]
     feedback: Text
 
+class ExplainInput(Trimmed):
+    # "Explicar com minhas palavras", no Resumo: o título e o texto do tópico e o que o aluno escreveu sem olhar o texto.
+    concept: Clean = Field(min_length=1, max_length=300)
+    content: Clean = Field(min_length=1, max_length=3000)
+    answer: Clean = Field(min_length=1, max_length=1000)
+    area: Area
+    level: Level
+
+class ExplainOutput(Trimmed):
+    # O comentário da IA. missing são trechos copiados do texto do tópico, e o backend descarta o que não está nele
+    # (main.explain). default_factory, e não = [] ou = "", para a palavra-chave "default" não entrar no esquema enviado.
+    verdict: Literal["completa", "parcial", "incorreta"]
+    missing: list[str] = Field(default_factory=list)
+    misconception: str = Field(default_factory=str)
+
 class ExampleInput(Trimmed):
     # "Usar um exemplo", na página Estudar: a área e o nível que o aluno escolheu.
     area: Area

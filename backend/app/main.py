@@ -14,9 +14,9 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .config import settings
-from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
-                     QuizItem, StudyInput, StudyOutput, SummaryItem)
-from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
+from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, ExplainInput, ExplainOutput,
+                     GradeInput, GradeOutput, QuizItem, StudyInput, StudyOutput, SummaryItem)
+from .prompts import CHAT, EXAMPLE, EXPLAIN, GENERATE, GRADE, NO_SOURCE, TOPICS
 from .providers import ai, budget, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
@@ -29,6 +29,8 @@ logging.getLogger("cerebro").setLevel(logging.INFO)
 STUDY_SCHEMA = StudyOutput.model_json_schema()
 # A revisão vai com esquema: são duas frases curtas, e o veredito tem de ser um dos três aceitos.
 GRADE_SCHEMA = GradeOutput.model_json_schema()
+# O comentário da explicação com as próprias palavras também: o veredito é um dos três aceitos, e os trechos vêm em lista.
+EXPLAIN_SCHEMA = ExplainOutput.model_json_schema()
 # O exemplo também: é um campo só, e o JSON quebrado (o chat, que vai sem esquema, recebe 1 em ~20) gastaria a única
 # segunda chamada do clique. Se as quebras de linha sumirem, como no chat com esquema, o texto fica num parágrafo só.
 EXAMPLE_SCHEMA = ExampleText.model_json_schema()
@@ -49,7 +51,7 @@ CITES_OPTION = re.compile(
 POINTS_ASIDE = re.compile(r"\b(?:acima|abaixo)\b", re.IGNORECASE)
 # Nome do campo de entrada na frase do erro 422.
 FIELDS = {"content": "conteúdo", "question": "pergunta", "area": "área", "level": "nível", "history": "histórico",
-          "expected": "gabarito", "answer": "resposta"}
+          "expected": "gabarito", "answer": "resposta", "concept": "tópico"}
 
 class RequestBudget:
     # Abre o teto de cada pedido (providers.next_call_timeout): no máximo request_calls chamadas à IA, até
@@ -276,6 +278,33 @@ def grade(data: GradeInput):
             if last:
                 fail(502, "AI_INVALID_ANSWER", "A IA devolveu uma revisão fora do formato. Tente novamente.")
     review.feedback = review.feedback[:600]
+    return review
+
+@app.post("/api/explain", response_model=ExplainOutput)
+def explain(data: ExplainInput):
+    # "Pedir comentário da IA" na explicação que o aluno escreveu de um tópico: a IA julga o sentido, como na revisão, e
+    # aponta os trechos do tópico que faltaram. Comentário fora do formato ganha uma segunda chamada, como a revisão.
+    for last in (False, True):
+        try:
+            review = ExplainOutput.model_validate(ai(data.model_dump(), EXPLAIN, EXPLAIN_SCHEMA))
+            break
+        except ValidationError as exc:
+            logger.warning("explain: comentário rejeitado %s", reasons(exc))
+            if last:
+                fail(502, "AI_INVALID_ANSWER", "A IA devolveu um comentário fora do formato. Tente novamente.")
+    # A tela marca os trechos no texto do tópico: só fica o que existe nele, pela regra do trecho de origem (grounded),
+    # sem repetir e até 3. Sem trecho conferido ficam o veredito e o equívoco.
+    found = {}
+    for piece in review.missing:
+        piece = grounded(piece, data.content)
+        if piece:
+            found.setdefault(plain(piece), piece)
+    kept = list(found.values())[:3]
+    if len(kept) < len(review.missing):
+        # Só a contagem: o trecho e a explicação nunca vão para o log.
+        logger.warning("explain: %s de %s trechos que faltaram descartados", len(review.missing) - len(kept), len(review.missing))
+    review.missing = kept
+    review.misconception = review.misconception[:300]
     return review
 
 @app.post("/api/example", response_model=ExampleOutput)

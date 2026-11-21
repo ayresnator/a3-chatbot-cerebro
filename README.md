@@ -12,20 +12,21 @@ Facilitar a preparação de materiais de estudo e incentivar o aprendizado ativo
 
 ## 🤖 Inteligência artificial utilizada
 
-O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em quatro situações:
+O projeto usa a **API do Google Gemini**, com o modelo `gemini-3.5-flash-lite` na faixa gratuita. Só o backend em Python fala com o provedor. A IA é chamada em cinco situações:
 
 | Uso | O que a IA faz | Rota do backend |
 |---|---|---|
 | Gerar material | Monta resumo, flashcards e quiz a partir do texto ou do tema | `POST /api/generate` |
 | Tirar dúvidas | Responde no chat e explica de outro jeito um tópico ou uma questão | `POST /api/chat` |
 | Revisar resposta curta | Julga o sentido de uma resposta que a comparação de texto marcou como errada | `POST /api/grade` |
+| Comentar uma explicação | Compara com o tópico do resumo a explicação que o estudante escreveu com as próprias palavras e aponta o que faltou | `POST /api/explain` |
 | Escrever um exemplo | Escreve, para o botão "Usar um exemplo", um texto curto sobre um tema sorteado da área escolhida | `POST /api/example` |
 
-O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
+O programa não aceita a resposta do modelo sem conferir. Ele valida cada item gerado, descarta a questão cujo gabarito não aponta uma opção, embaralha as alternativas e só mostra um trecho como "No seu texto" quando esse trecho existe no texto que o aluno enviou. No comentário de uma explicação, só marca como faltando o trecho que existe no texto do tópico. Os detalhes, com os números dos testes, estão em [docs/IA.md](docs/IA.md).
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho, montar o caderno de erros e marcar o dia em que cada cartão e cada questão do caderno voltam. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
+**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão e as explicações enviadas para comentário vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar, e o "Explicar com minhas palavras" avisa "O que você escreve vai para o Google Gemini." antes do botão do comentário. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
 **Segurança da API:**
 
@@ -84,11 +85,14 @@ O estudante pode:
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
 - Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto";
-- Tentar responder antes de ler e esconder o texto dos tópicos para testar a memória.
+- Tentar responder antes de ler e esconder o texto dos tópicos para testar a memória;
+- Explicar um tópico com as próprias palavras e comparar com o texto dele, no botão "Explicar com minhas palavras".
 
 Reler um resumo ensina pouco; tentar lembrar fixa mais, mesmo quando a resposta sai errada. Por isso o resumo abre com o bloco "Tente responder antes de ler": 2 perguntas dos flashcards do material, com um campo para cada. Ninguém corrige na hora. Depois de "Ler o resumo", o fim da página mostra "Confira o que você pensou", com cada pergunta, o que o estudante escreveu e a resposta do material. "Pular" fecha o bloco, que fica no botão "Tentar antes de ler", na faixa de ferramentas. Quem pula duas vezes seguidas deixa de ver o bloco aberto nos próximos materiais: ele aparece só nesse botão. "Ler o resumo" com os dois campos em branco também conta como pulo. A conta dos pulos fica no navegador e zera quando o estudante escreve uma resposta.
 
 Na mesma faixa, a caixa "Esconder o texto" deixa cada tópico só com o título e o botão "Mostrar". O texto, o trecho "No seu texto" e o botão "Ver no texto" aparecem juntos ao mostrar, e o estudante marca "Lembrei" ou "Não lembrei"; apertar de novo a marca escolhida a tira. No fim da lista, "Você lembrou 4 de 6 tópicos" conta os tópicos já marcados e lista os que ficaram para rever. Desligar e ligar a caixa começa outra rodada. Nada disso chama a IA nem entra no desempenho ou no caderno de erros, e só a conta dos pulos fica gravada. Também funciona na demonstração.
+
+Explicar um tópico com as próprias palavras, sem olhar o texto, mostra o que o estudante entendeu e o que ainda falta. Em cada tópico, "Explicar com minhas palavras" tira o texto da tela e abre um campo para ele escrever de 2 a 5 frases, com até 1.000 caracteres; o mesmo botão fecha o campo e devolve o texto. Com "Esconder o texto" ligado, o botão aparece junto com o texto, no "Mostrar", como os outros botões do tópico. "Comparar" mostra o que ele escreveu ao lado do texto do tópico e do trecho "No seu texto", sem chamar a IA. Com a IA ativa, "Pedir comentário da IA" (1 chamada) devolve um veredito (completa, parcial ou incorreta), até 3 trechos do tópico que faltaram, marcados no texto dele e listados embaixo, e o equívoco em uma frase, quando há. O backend só deixa passar o trecho que existe no texto do tópico. Antes do botão, a tela avisa: "O que você escreve vai para o Google Gemini.", e o comentário termina com "Comentário da IA: pode errar.". Nada disso é gravado nem entra no desempenho ou no caderno de erros: fechar o campo, ou abrir o de outro tópico, apaga o que foi escrito. Na demonstração só o "Comparar" aparece.
 
 Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. O texto do "Usar um exemplo" não é do estudante: trecho que saiu do texto que a IA escreveu aparece como "No exemplo escrito pela IA: ...", e trecho de um exemplo pronto, como "No texto de exemplo: ...". O tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, de um exemplo pronto, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta; o trecho de cada tópico dele é a própria frase do texto.
 
@@ -373,7 +377,7 @@ npm run build
 
 O GitHub Actions roda os mesmos comandos a cada envio ao repositório.
 
-A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 24 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
+A qualidade do que a IA escreve não cabe em teste simulado. Para isso existe a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`, na pasta `backend`), que faz até 27 pedidos reais ao Gemini com casos fixos e mede, entre outras coisas, se o modelo obedece a uma ordem escondida no texto do aluno. Ela consome a cota da chave e para em 40 chamadas HTTP, contando as novas tentativas; o [INICIAR-NO-VSCODE.md](INICIAR-NO-VSCODE.md) mostra como fazer a rodada inteira.
 
 O número de testes, o resultado da última execução e o que ainda não rodou na API real estão em [docs/VALIDACAO.md](docs/VALIDACAO.md).
 
@@ -389,7 +393,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
-- A revisão de resposta curta feita pela IA também pode errar.
+- A revisão de resposta curta feita pela IA também pode errar, e o comentário da explicação com as próprias palavras também. O comentário (`/api/explain`) só tem teste simulado: a instrução e o esquema dele ainda não rodaram na API real.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
 - O Cérebro é para uso local do grupo. O que falta para abri-lo na internet, com as decisões do grupo, os termos da Gemini API, a LGPD e as tarefas do backend, está em [docs/PUBLICAR.md](docs/PUBLICAR.md).
 

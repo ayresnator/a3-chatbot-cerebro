@@ -46,7 +46,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
-1. A IA entra em quatro lugares: gerar o material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
+1. A IA entra em cinco lugares: gerar o material, tirar dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever o texto do "Usar um exemplo". O resto é código comum.
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).
@@ -63,14 +63,14 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "A cota de hoje da IA acabou" (`AI_QUOTA_EXCEEDED`, e o cabeçalho fica "Cota de hoje esgotada") ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo" (`AI_BUDGET_REACHED`, e o cabeçalho fica "Teto do dia atingido") | Abra um material importado na Biblioteca, como no caso da cota. Para liberar a IA, aumente ou esvazie o `AI_DAILY_LIMIT` no `.env`, reinicie o backend e recarregue a página: no teto nenhum pedido sai, e a aba aberta continuaria com os botões da IA desligados. |
 | "Cérebro desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre, quando a aba volta a aparecer e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique", "Pedir revisão da IA" e "Pedir comentário da IA" (o "Explicar com minhas palavras" fica, com o "Comparar"). A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 A mensagem de erro mostra uma frase simples; o código entre parênteses na tabela fica embaixo dela, em "Detalhes técnicos". Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
 
 ## Perguntas prováveis
 
-**Onde está a inteligência artificial do trabalho?** Em quatro rotas do backend: gerar o material, responder dúvidas, revisar resposta curta e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
+**Onde está a inteligência artificial do trabalho?** Em cinco rotas do backend: gerar o material, responder dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
 **Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 
@@ -80,6 +80,6 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão e as explicações enviadas para comentário.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.

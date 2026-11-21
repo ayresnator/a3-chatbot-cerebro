@@ -26,8 +26,8 @@ import {
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote, findSource, textOrigin,
+  gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample,
+  sourceLabel, originNote, findSource, markPieces, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
@@ -122,6 +122,13 @@ const VERDICT_EFFECT = {
   parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
+// O veredito do comentário da IA sobre a explicação com as próprias palavras (#82), em frase: a palavra sozinha diz
+// pouco. As definições são as da instrução da IA (backend/app/prompts.py, EXPLAIN).
+const OWN_VERDICT = {
+  completa: 'Explicação completa: as ideias essenciais do tópico estão no que você escreveu.',
+  parcial: 'Explicação parcial: o que você escreveu está certo, mas faltou uma ideia essencial.',
+  incorreta: 'Explicação incorreta: o que você escreveu contradiz o tópico ou fala de outra coisa.',
+};
 
 // Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e os materiais temporários (o
 // caderno de erros, o simulado, a revisão do dia). A demonstração não usa IA e não mostra. O aviso do material segue o
@@ -167,10 +174,11 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, example),
-  // para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, own,
+  // example), para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
   // Wait); since é a hora do pedido, para os segundos.
-  // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
+  // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista;
+  // no comentário da explicação com as próprias palavras, item é o tópico.
   const [busy, setBusy] = useState(null);
   // Aviso de erro do Estudar e do Dúvidas: { message, tech, until } (Problem, abaixo), ou null.
   const [error, setError] = useState(null);
@@ -233,6 +241,10 @@ function App() {
   // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
   // Só com item, a resposta ainda não chegou.
   const [why, setWhy] = useState(null);
+  // "Explicar com minhas palavras" (#82), num tópico por vez, como o why: { item, text, compared, review, error }. item
+  // é o tópico; text, o que o aluno escreve, que só fica na tela; compared, a comparação à vista; review, o comentário da
+  // IA ({ verdict, missing, misconception }); error, o erro do pedido. Nada disso é gravado nem conta no desempenho.
+  const [own, setOwn] = useState(null);
   // Janela "Ver no texto" de um tópico do resumo: { texto, range, origin, concept }, ou null. range é onde o trecho
   // está no texto (lib.js, findSource), ou null; origin, de onde o texto veio (lib.js, textOrigin). Tudo é guardado no
   // clique: o material aberto pode mudar com a janela aberta (a geração que terminou longe do Estudar).
@@ -1033,6 +1045,64 @@ function App() {
     }
   }
 
+  // "Explicar com minhas palavras" (#82): o texto do tópico sai da tela, e o aluno escreve o que lembra. O botão fica no
+  // lugar e abre ou fecha, um tópico por vez. Fechar, ou abrir outro, apaga o que foi escrito e desiste do comentário
+  // pedido. No toque o foco fica no botão, para o teclado da tela não abrir sozinho, e o campo só rola até a vista.
+  function toggleOwn(s, i) {
+    if (busy?.kind === 'own') cancelAI();
+    if (own?.item === s) {
+      setOwn(null);
+      // Com "Esconder o texto", o tópico volta escondido e o botão sai com ele: o foco vai ao "Mostrar".
+      focusAfter.current = ['#minhas-' + i, '#mostrar-' + i];
+      return;
+    }
+    setOwn({ item: s, text: '' });
+    focusAfter.current = TOUCH ? ['#minhas-' + i, null, '#proprio-campo'] : ['#proprio-campo'];
+  }
+
+  // "Pedir comentário da IA": a explicação vai como dado, e o comentário só fica na tela, sem entrar no desempenho nem
+  // no caderno de erros. Campo em branco não gasta chamada: o aviso pede o texto, como o gerar sem texto. A resposta só
+  // muda a explicação do pedido: fechar o tópico durante a espera desiste dele (toggleOwn).
+  async function commentOwn() {
+    if (waiting) return;
+    const mine = own;
+    const s = mine.item;
+    if (!mine.text.trim()) {
+      setOwn({ ...mine, error: { message: 'Escreva a sua explicação antes de pedir o comentário da IA.' } });
+      focusAfter.current = ['#proprio-campo'];
+      return;
+    }
+    const from = origin(s);
+    let review = null;
+    setOwn({ ...mine, error: null });
+    setBusy({ kind: 'own', label: 'Esperando o comentário…', orb: 'solving', since: Date.now(), item: s });
+    // A espera nasce junto com o comentário e não seria lida.
+    say('Esperando o comentário da IA…');
+    try {
+      const data = await callAI('/api/explain', explainRequest(s, mine.text, from.area, from.level));
+      if (!Object.keys(OWN_VERDICT).includes(data?.verdict) || !Array.isArray(data.missing)) {
+        throw Error('A IA mandou um comentário incompleto. Tente de novo.');
+      }
+      review = {
+        verdict: data.verdict,
+        missing: data.missing.filter(piece => typeof piece === 'string'),
+        misconception: typeof data.misconception === 'string' ? data.misconception : '',
+      };
+      setOwn(o => (o?.item === s ? { ...o, compared: true, review } : o));
+    } catch (e) {
+      if (!e.cancelled) setOwn(o => (o?.item === s ? { ...o, error: e } : o));
+    } finally {
+      // Com o comentário o botão do pedido sai da tela, e o foco que estava no tópico vai para o veredito; longe dele, o
+      // leitor de tela ouve o veredito. O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
+      if (adrift(review ? '.own, .busy' : '.own .wait, .busy')) {
+        focusAfter.current = [review ? '#proprio-veredito' : '#proprio-ia', 'main h1'];
+      } else if (review) {
+        say('Comentário da IA: ' + OWN_VERDICT[review.verdict]);
+      }
+      setBusy(null);
+    }
+  }
+
   // "Ler o resumo" (answered) ou "Pular": o bloco "Tente responder antes de ler" sai, e o foco vai ao primeiro tópico,
   // onde a leitura começa. O que o aluno escreveu fica para o "Confira o que você pensou", no fim do resumo. A resposta
   // escrita zera a conta de pulos seguidos, e o pulo ou o bloco fechado em branco a aumenta (lib.js, nextSkips); no 2º
@@ -1461,10 +1531,11 @@ function App() {
     setError(rateAtCap);
     setWhy(w => (w?.error?.until ? { ...w, error: rateAtCap(w.error) } : w));
     setAnswer(a => (a?.review?.error?.until ? { ...a, review: { error: rateAtCap(a.review.error) } } : a));
+    setOwn(o => (o?.error?.until ? { ...o, error: rateAtCap(o.error) } : o));
     // Quando o alerta de um pedido na tela já diz a frase, a região fixa não a repete. A frase que acabou de entrar nela
     // ("Material pronto", do pedido que gastou a última chamada) vai junto: trocada logo depois, não chegaria ao leitor
     // de tela.
-    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error] : [])];
+    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, own?.error] : [])];
     if (!alerts.some(e => rateAtCap(e)?.message?.endsWith(ERRORS.AI_BUDGET_REACHED))) {
       say([spoken.trim(), ERRORS.AI_BUDGET_REACHED].filter(Boolean).join(' '));
     }
@@ -1493,6 +1564,7 @@ function App() {
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
   const waitInline = making ? MATERIAL.includes(page)
     : busy?.kind === 'why' ? (page === 'Resumos' && topics.includes(why?.item)) || (page === 'Quizzes' && !done && why?.item === quiz)
+    : busy?.kind === 'own' ? page === 'Resumos' && own?.item === busy.item && topics.includes(busy.item)
     : busy?.kind === 'review' && page === 'Quizzes' && !done && answer === busy.answer;
   const band = !!busy && !waitInline;
   // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
@@ -1537,7 +1609,7 @@ function App() {
   // fim da espera.
   const pause = pauseNotice({
     until: pausedUntil, page, error, capped,
-    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil),
+    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error, own?.error].some(e => e?.until === pausedUntil),
   });
   const problem = pause || error;
   // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o
@@ -2134,7 +2206,13 @@ function App() {
                               <ol className="summary" role="list">
                                 {topics.map((s, i) => (
                                   // Escondido, o tópico fica só com o título e o "Mostrar" (styles.css, data-escondido).
-                                  <li key={i} data-escondido={(hide && !recall.shown[i]) || undefined}>
+                                  // Explicando com as próprias palavras (data-proprio), o tópico fica com o título, o botão e
+                                  // o campo, também com "Esconder o texto": o texto volta na comparação.
+                                  <li
+                                    key={i}
+                                    data-escondido={(hide && !recall.shown[i] && own?.item !== s) || undefined}
+                                    data-proprio={own?.item === s || undefined}
+                                  >
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
                                       <h3 tabIndex={-1}>{s.concept}</h3>
@@ -2194,18 +2272,131 @@ function App() {
                                           ))}
                                         </div>
                                       )}
-                                      {/* O foco volta ao botão do pedido ou, com o tópico escondido durante a espera, ao
-                                          "Mostrar" dele: dos dois, vale o último que está na tela, e o "Mostrar" vem antes. */}
-                                      {API_BASE && (
-                                        <div className="ai-ask">
+                                      {/* O foco do "Não entendi" volta ao botão do pedido ou, com o tópico escondido durante
+                                          a espera, ao "Mostrar" dele (ao "Explicar com minhas palavras", com o campo aberto):
+                                          vale o último que está na tela, e o "Mostrar" vem antes. "Explicar com minhas
+                                          palavras" não chama a IA e fica também na demonstração. */}
+                                      <div className="ai-ask">
+                                        <button
+                                          type="button"
+                                          id={'minhas-' + i}
+                                          className="own-toggle"
+                                          aria-expanded={own?.item === s}
+                                          onClick={() => toggleOwn(s, i)}
+                                        >
+                                          <Icon name="abaixo" />
+                                          Explicar com minhas palavras
+                                        </button>
+                                        {API_BASE && (
                                           <button
                                             type="button"
                                             id={'explicar-' + i}
                                             aria-disabled={waiting || undefined}
-                                            onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #explicar-' + i)}
+                                            onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #minhas-' + i + ', #explicar-' + i)}
                                           >
                                             Não entendi, me explique <small>{askCost}</small>
                                           </button>
+                                        )}
+                                      </div>
+                                      {/* Explicar sem olhar o texto mostra o que o aluno entendeu e o que falta: o campo vem
+                                          no lugar do texto, e a comparação só aparece depois. Nada daqui é gravado. */}
+                                      {own?.item === s && (
+                                        <div className="own">
+                                          {own.compared ? (
+                                            <div className="own-compare">
+                                              <div>
+                                                <h4 id="proprio-voce" tabIndex={-1}>Você escreveu</h4>
+                                                <p className="own-text">{own.text.trim() || 'Você não escreveu nada.'}</p>
+                                              </div>
+                                              <div>
+                                                <h4>No resumo</h4>
+                                                <p>
+                                                  {markPieces(s.text, own.review?.missing || []).map((part, k) =>
+                                                    part.mark ? <mark key={k}>{part.text}</mark> : part.text)}
+                                                </p>
+                                                {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                                {result.semIA !== true && (s.ia || !s.source?.trim()) && (
+                                                  <span className="ai-tag">Explicação da IA: confira</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras.</label>
+                                              <p className="hint" id="proprio-dica">De 2 a 5 frases, com até 1.000 caracteres.</p>
+                                              <textarea
+                                                id="proprio-campo"
+                                                rows={4}
+                                                maxLength={1000}
+                                                aria-describedby="proprio-dica"
+                                                readOnly={busy?.kind === 'own' && busy.item === s}
+                                                value={own.text}
+                                                onChange={e => {
+                                                  const text = e.target.value;
+                                                  // O aviso de campo em branco sai com o texto; o do limite por minuto
+                                                  // fica até a espera acabar, como no Estudar.
+                                                  setOwn(o => ({ ...o, text, error: o.error?.until > Date.now() ? o.error : null }));
+                                                }}
+                                              />
+                                            </>
+                                          )}
+                                          {own.review && (
+                                            <m.div className="own-review" variants={focusIn} initial={appear()} animate="show">
+                                              <p id="proprio-veredito" tabIndex={-1}><strong>{OWN_VERDICT[own.review.verdict]}</strong></p>
+                                              {own.review.missing.length > 0 && (
+                                                <>
+                                                  <p id="proprio-faltou">O que faltou, marcado no texto do resumo:</p>
+                                                  <ul aria-labelledby="proprio-faltou">
+                                                    {own.review.missing.map((piece, k) => <li key={k}>{piece}</li>)}
+                                                  </ul>
+                                                </>
+                                              )}
+                                              {own.review.misconception && <p>Equívoco: {own.review.misconception}</p>}
+                                              <p className="hint">Comentário da IA: pode errar.</p>
+                                            </m.div>
+                                          )}
+                                          {/* O comentário pedido espera no lugar onde ele vai entrar. */}
+                                          {busy?.kind === 'own' && busy.item === s && (
+                                            <div className="review-wait">
+                                              <Sk className="sk-read" />
+                                              <Sk w="72%" className="sk-read" />
+                                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                            </div>
+                                          )}
+                                          {own.error && <div role="alert" className="error"><Problem error={own.error} /></div>}
+                                          {!own.compared && (
+                                            <div className="row">
+                                              <button
+                                                type="button"
+                                                className="primary"
+                                                onClick={() => {
+                                                  // O campo sai da tela: o foco vai para o que o aluno escreveu.
+                                                  setOwn({ ...own, compared: true });
+                                                  focusAfter.current = ['#proprio-voce'];
+                                                }}
+                                              >
+                                                Comparar
+                                              </button>
+                                            </div>
+                                          )}
+                                          {/* O aviso vem antes do botão, e o botão o leva na descrição. Sem nada escrito, a
+                                              comparação fica sem o pedido à IA. */}
+                                          {API_BASE && !own.review && (!own.compared || own.text.trim()) && (
+                                            <>
+                                              <p className="hint" id="proprio-aviso">O que você escreve vai para o Google Gemini.</p>
+                                              <div className="ai-ask">
+                                                <button
+                                                  type="button"
+                                                  id="proprio-ia"
+                                                  aria-disabled={waiting || undefined}
+                                                  aria-describedby="proprio-aviso"
+                                                  onClick={commentOwn}
+                                                >
+                                                  Pedir comentário da IA <small>{askCost}</small>
+                                                </button>
+                                              </div>
+                                            </>
+                                          )}
                                         </div>
                                       )}
                                       {why?.item === s && <Why {...why} wait={busy} onCancel={cancelAI} pop={pop} focusIn={focusIn} />}
