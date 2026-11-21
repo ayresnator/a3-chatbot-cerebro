@@ -22,6 +22,7 @@ import {
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
+  examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -185,6 +186,8 @@ function App() {
   const [done, setDone] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('Todas');
+  // Quantas questões o simulado da Biblioteca pede: 10, 20 ou 30 (startExam).
+  const [examSize, setExamSize] = useState(10);
   const [chartArea, setChartArea] = useState('Todas');
   const [question, setQuestion] = useState('');
   const [chat, setChat] = useState(DRAFT.chat);
@@ -834,6 +837,12 @@ function App() {
     notebook(list => (ok
       ? clearMistake(list, mistakeKey(from.title, q.question), now)
       : addMistake(list, q, from.title, from.area, now)));
+    // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
+    if (blind) {
+      say('Resposta registrada.');
+      focusAfter.current = ['.exam-next .primary'];
+      return;
+    }
     // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
     // última linha com marca da caneta (ou o próprio retorno).
     focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
@@ -871,6 +880,25 @@ function App() {
     restart();
     // Um aviso ainda na tela com o botão "Abrir" (material pronto) reiniciaria este quiz em vez de abrir o material.
     setNotice(null);
+  }
+
+  // "Começar simulado" (Biblioteca): como o "Refazer meus erros", o quiz abre num material temporário, aqui com questões
+  // sorteadas dos materiais da lista na tela (a busca e o filtro de área), cada uma com o material e a área de onde
+  // veio. A tela só corrige no fim (blind). Nada é gravado além das respostas, como em qualquer quiz.
+  function startExam() {
+    const quiz = mockExam(shown, examSize);
+    setParked(opened);
+    setResult({ virtual: true, exam: true, title: 'Simulado', area: '', level: '', summary: [], flashcards: [], quiz });
+    openPage('Quizzes', QUESTION_FOCUS);
+    restart();
+    setNotice(null);
+    say('Simulado com ' + examLine(quiz) + '. A correção fica para o fim.');
+  }
+
+  // O tamanho do simulado mudou: a frase ao lado diz quantas questões entram, e o leitor de tela ouve a mesma.
+  function chooseExamSize(size) {
+    setExamSize(size);
+    say(examLine(examFrom, size));
   }
 
   // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
@@ -1123,6 +1151,8 @@ function App() {
   }
 
   const quizList = retry || result?.quiz || [];
+  // Simulado (startExam): a correção fica para o fim. "Refazer as que errei" volta com a correção na hora.
+  const blind = !!result?.exam && !retry;
   const quiz = quizList[idx];
   const wrong = answers.filter(a => !a.ok);
   const right = answers.length - wrong.length;
@@ -1151,6 +1181,8 @@ function App() {
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
     [page, saved, query, filter]
   );
+  // As questões de onde sai o simulado: as dos materiais da lista (lib.js, examPool).
+  const examFrom = useMemo(() => examPool(shown), [shown]);
   // O leitor de tela ouve quantos materiais a busca ou o filtro deixou, meio segundo depois da última mudança: a cada
   // tecla ele seria atropelado. Abrir a Biblioteca não é anunciado (page fica fora das dependências).
   useEffect(() => {
@@ -1662,12 +1694,14 @@ function App() {
                       </m.section>
                     ) : (
                       <m.section key="material" className="panel material" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
-                        {/* O material temporário do caderno de erros só tem quiz: sem o botão de salvar e sem as abas. */}
+                        {/* O material temporário (o caderno de erros, o simulado) só tem quiz: sem o botão de salvar e sem
+                            as abas. */}
                         <div className="result-header">
                           <div>
                             <h2 id="material-titulo" tabIndex={-1}>{result.title}</h2>
                             <p className="meta">
-                              {result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
+                              {result.exam ? examLine(result.quiz)
+                                : result.virtual ? 'Questões que você errou' : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
                                 O dos outros diz de onde ele veio (lib.js, originNote). */}
@@ -1882,6 +1916,17 @@ function App() {
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
                               <p>Você acertou {right} de {answers.length}.</p>
+                              {/* O fim do simulado diz também o acerto por material, nas linhas do acerto por área do
+                                  Desempenho. */}
+                              {blind && (
+                                <ul className="subjects" role="list" aria-label="Acerto por material">
+                                  {examScore(answers).map(([title, ok, total]) => (
+                                    <li className="subject" key={title}>
+                                      <strong>{title}</strong> <span>{ok} de {total}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               {wrong.length > 0 ? (
                                 <ol className="review" role="list">
                                   {wrong.map((q, i) => (
@@ -1889,6 +1934,7 @@ function App() {
                                       <Pen kind="errei" draw delay={0.3 + Math.min(i, 8) * 0.08} />
                                       <div>
                                         <strong>{q.question}</strong>
+                                        {result.exam && <span>Do material: {q.title}</span>}
                                         <span>Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}</span>
                                         <span>Resposta certa: {expectedText(q)}</span>
                                         {q.explanation && <span>{q.explanation}</span>}
@@ -1901,9 +1947,10 @@ function App() {
                               )}
                               {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
                                   caderno". A frase só aparece enquanto vale: o fim do quiz continua na tela na volta de
-                                  outra página, e o aluno pode ter tirado do caderno uma das questões. */}
-                              {wrong.length > 0 && !result.virtual &&
-                                wrong.every(q => mistakes.some(e => e.key === mistakeKey(result.title, q.question))) && (
+                                  outra página, e o aluno pode ter tirado do caderno uma das questões. No simulado cada
+                                  questão vai para o caderno com o material de onde veio (origin). */}
+                              {wrong.length > 0 && (!result.virtual || result.exam) &&
+                                wrong.every(q => mistakes.some(e => e.key === mistakeKey(origin(q).title, q.question))) && (
                                 <p>
                                   {wrong.length === 1
                                     ? 'A questão que você errou está no caderno de erros. '
@@ -1928,16 +1975,22 @@ function App() {
                                     Refazer as que errei
                                   </button>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    restartQuiz();
-                                    focusAfter.current = QUESTION_FOCUS;
-                                  }}
-                                >
-                                  Refazer o quiz todo
-                                </button>
-                                {result.virtual ? (
+                                {/* O simulado não repete o mesmo sorteio: um novo sai na Biblioteca, que este fim oferece. */}
+                                {!result.exam && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      restartQuiz();
+                                      focusAfter.current = QUESTION_FOCUS;
+                                    }}
+                                  >
+                                    Refazer o quiz todo
+                                  </button>
+                                )}
+                                {/* Sair do quiz por aqui devolve o material que estava aberto, como pelo menu. */}
+                                {result.exam ? (
+                                  <button type="button" onClick={() => openPage('Biblioteca')}>Voltar à Biblioteca</button>
+                                ) : result.virtual ? (
                                   <button type="button" onClick={() => openPage('Erros')}>Voltar ao caderno</button>
                                 ) : (
                                   <button type="button" onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}>
@@ -1971,7 +2024,8 @@ function App() {
                                 </span>
                               </div>
                               <Meter value={answers.length} max={quizList.length} label="Questões respondidas" />
-                              <QuizMarks total={quizList.length} answers={answers} idx={idx} />
+                              {/* As marcas ✓ e ✗ seriam correção: no simulado ficam só o fio e o "Questão X de Y". */}
+                              {!blind && <QuizMarks total={quizList.length} answers={answers} idx={idx} />}
                               {result.virtual && <p className="hint">Do material: {quiz.title}</p>}
                               {/* O enunciado dá a descrição da caixa da resposta e o nome do grupo das alternativas: o
                                   leitor de tela lê a pergunta junto com elas. */}
@@ -2014,21 +2068,37 @@ function App() {
                                       key={i}
                                       type="button"
                                       disabled={answer !== null}
-                                      className={'option' + (answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
+                                      className={'option' + (blind ? (answer?.value === i ? ' chosen' : '')
+                                        : answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
                                       onClick={() => submit(i)}
                                     >
                                       <span className="letter">{String.fromCharCode(65 + i)}</span>
                                       <span className="option-text">{o}</span>
                                       {/* Certo e errado também em texto: a cor sozinha não serve a quem não a distingue. */}
-                                      {answer && i === quiz.answer && <Pen kind="certo" note="certa" draw />}
-                                      {answer?.value === i && i !== quiz.answer && <Pen kind="errei" note="sua resposta" draw />}
+                                      {!blind && answer && i === quiz.answer && <Pen kind="certo" note="certa" draw />}
+                                      {!blind && answer?.value === i && i !== quiz.answer && <Pen kind="errei" note="sua resposta" draw />}
+                                      {/* No simulado a escolhida fica marcada, em texto também, sem dizer se acertou. */}
+                                      {blind && answer?.value === i && (
+                                        <span className="pen pen--escolha"><span className="pen-note">sua resposta</span></span>
+                                      )}
                                     </button>
                                   ))}
                                 </div>
                               )}
+                              {/* No simulado não há retorno: depois da resposta, só o botão de seguir (submit leva o foco
+                                  a ele). A correção, a explicação e os pedidos à IA ficam para o fim e para o "Refazer as
+                                  que errei". */}
+                              {answer && blind && (
+                                <div className="row exam-next">
+                                  <button type="button" className="primary" onClick={nextQuestion}>
+                                    {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
+                                    <Icon name="seta" />
+                                  </button>
+                                </div>
+                              )}
                               {/* O retorno entra em 0,35 s e sai na hora, junto com a questão: o aluno passa de questão a
                                   cada uma (com saída, ele pulava 132 px e ficava legível embaixo da questão nova). */}
-                              {answer && (
+                              {answer && !blind && (
                                 <m.div
                                   key={'retorno-' + idx}
                                   className={'feedback ' + (answer.ok ? 'good' : 'bad')}
@@ -2408,6 +2478,10 @@ function App() {
                     onOpen={openSaved}
                     onRemove={(material, item) => leave(item, () => remove(material))}
                     onStart={() => openPage('Estudar')}
+                    exam={examLine(examFrom, examSize)}
+                    examSize={examSize}
+                    onExamSize={chooseExamSize}
+                    onExam={startExam}
                   />
                 </Suspense>
               )}

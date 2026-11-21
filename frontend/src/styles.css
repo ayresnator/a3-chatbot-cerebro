@@ -2084,6 +2084,13 @@ main:focus {
     color: var(--ink)
 }
 
+/* No simulado a escolhida fica marcada sem dizer se acertou (App.jsx, blind): a borda ciano e a nota "sua resposta". */
+.option.chosen {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--ink)
+}
+
 .feedback {
     margin: var(--sp-5) 0;
     padding: var(--sp-4) var(--sp-5);
@@ -2127,6 +2134,11 @@ main:focus {
     display: flex;
     justify-content: flex-end;
     margin-top: var(--sp-4)
+}
+
+/* No simulado não há retorno: o botão de seguir fica sozinho, na ponta da linha, como no retorno. */
+.exam-next {
+    justify-content: flex-end
 }
 
 .empty {
@@ -2181,6 +2193,14 @@ main:focus {
     color: var(--ink-2)
 }
 
+/* Acerto por material no fim do simulado: as linhas do acerto por área (Desempenho), na largura da lista das erradas e
+   alinhadas à esquerda dentro do bloco centralizado. */
+.quiz-done .subjects {
+    max-width: calc(var(--measure) + var(--mark) + var(--sp-3));
+    margin: var(--sp-5) auto 0;
+    text-align: left
+}
+
 /* ---------- Caneta: as marcas que se desenham (marks.jsx) ---------- */
 
 .pen {
@@ -2219,6 +2239,11 @@ main:focus {
 
 .pen--novo {
     color: var(--ink-3)
+}
+
+/* A escolhida no simulado: só a nota, sem traço, no ciano da borda dela (.option.chosen). */
+.pen--escolha {
+    color: var(--accent)
 }
 
 /* Nota da caneta, na mesma Manrope: "certa", "sua resposta", "errei". */
@@ -3343,6 +3368,33 @@ main:focus {
 .search input {
     flex: 1;
     padding-left: 2.5rem
+}
+
+/* Simulado (Biblioteca.jsx), entre a busca e a lista: o nome e a frase à esquerda, como num item da lista, e o tamanho e
+   o botão à direita. */
+.exam-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-4);
+    padding-top: var(--sp-4);
+    border-top: var(--hair) solid var(--line)
+}
+
+.exam-row > div {
+    flex: 1 1 18rem;
+    min-width: 0
+}
+
+.exam-row h2 {
+    margin: 0 0 var(--sp-1);
+    font-size: var(--fs-3)
+}
+
+.exam-row p {
+    color: var(--ink-2);
+    font-size: var(--fs-2)
 }
 
 .library {

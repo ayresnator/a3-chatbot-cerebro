@@ -12,6 +12,7 @@ import {
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
+  examPool, mockExam, examScore, examLine,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -776,6 +777,110 @@ test('libraryCount: o resultado da busca da Biblioteca, com nenhum, um e vários
   assert.equal(libraryCount(0), 'Nenhum material encontrado');
   assert.equal(libraryCount(1), '1 material encontrado');
   assert.equal(libraryCount(2), '2 materiais encontrados');
+});
+
+// Material do simulado com n questões de múltipla escolha, congelado: função que mexesse nele falharia aqui.
+const examMaterial = (title, area, n) => Object.freeze({
+  title,
+  area,
+  summary: [{ concept: title, text: title + '.' }],
+  flashcards: [{ question: 'O que é ' + title + '?', answer: title }],
+  quiz: Object.freeze(Array.from({ length: n }, (_, i) => Object.freeze({
+    type: 'multiple',
+    question: title + ': questão ' + (i + 1) + '?',
+    options: Object.freeze(['A', 'B', 'C']),
+    answer: i % 3,
+    explanation: 'Trecho ' + (i + 1) + '.',
+    steps: [],
+  }))),
+});
+const EXAM = [examMaterial('Inflação', 'Economia', 5), examMaterial('Porcentagem', 'Matemática', 4),
+  examMaterial('Contratos', 'Direito', 3)];
+// Sorteio de semente fixa (mulberry32), no lugar do Math.random: a mesma semente dá sempre a mesma sequência.
+const seeded = seed => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const examKey = q => mistakeKey(q.title, q.question);
+
+test('examPool: cada questão leva o título e a área do material, e as opções e a resposta ficam como estão', () => {
+  const pool = examPool(EXAM);
+  assert.equal(pool.length, 12);
+  for (const q of pool) {
+    const { title, area, ...item } = q;
+    const from = EXAM.find(m => m.title === title);
+    assert.equal(area, from.area);
+    assert.deepEqual(item, from.quiz.find(x => x.question === item.question));
+  }
+});
+
+test('examPool: a mesma questão (mesmo material e enunciado, sem acento nem maiúscula) entra uma vez só', () => {
+  assert.equal(examPool([EXAM[0], { ...EXAM[0], title: 'INFLACAO' }]).length, 5);
+  assert.equal(examPool([EXAM[0], { ...EXAM[0], title: 'Juros' }]).length, 10, 'em outro material é outra questão');
+  assert.deepEqual(examPool([]), []);
+});
+
+test('mockExam: com o sorteio fixo, a ordem sai sempre a mesma', () => {
+  const first = mockExam(EXAM, 10, seeded(7));
+  assert.deepEqual(mockExam(EXAM, 10, seeded(7)), first);
+  assert.notDeepEqual(mockExam(EXAM, 10, seeded(8)), first, 'outra semente, outra ordem');
+  assert.deepEqual(mockExam(EXAM, 10, () => 0), mockExam(EXAM, 10, () => 0));
+});
+
+test('mockExam: nenhuma questão se repete, e cada uma leva o título e a área do material, sem mudar opções nem resposta', () => {
+  for (let seed = 1; seed <= 50; seed++) {
+    const exam = mockExam(EXAM, 10, seeded(seed));
+    assert.equal(exam.length, 10);
+    assert.equal(new Set(exam.map(examKey)).size, 10, 'semente ' + seed);
+    for (const q of exam) {
+      const { title, area, ...item } = q;
+      const from = EXAM.find(m => m.title === title);
+      assert.equal(area, from.area);
+      assert.deepEqual(item, from.quiz.find(x => x.question === item.question));
+    }
+  }
+});
+
+test('mockExam: um pedido maior que o total traz todas as questões, embaralhadas', () => {
+  const exam = mockExam(EXAM, 30, seeded(3));
+  assert.equal(exam.length, 12);
+  assert.deepEqual(new Set(exam.map(examKey)), new Set(examPool(EXAM).map(examKey)));
+  assert.notDeepEqual(exam.map(examKey), examPool(EXAM).map(examKey), 'a ordem não é a da biblioteca');
+});
+
+test('mockExam: o sorteio passa por todos os materiais antes de repetir um', () => {
+  // 10 de 5 + 4 + 3: três rodadas completas (9) e uma questão da quarta, de quem ainda tem.
+  for (let seed = 1; seed <= 50; seed++) {
+    const exam = mockExam(EXAM, 10, seeded(seed));
+    const count = title => exam.filter(q => q.title === title).length;
+    assert.equal(count('Contratos'), 3, 'semente ' + seed);
+    assert.deepEqual([count('Inflação'), count('Porcentagem')].sort(), [3, 4], 'semente ' + seed);
+  }
+  // Com menos vagas que materiais, cada questão vem de um material.
+  for (let seed = 1; seed <= 20; seed++) {
+    assert.equal(new Set(mockExam(EXAM, 2, seeded(seed)).map(q => q.title)).size, 2, 'semente ' + seed);
+  }
+});
+
+test('examScore: o acerto por material, na ordem em que cada material apareceu', () => {
+  const answers = [
+    { title: 'Inflação', ok: true }, { title: 'Contratos', ok: false }, { title: 'Inflação', ok: false },
+    { title: 'Inflação', ok: true }, { title: 'Contratos', ok: false },
+  ];
+  assert.deepEqual(examScore(answers), [['Inflação', 2, 3], ['Contratos', 0, 2]]);
+  assert.deepEqual(examScore([]), []);
+});
+
+test('examLine: quantas questões entram e de quantos materiais, no singular e no plural', () => {
+  const pool = examPool(EXAM);
+  assert.equal(examLine(pool, 10), '10 questões de 3 materiais');
+  assert.equal(examLine(pool, 30), '12 questões de 3 materiais', 'com menos questões que o pedido, entram todas');
+  assert.equal(examLine(pool, 2), '2 questões de 2 materiais', 'uma questão por material até todos entrarem');
+  assert.equal(examLine(examPool([EXAM[2]]), 10), '3 questões de 1 material');
+  assert.equal(examLine(examPool([examMaterial('Juros', 'Economia', 1)]), 10), '1 questão de 1 material');
+  assert.equal(examLine(mockExam(EXAM, 10, seeded(1))), '10 questões de 3 materiais', 'o simulado aberto');
 });
 
 const NO_TIPS = { key: '', list: [] };

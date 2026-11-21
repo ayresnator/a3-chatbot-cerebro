@@ -253,6 +253,11 @@
         flex: 1
     }
 
+    /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
+    .exam-next .primary {
+        flex: 1
+    }
+
     /* Desempenho: a coluna do gráfico fica estreita para "6 respostas" e "50% certas", e o rótulo vira "50% · 6". */
     .chart .full {
         display: none
@@ -642,6 +647,16 @@
     /* O rótulo "Área" à esquerda e a lista no resto da linha. */
     .toolbar .inline-field select {
         flex: 1
+    }
+
+    /* Simulado: a frase ganha a linha inteira; o tamanho e o botão ficam embaixo, e o botão cresce até a ponta. Com a
+       base no tamanho do texto, o botão que não cabe ao lado do tamanho desce inteiro, em vez de quebrar o nome. */
+    .exam-row > div {
+        flex-basis: 100%
+    }
+
+    .exam-row button {
+        flex: auto
     }
 
     .library-item {
