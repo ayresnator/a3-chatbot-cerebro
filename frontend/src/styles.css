@@ -3748,7 +3748,8 @@ main[data-instant] > .view[data-motion-pop-id] {
         transition: none
     }
 
-    button:active:not(:disabled) {
+    /* O seletor repete o da pressão (button:active, acima): com a mesma especificidade, vence por vir depois. */
+    button:active:not(:disabled, [aria-disabled=true]):not(:focus-visible) {
         scale: none
     }
 
