@@ -1,6 +1,7 @@
 import io
 import json
 import unittest
+from dataclasses import replace
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
@@ -56,6 +57,18 @@ class PrivacyTests(unittest.TestCase):
                 self.assertEqual(response.status_code, status, path)
                 if status != 200:
                     for word in (ALUNO, MODELO, CORPO, KEY):
+                        self.assertNotIn(word, response.text, path)
+            # No teto do dia (AI_DAILY_LIMIT) o pedido volta AI_BUDGET_REACHED sem chamar o provedor.
+            mock_open.side_effect = AssertionError("no teto nenhuma chamada sai")
+            example = {"area": "Escolar", "level": "Básico", "avoid": ALUNO}
+            with patch.object(providers, "settings", replace(CONFIG, daily_limit=1)), \
+                    patch.dict(providers.calls, day=providers.quota_day(), count=1):
+                for path, body in (("/api/chat", CHAT), ("/api/generate", study), ("/api/grade", grade),
+                                   ("/api/example", example)):
+                    response = self.client.post(path, json=body)
+                    self.assertEqual((response.status_code, response.json()["detail"]["code"]),
+                                     (429, "AI_BUDGET_REACHED"), path)
+                    for word in (ALUNO, KEY):
                         self.assertNotIn(word, response.text, path)
         for word in (ALUNO, MODELO, CORPO, KEY):
             self.assertNotIn(word, "\n".join(logs.output))

@@ -29,9 +29,9 @@ logger = logging.getLogger("cerebro.ai")
 # A cota do Google vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), e a conta de chamadas vira junto.
 # shortcut: UTC-8 fixo; no horário de verão dos EUA a virada sai 1 h depois; trocar por ZoneInfo + tzdata se precisar exato.
 QUOTA_TZ = timezone(timedelta(hours=-8))
-# Chamadas HTTP feitas ao provedor no dia da cota, para o cabeçalho da tela, e o dia da cota em que veio o
-# AI_QUOTA_EXCEEDED (exhausted). Tudo fica só na memória: a conta zera quando o dia da cota vira e quando o backend
-# reinicia. A trava existe porque as rotas rodam em várias threads.
+# Chamadas HTTP feitas ao provedor no dia da cota, para o cabeçalho da tela e para o teto do dia (AI_DAILY_LIMIT), e o
+# dia da cota em que veio o AI_QUOTA_EXCEEDED (exhausted). Tudo fica só na memória: a conta zera quando o dia da cota
+# vira e quando o backend reinicia. A trava existe porque as rotas rodam em várias threads.
 calls = {"day": None, "count": 0, "exhausted": None}
 calls_lock = threading.Lock()
 
@@ -43,6 +43,13 @@ def calls_today(add: int = 0) -> int:
         today = quota_day()
         if calls["day"] != today:
             calls.update(day=today, count=0)
+        # No teto do dia a chamada não sai nem entra na conta. Conferir e somar sob a mesma trava: com pedidos ao mesmo
+        # tempo, nenhum passa do teto.
+        limit = settings.daily_limit
+        if add and limit and calls["count"] >= limit:
+            used = (f"As {limit} chamadas de hoje, o teto escolhido pelo grupo, já foram usadas" if limit > 1
+                    else "A única chamada de hoje, o teto escolhido pelo grupo, já foi usada")
+            fail(429, "AI_BUDGET_REACHED", used + ". A contagem recomeça amanhã.")
         calls["count"] += add
         return calls["count"]
 
@@ -138,7 +145,8 @@ def request_json(request: Request) -> dict:
     for _ in range(4):
         # O teto do pedido vem antes da conta do dia: a chamada recusada não sai e não conta.
         timeout = next_call_timeout()
-        # Toda chamada entra na conta do dia, também as repetidas e as que terminam em erro.
+        # Toda chamada entra na conta do dia, também as repetidas e as que terminam em erro. No teto do dia ela não sai
+        # (AI_BUDGET_REACHED): o teto vale para cada chamada, também as novas tentativas e o catálogo de modelos.
         calls_today(1)
         try:
             with urlopen(request, timeout=timeout) as response:

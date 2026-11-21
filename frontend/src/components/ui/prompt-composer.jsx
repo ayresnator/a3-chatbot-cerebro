@@ -202,8 +202,10 @@ function LevelMenu({ value, onChange }) {
   );
 }
 
+// reason: o id do aviso que diz por que o "Perguntar" está desligado (o teto do dia, App.jsx). Ele descreve o botão e o
+// campo, onde o Ctrl + Enter não pergunta e não diz nada.
 export function PromptComposer({
-  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, onFile, children,
+  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, reason, onFile, children,
 }) {
   const field = useRef(null);
   const [focused, setFocused] = useState(false);
@@ -268,7 +270,7 @@ export function PromptComposer({
           ref={field}
           rows={1}
           aria-label="Conteúdo ou pergunta para o Cérebro"
-          aria-describedby="composer-keyboard-hint"
+          aria-describedby={reason ? 'composer-keyboard-hint ' + reason : 'composer-keyboard-hint'}
           maxLength={20000}
           value={value}
           onChange={e => onChange(e.target.value)}
@@ -297,7 +299,14 @@ export function PromptComposer({
         {/* O contador e o "Perguntar" andam juntos: quando a linha quebra, os dois descem, à direita. */}
         <span className="editor-send">
           <span className="counter">{value.length.toLocaleString('pt-BR')} / 20.000</span>
-          <button type="button" className="ask" data-quiet={(ready && quiet) || undefined} disabled={!ready} onClick={onSend}>
+          <button
+            type="button"
+            className="ask"
+            data-quiet={(ready && quiet) || undefined}
+            disabled={!ready}
+            aria-describedby={reason}
+            onClick={onSend}
+          >
             {/* Em 550 px ou menos e no celular deitado o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece
                 (mobile.css); o nome inteiro e o custo continuam no botão. */}
             <span className="full">Perguntar ao Cérebro</span>

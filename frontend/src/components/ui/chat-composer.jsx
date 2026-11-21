@@ -16,9 +16,11 @@ const FINE = window.matchMedia('(pointer: fine)').matches;
 // A mola do brilho, a mesma do Animated AI Chat.
 const FOLLOW = { damping: 25, stiffness: 150, mass: 0.5 };
 
+// reason: o id do aviso que diz por que o Enviar está desligado (o teto do dia, App.jsx). Ele descreve o Enviar e o
+// campo, onde o Enter não envia e não diz nada.
 export function ChatComposer({
   value, onChange, onSend, hints, area, onArea, level, onLevel, about, swap, onSwap, waiting, touch, cost, status, note,
-  variants, pop,
+  reason, variants, pop,
 }) {
   const field = useRef(null);
   const list = useRef(null);
@@ -185,7 +187,7 @@ export function ChatComposer({
           id="pergunta"
           rows={1}
           aria-label="Sua dúvida"
-          aria-describedby={about ? 'chat-sobre chat-dica' : 'chat-dica'}
+          aria-describedby={[about && 'chat-sobre', 'chat-dica', reason].filter(Boolean).join(' ')}
           aria-controls={shown ? 'atalhos' : undefined}
           aria-activedescendant={current}
           value={value}
@@ -242,7 +244,7 @@ export function ChatComposer({
           )}
           {/* Fica no mesmo lugar nas duas fontes: o foco continua nele depois do clique, com o nome da outra fonte. */}
           {swap && <button type="button" className="link" onClick={onSwap}>{swap}</button>}
-          <button type="submit" className="primary" disabled={waiting || !value.trim()}>
+          <button type="submit" className="primary" disabled={waiting || !value.trim()} aria-describedby={reason}>
             <span>Enviar</span>
             {cost && <small>1 chamada de IA</small>}
             <Icon name="seta" />

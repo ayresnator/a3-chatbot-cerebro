@@ -68,6 +68,11 @@ def setUpModule():
     network = patch("app.providers.urlopen", side_effect=AssertionError("os testes não chamam a rede"))
     network.start()
     unittest.addModuleCleanup(network.stop)
+    # O teto do dia do .env (AI_DAILY_LIMIT) também fica de fora: com ele, a conta que os testes somam recusaria
+    # chamadas. Quem testa o teto põe o seu.
+    ceiling = patch.object(providers, "settings", replace(providers.settings, daily_limit=None))
+    ceiling.start()
+    unittest.addModuleCleanup(ceiling.stop)
 
 class ProviderTests(unittest.TestCase):
     @patch("app.providers.urlopen")
@@ -329,6 +334,48 @@ class ProviderTests(unittest.TestCase):
             for thread in threads:
                 thread.join()
             self.assertEqual(providers.calls_today(), 20)
+
+    @patch("app.providers.urlopen")
+    def test_the_daily_limit_is_exact_with_requests_in_parallel(self, mock_open):
+        # Vinte pedidos ao mesmo tempo com teto 10 fazem exatamente 10 chamadas ao provedor: conferir o teto e somar a
+        # conta ficam sob a mesma trava. O dicionário lento dá a vez a outra thread entre ler e gravar, como acima.
+        class Slow(dict):
+            def __getitem__(self, key):
+                value = super().__getitem__(key)
+                time.sleep(0.001)
+                return value
+        sent, refused = [], []
+        def reply(*args, **kwargs):
+            sent.append(1)
+            return gemini_response()
+        def ask():
+            try:
+                providers.ai({}, "JSON")
+            except HTTPException as exc:
+                refused.append(exc.detail["code"])
+        mock_open.side_effect = reply
+        with patch.object(providers, "calls", Slow(day=None, count=0, exhausted=None)), \
+                patch.object(providers, "settings", replace(CONFIG, daily_limit=10)):
+            threads = [threading.Thread(target=ask) for _ in range(20)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual((len(sent), providers.calls_today()), (10, 10))
+        self.assertEqual(refused, ["AI_BUDGET_REACHED"] * 10)
+
+    @patch("app.providers.quota_day")
+    def test_the_daily_limit_opens_again_when_the_quota_day_turns(self, mock_day):
+        # O teto vale para o dia da cota: a conta zera na virada, e as chamadas voltam a sair. A recusada não conta.
+        mock_day.return_value = date(2030, 1, 1)
+        with patch.object(providers, "settings", replace(CONFIG, daily_limit=2)):
+            self.assertEqual([providers.calls_today(1), providers.calls_today(1)], [1, 2])
+            with self.assertRaises(HTTPException) as ctx:
+                providers.calls_today(1)
+            self.assertEqual((ctx.exception.status_code, ctx.exception.detail["code"], providers.calls_today()),
+                             (429, "AI_BUDGET_REACHED", 2))
+            mock_day.return_value = date(2030, 1, 2)
+            self.assertEqual([providers.calls_today(), providers.calls_today(1)], [0, 1])
 
     @patch("app.providers.urlopen")
     def test_error_body_that_cannot_be_read_is_still_a_mapped_error(self, mock_open):
@@ -740,6 +787,19 @@ class ConfigTests(unittest.TestCase):
                 if value is None:
                     del os.environ["ALLOWED_HOSTS"]
                 self.assertEqual(config.load_settings().allowed_hosts, ["127.0.0.1", "localhost"], value)
+
+    def test_daily_limit_is_a_whole_number_above_zero_or_empty(self):
+        # AI_DAILY_LIMIT é o teto de chamadas por dia escolhido pelo grupo. Sem a linha, ou vazia, não há teto. Outro valor
+        # impede o backend de subir, com a frase do que corrigir: um teto errado deixaria a cota sem proteção, calado.
+        for value, limit in ((None, None), ("", None), ("  ", None), ("40", 40), (" 3 ", 3), ("040", 40)):
+            with patch.dict(os.environ, {"GEMINI_API_KEY": "sua_chave_aqui", "AI_DAILY_LIMIT": value or ""}):
+                if value is None:
+                    del os.environ["AI_DAILY_LIMIT"]
+                self.assertEqual(config.load_settings().daily_limit, limit, value)
+        for value in ("0", "00", "-1", "abc", "4.5", "1e3", "40 chamadas", "²"):
+            with patch.dict(os.environ, {"GEMINI_API_KEY": "sua_chave_aqui", "AI_DAILY_LIMIT": value}), \
+                    self.assertRaisesRegex(ValueError, "^AI_DAILY_LIMIT deve ser um número inteiro maior que zero"):
+                config.load_settings()
 
 
 class ApiTests(unittest.TestCase):
@@ -1613,6 +1673,35 @@ class ApiTests(unittest.TestCase):
         self.assertEqual((response.status_code, response.json()["title"], mock_open.call_count), (200, "Fotossintese", 1))
 
     @patch("app.providers.urlopen")
+    def test_the_daily_limit_refuses_the_call_without_reaching_the_provider(self, mock_open):
+        # O teto do dia (AI_DAILY_LIMIT) é conferido antes de cada chamada: com teto 3, três chamadas saem e o quarto pedido
+        # volta AI_BUDGET_REACHED sem chamar o provedor. O /api/health informa o teto, para a tela desligar os botões da IA.
+        mock_open.side_effect = lambda *args, **kwargs: gemini_response()
+        three = replace(CONFIG, daily_limit=3)
+        with patch.dict(providers.calls, day=providers.quota_day(), count=0), patch("app.main.settings", three), \
+                patch.object(providers, "settings", three):
+            self.assertEqual([self.client.post("/api/chat", json=self.CHAT).status_code for _ in range(3)], [200] * 3)
+            response = self.client.post("/api/chat", json=self.CHAT)
+            health = self.client.get("/api/health").json()
+        self.assertEqual((response.status_code, response.json()["detail"]), (429, {
+            "code": "AI_BUDGET_REACHED", "provider_status": "",
+            "message": "As 3 chamadas de hoje, o teto escolhido pelo grupo, já foram usadas. A contagem recomeça amanhã."}))
+        self.assertEqual((mock_open.call_count, health["calls_today"], health["daily_limit"]), (3, 3, 3))
+        # A nova chamada por falta de acento que bate no teto não derruba a geração: fica o primeiro material.
+        mock_open.reset_mock()
+        mock_open.side_effect = [gemini_response(json.dumps({**self.MATERIAL, "title": "Fotossintese"})),
+                                 gemini_response(json.dumps(self.MATERIAL))]
+        with patch.dict(providers.calls, day=providers.quota_day(), count=2), patch.object(providers, "settings", three):
+            response = self.client.post("/api/generate", json=self.REQUEST)
+        self.assertEqual((response.status_code, response.json()["title"], mock_open.call_count), (200, "Fotossintese", 1))
+        # Com teto 1 a frase vai no singular.
+        with patch.dict(providers.calls, day=providers.quota_day(), count=1), \
+                patch.object(providers, "settings", replace(CONFIG, daily_limit=1)):
+            response = self.client.post("/api/chat", json=self.CHAT)
+        self.assertEqual(response.json()["detail"]["message"],
+                         "A única chamada de hoje, o teto escolhido pelo grupo, já foi usada. A contagem recomeça amanhã.")
+
+    @patch("app.providers.urlopen")
     def test_no_new_call_after_the_screen_gave_up(self, mock_open):
         # Cancelar, ou o tempo esgotado da tela, fecha a ligação. A chamada que já estava no ar termina, mas nenhuma outra
         # sai: nem a segunda do tempo esgotado nem a nova chamada por falta de acento. Ninguém recebe a resposta.
@@ -1713,7 +1802,7 @@ class ApiTests(unittest.TestCase):
             before = self.client.get("/api/health").json()
             self.assertEqual(before, {"status": "ok", "ai_configured": True, "provider": "gemini", "model": "auto",
                                       "model_in_use": "auto", "calls_today": providers.calls_today(),
-                                      "quota_exhausted": providers.quota_exhausted()})
+                                      "quota_exhausted": providers.quota_exhausted(), "daily_limit": None})
             # Depois da primeira chamada à IA o modelo já foi escolhido, e a rota mostra qual é.
             with patch("app.providers.list_gemini_models", return_value=["gemini-2.5-flash", "gemini-3.1-flash-lite"]):
                 providers.resolve_gemini_model()
