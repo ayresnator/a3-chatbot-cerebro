@@ -16,6 +16,7 @@ export const FILE_ERRORS = {
   vazio: 'O arquivo está vazio.',
   leitura: 'Não foi possível ler o arquivo. Tente abrir de novo.',
   leitor: 'Não foi possível carregar o leitor de PDF. Recarregue a página e tente de novo.',
+  rede: 'O leitor de PDF chega pela internet no primeiro PDF aberto. Conecte-se e tente de novo.',
   senha: 'Este PDF tem senha. Abra no seu leitor de PDF, salve uma cópia sem senha e abra a cópia aqui.',
   imagem: 'Este PDF não tem texto, só imagem: parece digitalizado. ' +
     'Cole o texto no editor ou peça o arquivo original.',
@@ -158,7 +159,7 @@ async function readPdf(bytes) {
     pdfjs = lib;
     pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
   } catch (e) {
-    throw problem('leitor', e);
+    throw problem(noReader(), e);
   }
   const task = pdfjs.getDocument({ data: bytes });
   try {
@@ -179,7 +180,13 @@ async function readPdf(bytes) {
 // Erro do pdf.js para o aluno. O worker que não carrega (servidor que não manda o .mjs como JavaScript, rede caída) não
 // é defeito do PDF.
 export function pdfError(e) {
-  return problem(e?.name === 'PasswordException' ? 'senha' : /worker/i.test(e?.message) ? 'leitor' : 'pdf', e);
+  return problem(e?.name === 'PasswordException' ? 'senha' : /worker/i.test(e?.message) ? noReader() : 'pdf', e);
+}
+
+// O leitor de PDF que não carregou. Sem rede, ou no modo estudo (#85), que abre do cache e só guarda o leitor no
+// primeiro PDF aberto com internet, recarregar não adianta.
+function noReader() {
+  return globalThis.navigator?.onLine === false || globalThis.CEREBRO_CONFIG?.semIA === true ? 'rede' : 'leitor';
 }
 
 // O texto que vai para o editor (cut: passou do limite do editor, e entrou só o começo).

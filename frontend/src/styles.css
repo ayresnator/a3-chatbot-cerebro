@@ -232,9 +232,10 @@
     /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard. */
     --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
     --main-x: clamp(1.5rem, 3.2vw, 3rem);
-    /* Camadas, de baixo para cima: os brilhos e a faixa atrás do conteúdo, a caixa presa do Dúvidas e a pílula de
-       espera dela, as listas que abrem por cima (atalhos e nível), o dock, a barra de baixo e, por cima de tudo, os
-       avisos e a faixa de espera. A janela e a folha ficam acima delas, na camada de cima do navegador (showModal). */
+    /* Camadas, de baixo para cima: os brilhos, o canvas das ondas (.waves) e a faixa atrás do conteúdo, a caixa presa
+       do Dúvidas e a pílula de espera dela, as listas que abrem por cima (atalhos e nível), o dock, a barra de baixo e,
+       por cima de tudo, os avisos e a faixa de espera. A janela e a folha ficam acima delas, na camada de cima do
+       navegador (showModal). */
     --z-behind: -1;
     --z-composer: 5;
     --z-chat-wait: 6;
@@ -406,6 +407,47 @@ body::before {
     z-index: var(--z-behind);
     background: var(--backdrop);
     pointer-events: none
+}
+
+/* Fundo em ondas (issue #92; Waves em ui.jsx, shader em waves.js): canvas preso à janela atrás de tudo, só no
+   computador com mouse. data-waves no html entra com o primeiro quadro do shader; até lá, e sem WebGL na GPU, ficam os
+   brilhos de cima. Com ele, a barra de cima, o dock e o palco ficam com o tom escuro de antes, mas opacos: as ondas
+   aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
+   espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
+   no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
+   ninguém vê. */
+.waves {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-behind);
+    display: block;
+    width: 100%;
+    height: 100%;
+    visibility: hidden;
+    pointer-events: none
+}
+
+/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá. */
+:root[data-waves] {
+    --glass: #080808;
+    --quiet: #040404
+}
+
+:root[data-waves] .waves {
+    visibility: visible
+}
+
+:root[data-waves] body::before {
+    display: none
+}
+
+:root[data-waves] .busy {
+    --glass-float: #0b0b0b
+}
+
+:root[data-waves] :is(.topbar, .rail, .busy) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none
 }
 
 ::selection {
@@ -1401,7 +1443,8 @@ main:focus {
 }
 
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
-   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. */
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da janela do perfil (App.jsx)
+   é um chip de ligar e desligar: ligado, fica marcado e ganha o ✓. */
 .chip {
     min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
@@ -1417,7 +1460,9 @@ main:focus {
 }
 
 .chip[aria-checked=true],
-.chip[aria-checked=true]:hover {
+.chip[aria-checked=true]:hover,
+.chip[aria-pressed=true],
+.chip[aria-pressed=true]:hover {
     border-color: var(--accent);
     background: var(--accent-off);
     color: var(--ink-hi)
@@ -2135,6 +2180,8 @@ main:focus {
     color: var(--ink)
 }
 
+/* A folga em cima vale quando o cartão sobe para o topo da janela (App.jsx, turnCard): o anel do foco fica inteiro, e
+   voltar à pergunta não faz a âncora de rolagem do navegador puxar a página 16 px. */
 .flashcard {
     --press: .99;
     flex-direction: column;
@@ -2146,7 +2193,14 @@ main:focus {
     border-radius: var(--r-3);
     background: var(--panel);
     font-weight: 400;
-    text-align: center
+    text-align: center;
+    scroll-margin-top: var(--sp-2)
+}
+
+/* Os filhos do cartão ficam fora da âncora de rolagem: com a resposta longa, o texto centralizado virava a âncora, e
+   voltar à pergunta puxava a página 31 px (683x312 com zoom de 200%). O topo do cartão não se mexe e fica de âncora. */
+.flashcard > * {
+    overflow-anchor: none
 }
 
 /* Sob o ponteiro, o vidro elevado: um tom acima. */
@@ -2186,6 +2240,67 @@ main:focus {
 
 .verdicts .primary .icon {
     color: var(--on-accent)
+}
+
+/* Virado o cartão, o texto inteiro do campo logo abaixo da resposta, com o lembrete embaixo. */
+.card-wrote {
+    max-width: var(--measure);
+    margin-top: var(--sp-4);
+    line-height: var(--lh-read)
+}
+
+.card-wrote .hint {
+    margin: var(--sp-1) 0 0
+}
+
+/* Campo "Sua resposta", entre o cartão e os botões de avaliação, com o rótulo em cima, como no perfil. Virado o cartão,
+   ele fica só para leitura e sem o fundo de campo; quem diz isso é o texto ("Você escreveu", ou o exemplo do campo
+   vazio). A borda continua a de campo: ele ainda recebe o foco, e com a do campo desligado ficava abaixo de 3:1. */
+.card-form {
+    display: grid;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4)
+}
+
+.card-form label {
+    width: fit-content;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650
+}
+
+.card-form input:read-only {
+    background: none
+}
+
+/* "Escrever antes de virar": a caixa do sistema, no ciano do app, centrada embaixo dos botões. O rótulo inteiro é o
+   alvo: 36 px, e 44 px no toque. */
+.write-first {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: fit-content;
+    min-height: var(--control-h-inline);
+    margin: 0 auto;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    cursor: pointer
+}
+
+.write-first input {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+    cursor: pointer
+}
+
+@media (pointer: coarse) {
+    .write-first {
+        min-height: var(--control-h)
+    }
 }
 
 .quiz-question {
@@ -4059,6 +4174,16 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .source-dialog .dialog-body > button:last-child {
     align-self: flex-start
+}
+
+.profile-dialog .chip {
+    align-self: flex-start
+}
+
+/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a janela abre, para o leitor de
+   tela ler o texto quando ele entra. Vazio, não ocupa lugar: a margem devolve o espaço entre os blocos (.dialog-body). */
+.profile-dialog [role=status]:empty {
+    margin-top: calc(var(--sp-4) * -1)
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o

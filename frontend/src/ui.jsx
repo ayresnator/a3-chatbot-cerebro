@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
@@ -210,8 +210,9 @@ export function SummarySkeleton({ pretest }) {
   );
 }
 
-// Cartão a caminho: o cabeçalho do baralho, o cartão e os três botões de avaliação.
-export function CardSkeleton() {
+// Cartão a caminho: o cabeçalho do baralho, o cartão, o campo "Sua resposta" (com a caixa "Escrever antes de virar"
+// ligada, write) e os três botões de avaliação.
+export function CardSkeleton({ write }) {
   return (
     <div aria-hidden="true">
       <div className="study-head">
@@ -224,6 +225,12 @@ export function CardSkeleton() {
         <Sk w="45%" className="sk-face" />
         <Sk w="11rem" />
       </div>
+      {write && (
+        <div className="card-form">
+          <Sk w="10rem" className="sk-label" />
+          <Sk className="sk-control" />
+        </div>
+      )}
       <div className="row center verdicts">
         <Sk w="7.5rem" className="sk-control" />
         <Sk w="9rem" className="sk-control" />
@@ -355,4 +362,60 @@ export function PerfilSkeleton() {
       <Sk className="sk-control sk-submit" />
     </div>
   );
+}
+
+// Onde o fundo em ondas roda: a tela larga do computador, com mouse. Na tela estreita o texto fica direto sobre o fundo,
+// e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
+// forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
+const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
+  '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
+function watchWavesMedia(change) {
+  WAVES_MEDIA.forEach(list => list.addEventListener('change', change));
+  return () => WAVES_MEDIA.forEach(list => list.removeEventListener('change', change));
+}
+export function useWavesAllowed() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches);
+}
+// Movimento reduzido no sistema, lido ao vivo: as ondas param, e voltam a andar, sem recarregar a página. O
+// useReducedMotion da Motion, que o resto do app usa, guarda o valor da abertura.
+export function useWavesStill() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[2].matches);
+}
+
+// Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
+// desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
+// quando entra. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco (styles.css), e as ondas
+// ficam só em volta deles: ele entra com o primeiro quadro e sai quando o contexto do WebGL se perde. Numa troca de
+// animate ele fica: o canvas guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
+// avisa: sem as ondas (false), o botão "Fundo animado" some.
+export function Waves({ on, animate, onActive }) {
+  const canvas = useRef(null);
+  useEffect(() => {
+    const show = active => document.documentElement.toggleAttribute('data-waves', active);
+    if (!on) {
+      show(false);
+      return;
+    }
+    const report = active => {
+      show(active);
+      onActive(active);
+    };
+    let stop = null;
+    let live = true;
+    import('./waves.js').then(({ startWaves }) => {
+      if (live) stop = startWaves(canvas.current, { animate, onActive: report });
+    }, () => report(false));
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, [on, animate]);
+  // O contexto pode se perder com as ondas desligadas (a janela estreitada para menos de 851 px, por exemplo): sem
+  // ninguém ouvindo a perda, o navegador não o devolve, e as ondas só voltariam com a página recarregada. Este ouvinte
+  // fica o tempo todo e só pede a volta; com as ondas ligadas, o do waves.js cuida do resto.
+  useEffect(() => {
+    canvas.current.addEventListener('webglcontextlost', e => e.preventDefault());
+    return () => document.documentElement.removeAttribute('data-waves');
+  }, []);
+  return <canvas ref={canvas} className="waves" aria-hidden="true" />;
 }

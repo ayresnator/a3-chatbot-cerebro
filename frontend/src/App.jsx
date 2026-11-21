@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Countdown,
+  PerfilSkeleton, Countdown, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
@@ -27,7 +27,7 @@ import {
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote, findSource, textOrigin,
+  originNote, virtualNote, findSource, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
@@ -37,7 +37,11 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
 // A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
 demoStorage(DEMO);
-const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
+// Modo estudo (#85), o build do celular, com semIA no config.js: os dados são os de verdade, nas chaves do app com IA, e
+// nenhum pedido vai para a /api. Os botões de gerar organizam o texto por frases, como na demonstração. Com ?demo, vale
+// a demonstração.
+const SEM_IA = !DEMO && CONFIG.semIA === true;
+const API_BASE = DEMO || SEM_IA ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
 // Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
 // botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
@@ -167,6 +171,28 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
+  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
+  // sem nada gravado, elas andam. Com movimento reduzido no sistema (wavesStill, lido ao vivo) elas ficam paradas e o
+  // botão some.
+  const wavesAllowed = useWavesAllowed();
+  const wavesStill = useWavesStill();
+  const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
+  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido, e aí o botão
+  // some (não teria o que ligar); null enquanto não houve aviso, e o botão fica.
+  const [wavesActive, setWavesActive] = useState(null);
+  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
+  const [fundoUnsaved, setFundoUnsaved] = useState(false);
+  // O botão some com a janela do perfil aberta (sem WebGL na GPU, movimento reduzido ligado, contexto perdido, janela
+  // estreitada). Com o foco nele, o foco cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai
+  // para o "Fechar". A função do ref não muda, e o React só a chama com null logo antes de tirar o botão do DOM.
+  const fundoButton = useRef(null);
+  const fundoRef = useCallback(el => {
+    if (!el && fundoButton.current === document.activeElement) {
+      fundoButton.current.closest('dialog')?.querySelector('.close')?.focus();
+    }
+    fundoButton.current = el;
+  }, []);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
@@ -196,6 +222,12 @@ function App() {
   const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
+  // Campo "Sua resposta", embaixo do cartão: o que o aluno escreveu antes de virar (só nesta tela, não é gravado) e
+  // locked, o cartão já virado: o campo fica só para leitura até o próximo cartão. write é a caixa "Escrever antes de
+  // virar", que mostra o campo (lib.js, readWriteFirst).
+  const [typed, setTyped] = useState('');
+  const [locked, setLocked] = useState(false);
+  const [write, setWrite] = useState(() => readWriteFirst(TOUCH));
   const [answer, setAnswer] = useState(null);
   const [answers, setAnswers] = useState([]);
   // Marcar certeza (#80): com a caixa ligada, a opção escolhida (choice, o índice dela) espera a certeza para ir à
@@ -337,9 +369,9 @@ function App() {
     };
   }, []);
 
-  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil ou a data do
-  // backup: esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O
-  // rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil, a data do backup
+  // ou o "Fundo animado": esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba
+  // que gravou. O rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
   useEffect(() => {
     const sync = e => {
       const changed = k => e.key === null || e.key === storageKey(k);
@@ -348,6 +380,7 @@ function App() {
       if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
       if (changed('cartoes')) setBoxes(readList('cartoes').filter(validCardReview));
       if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('fundo')) setFundo(read('fundo', true) !== false);
       if (changed('user')) {
         const profile = readUser();
         setUser(profile);
@@ -360,6 +393,59 @@ function App() {
 
   useEffect(() => {
     if (API_BASE) checkHealth();
+  }, []);
+
+  // Modo estudo: o navegador é pedido para não apagar os dados sozinho, e o manifest entra só aqui (com ele, o navegador
+  // oferece instalar o app; o app com IA e a demonstração ficam como estão). O service worker (sw-molde.js) guarda os
+  // arquivos do build, e o app abre sem rede. A versão nova espera o "Atualizar" do aviso, oferecido quando ela chega,
+  // na abertura e na volta à aba; com ele, esta página e as outras abas recarregam na versão nova.
+  useEffect(() => {
+    if (!SEM_IA) return;
+    navigator.storage?.persist?.();
+    document.head.append(Object.assign(document.createElement('link'), { rel: 'manifest', href: './manifest.webmanifest' }));
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    let reg = null;
+    // Sem controller é a primeira visita: o service worker que chega não é versão nova.
+    const offer = () => {
+      if (reg?.waiting && sw.controller) {
+        toast('Versão nova do Cérebro', { label: 'Atualizar', run: () => reg.waiting?.postMessage('atualizar') });
+      }
+    };
+    const watch = worker => worker?.addEventListener('statechange', () => worker.state === 'installed' && offer());
+    sw.register('./sw.js').then(r => {
+      reg = r;
+      watch(r.installing);
+      r.addEventListener('updatefound', () => watch(r.installing));
+      offer();
+    }, () => {});
+    const back = () => {
+      if (document.visibilityState !== 'visible' || !reg) return;
+      offer();
+      reg.update().catch(() => {});
+    };
+    let reloading = false;
+    const reload = () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    };
+    document.addEventListener('visibilitychange', back);
+    sw.addEventListener('controllerchange', reload);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      sw.removeEventListener('controllerchange', reload);
+    };
+  }, []);
+
+  // A demonstração do build do modo estudo não registra o service worker, mas abre do cache dele: com o "Atualizar" de
+  // outra aba, ela também recarrega na versão nova, e não pede depois um arquivo que já saiu do cache.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!DEMO || CONFIG.semIA !== true || !sw) return;
+    const reload = () => window.location.reload();
+    sw.addEventListener('controllerchange', reload);
+    return () => sw.removeEventListener('controllerchange', reload);
   }, []);
 
   // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
@@ -453,22 +539,23 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show, whole] = focusAfter.current;
+    const [selector, fallback, show, whole, lead] = focusAfter.current;
     focusAfter.current = null;
     // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova. Só a
     // que está na tela: o focus() num alvo escondido (display none) não pega, e o foco caía no body sem tentar a reserva.
     const last = s => s && [...document.querySelectorAll(s)].filter(e => e.getClientRects().length).pop();
-    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
-    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
-    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
-    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
-    // acima da faixa.
-    (last(selector) || last(fallback))?.focus({ preventScroll: !!show });
-    if (!show) return;
+    // Com show (ou whole), o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado
+    // as marcas da caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela
+    // (no celular a raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco
+    // e conta uma vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e
+    // ✗ e a nota acima da faixa. Sem caber, o lead (o cartão virado), quando há, leva o foco e sobe para o topo.
     const box = last(whole);
     const fits = box && fitsAbove(box.offsetHeight, innerHeight,
       getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
-    (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
+    const top = box && !fits && last(lead);
+    (top || last(selector) || last(fallback))?.focus({ preventScroll: !!(show || box) });
+    if (top) top.scrollIntoView({ block: 'start' });
+    else (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -522,7 +609,7 @@ function App() {
   // aluno volta onde estava.
   function restart() {
     restartQuiz();
-    setFlip(false);
+    freshCard();
     setDeck(null);
   }
 
@@ -678,7 +765,10 @@ function App() {
     if (waiting) return;
     setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError({ message: 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
+      setError({
+        message: SEM_IA ? 'Cole um texto completo (mínimo 30 caracteres): sem IA, os botões organizam as frases dele.'
+          : 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).',
+      });
       return;
     }
     // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
@@ -899,6 +989,32 @@ function App() {
     toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
+  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". from é onde o foco fica quando o cartão vira pelo
+  // teclado; pelo ponteiro (o clique e o toque), não vem. Quem já viu a resposta não reescreve a sua: o campo fica só
+  // para leitura até o próximo cartão.
+  function turnCard(from) {
+    setFlip(!flip);
+    setLocked(true);
+    // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a face nova (flip ainda é o de
+    // antes do clique).
+    say(spokenCard(card, !flip, write && typed.trim() !== ''));
+    cardMotion.current = 'perspective(900px) rotateX(-10deg)';
+    // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às vezes para fora da janela ou para trás
+    // da barra de baixo. Pelo teclado, se o bloco do cartão cabe na janela, a página rola até ele inteiro, e o foco fica
+    // onde estava. Senão (a janela baixa: o celular deitado, o zoom de 200%), a resposta e o "Você escreveu" têm a vez:
+    // o cartão sobe para o topo e leva o foco, e o Tab segue para o campo e os botões, que o scroll-padding traz acima
+    // da barra. Pelo ponteiro, a página não rola: "Errei", "Revisar depois" ou "Acertei" subiriam para baixo dele, e o
+    // segundo clique no mesmo lugar (para rever a pergunta, ou o fim de um duplo clique) avaliaria o cartão.
+    if (!flip && from) focusAfter.current = [from, null, null, '.card-block', '.flashcard'];
+  }
+
+  // O cartão seguinte, ou o mesmo recomeçado, abre na pergunta e com o campo "Sua resposta" vazio e editável.
+  function freshCard() {
+    setFlip(false);
+    setTyped('');
+    setLocked(false);
+  }
+
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
   // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia. Os dois mudam
   // também a caixa do cartão (lib.js, scheduleCard). Na revisão do dia, o cartão traz o material e a área de onde veio.
@@ -907,7 +1023,7 @@ function App() {
     const from = result.virtual ? card : result;
     event('flashcard', ok, from.area, fold(card.question), from.title);
     schedule(list => scheduleCard(list, from.title, card.question, ok, new Date()));
-    setFlip(false);
+    freshCard();
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
     focusAfter.current = ['.flashcard', '.deck-done h2'];
@@ -1146,7 +1262,10 @@ function App() {
     if (!API_BASE) {
       setChat(c => [...c, {
         role: 'assistant',
-        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
+        text: (SEM_IA
+          ? 'No modo estudo não há IA neste aparelho: as respostas a dúvidas precisam do computador com a IA. '
+          : 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. ') +
+          'Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
       }]);
       return;
     }
@@ -1407,6 +1526,8 @@ function App() {
   const right = answers.length - wrong.length;
   const session = deck || deckStart(result?.flashcards?.length || 0);
   const card = result?.flashcards?.[session.queue[session.pos]];
+  // Virado o cartão, o que o aluno escreveu no campo aparece logo abaixo da resposta ("Você escreveu").
+  const wrote = write && locked && typed.trim() !== '';
   const today = localDay(new Date());
   // Os números do desempenho só mudam com as respostas (ou na virada do dia), não a cada tecla no editor.
   // Quiz e cartões são números separados: nos cartões é o aluno quem diz se acertou.
@@ -1466,6 +1587,7 @@ function App() {
   const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
+    study: SEM_IA,
   });
   // Teto de chamadas por dia escolhido pelo grupo (lib.js, capReached): até a contagem recomeçar, os botões da IA ficam
   // desligados, com o motivo junto deles.
@@ -1512,7 +1634,8 @@ function App() {
   // A escolha de páginas: o texto das páginas marcadas, contado como o contador do editor, e se ele passa do limite.
   const picked = pick ? pick.reader.pageSpan(pick.pages, pick.from, pick.to) : '';
   const over = picked.length > MAX_INPUT;
-  const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
+  const status = API_BASE ? healthLabel(health)
+    : { text: SEM_IA ? 'Modo estudo · sem IA' : 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
@@ -1656,6 +1779,7 @@ function App() {
       >
         Pular para o conteúdo
       </a>
+      <Waves on={wavesAllowed} animate={fundo && !wavesStill} onActive={setWavesActive} />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
@@ -1756,7 +1880,9 @@ function App() {
                 <m.div className="page-head" variants={titleIn}>
                   <h1 className="page-title" tabIndex={-1}>{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
-                    <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                    <p className="lead">
+                      Cole o texto da aula{API_BASE && ' ou escreva um tema'}, escolha a área e o nível e gere o material.
+                    </p>
                   )}
                 </m.div>
               )}
@@ -1786,6 +1912,7 @@ function App() {
                       cost={cost}
                       reason={capNote ? 'aviso-ia' : undefined}
                       onFile={openFile}
+                      topic={!!API_BASE}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1879,7 +2006,8 @@ function App() {
                   </m.div>
                   <m.div variants={rise}>
                     {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
-                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. */}
+                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. No modo estudo, o que
+                        os botões fazem sem IA e de onde vêm os materiais. */}
                     <p className="note" id="aviso-ia">
                       <Icon name={API_BASE && !aiOff && !capNote ? 'privacidade' : 'info'} />
                       {aiOff ? (
@@ -1889,6 +2017,9 @@ function App() {
                         </span>
                       ) : capNote ? ERRORS.AI_BUDGET_REACHED : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
+                        : SEM_IA ? 'Modo estudo, sem IA neste aparelho: os botões só organizam o texto por frases. ' +
+                          'Para estudar os seus materiais, importe o backup na Biblioteca. Os dados ficam só aqui: ' +
+                          'instale o app na tela inicial e exporte o backup para levar o progresso ao computador.'
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
                           'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
@@ -2015,7 +2146,7 @@ function App() {
                         <div role="tabpanel" aria-label={TABS.find(([p]) => p === page)?.[1]}>
                           {page === 'Resumos'
                             ? <SummarySkeleton pretest={pretestOpens()} />
-                            : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
+                            : page === 'Flashcards' ? <CardSkeleton write={write} /> : <QuizSkeleton />}
                         </div>
                       </m.section>
                     ) : !result ? (
@@ -2050,9 +2181,13 @@ function App() {
                                 : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
-                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                                O dos outros diz de onde ele veio (lib.js, originNote). No modo estudo, o material
+                                temporário leva o aviso, a menos que cada item venha de material feito no aparelho
+                                (lib.js, virtualNote). */}
                             {result.virtual
-                              ? aiNote
+                              ? aiNote || (SEM_IA &&
+                                virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
+                                <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
                           {!result.virtual && (
@@ -2369,7 +2504,7 @@ function App() {
                                   style={{ visibility: session.pos ? undefined : 'hidden' }}
                                   onClick={() => {
                                     setDeck(deckRestart(session));
-                                    setFlip(false);
+                                    freshCard();
                                     focusAfter.current = ['.flashcard'];
                                   }}
                                 >
@@ -2381,48 +2516,102 @@ function App() {
                               <DeckMarks session={session} fresh />
                               {/* Como no quiz do caderno; o leitor de tela ouve o material junto com o cartão. */}
                               {result.virtual && <p className="hint" id="do-material">Do material: {card.title}</p>}
-                              <button
-                                type="button"
-                                className={'flashcard' + (flip ? ' flipped' : '')}
-                                aria-describedby={result.virtual ? 'do-material' : undefined}
-                                onClick={() => {
-                                  setFlip(!flip);
-                                  // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a
-                                  // face nova (flip ainda é o de antes do clique).
-                                  say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
-                                  cardMotion.current = 'perspective(900px) rotateX(-10deg)';
-                                }}
-                              >
-                                <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
-                                {/* A dica serve ao mouse, ao toque e ao teclado. */}
-                                <span className="face-hint">
-                                  <Icon name="refazer" />
-                                  {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
-                                </span>
-                              </button>
-                              <div className="row center verdicts">
-                                <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
-                                  <Icon name="fechar" />
-                                  Errei
-                                </button>
+                              {/* O bloco que a página mostra inteiro ao virar o cartão pelo teclado, se cabe (turnCard).
+                                  O detail do clique conta os cliques: é 0 quando o cartão vira pelo Enter ou espaço. */}
+                              <div className="card-block">
                                 <button
                                   type="button"
-                                  disabled={session.pos + 1 >= session.queue.length}
-                                  onClick={() => {
-                                    setDeck(deckLater(session));
-                                    setFlip(false);
-                                    cardMotion.current = 'translateX(12px)';
-                                    toast('Cartão movido para o final do baralho');
-                                  }}
+                                  className={'flashcard' + (flip ? ' flipped' : '')}
+                                  aria-describedby={result.virtual ? 'do-material' : undefined}
+                                  onClick={e => turnCard(e.detail ? null : '.flashcard')}
                                 >
-                                  <Icon name="refazer" />
-                                  Revisar depois
+                                  <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
+                                  {/* A dica serve ao mouse, ao toque e ao teclado. */}
+                                  <span className="face-hint">
+                                    <Icon name="refazer" />
+                                    {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
+                                  </span>
                                 </button>
-                                <button type="button" className="primary" disabled={!flip} onClick={() => cardNext(true)}>
-                                  <Icon name="check" />
-                                  Acertei
-                                </button>
+                                {/* Escrever antes de ver a resposta deixa a autoavaliação mais honesta. Virado o
+                                    cartão, o texto inteiro do aluno vem logo abaixo da resposta, com o lembrete: no
+                                    campo de uma linha a resposta longa ficava cortada. */}
+                                {wrote && (
+                                  <div className="card-wrote">
+                                    <p>Você escreveu: {typed}</p>
+                                    <p id="lembrete-cartao" className="hint">{CARD_REMINDER}</p>
+                                  </div>
+                                )}
+                                {/* O campo fica fora do cartão (botão não leva controle dentro) e vem logo depois dele
+                                    no Tab. autoComplete off: o navegador não guarda o que o aluno escreve. */}
+                                {write && (
+                                  <form
+                                    className="card-form"
+                                    onSubmit={e => {
+                                      e.preventDefault();
+                                      // O Enter vira o cartão para a resposta, como o clique (o foco e a rolagem
+                                      // depois: turnCard); virado, não volta.
+                                      if (!flip) turnCard('#resposta-cartao');
+                                    }}
+                                  >
+                                    <label htmlFor="resposta-cartao">Sua resposta (opcional)</label>
+                                    <input
+                                      id="resposta-cartao"
+                                      value={typed}
+                                      onChange={e => setTyped(e.target.value)}
+                                      readOnly={locked}
+                                      placeholder={locked && !typed ? 'Escreva no próximo cartão' : undefined}
+                                      maxLength={500}
+                                      autoComplete="off"
+                                      aria-describedby={wrote ? 'lembrete-cartao' : undefined}
+                                    />
+                                  </form>
+                                )}
+                                <div className="row center verdicts">
+                                  <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
+                                    <Icon name="fechar" />
+                                    Errei
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={session.pos + 1 >= session.queue.length}
+                                    onClick={() => {
+                                      setDeck(deckLater(session));
+                                      freshCard();
+                                      cardMotion.current = 'translateX(12px)';
+                                      toast('Cartão movido para o final do baralho');
+                                    }}
+                                  >
+                                    <Icon name="refazer" />
+                                    Revisar depois
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="primary"
+                                    disabled={!flip}
+                                    onClick={() => cardNext(true)}
+                                  >
+                                    <Icon name="check" />
+                                    Acertei
+                                  </button>
+                                </div>
                               </div>
+                              {/* Embaixo dos botões, fora do caminho do Tab entre o cartão, o campo e a avaliação. A
+                                  escolha fica no navegador (lib.js, readWriteFirst). */}
+                              <label className="write-first">
+                                <input
+                                  type="checkbox"
+                                  id="escrever"
+                                  checked={write}
+                                  onChange={e => {
+                                    setWrite(e.target.checked);
+                                    persist('escrever', e.target.checked);
+                                    // Ligada, o campo entra acima da caixa e a empurra para baixo: a página rola
+                                    // até ela, que continua com o foco, acima da barra de baixo.
+                                    focusAfter.current = ['#escrever', null, '#escrever'];
+                                  }}
+                                />
+                                Escrever antes de virar
+                              </label>
                             </>
                           ))}
                           {page === 'Quizzes' && (done ? (
@@ -3321,6 +3510,30 @@ function App() {
                   onSave={saveProfile}
                 />
               </Suspense>
+              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
+                  WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
+              {wavesAllowed && !wavesStill && wavesActive !== false && (
+                <>
+                  <button
+                    ref={fundoRef}
+                    type="button"
+                    className="chip"
+                    aria-pressed={fundo}
+                    onClick={() => {
+                      setFundo(!fundo);
+                      setFundoUnsaved(!persist('fundo', !fundo));
+                    }}
+                  >
+                    {fundo && <Icon name="check" />}
+                    Fundo animado
+                  </button>
+                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta janela, na parte inerte da página, e
+                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
+                  <p role="status">
+                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
+                  </p>
+                </>
+              )}
             </div>
           </Modal>
         )}

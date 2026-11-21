@@ -21,7 +21,7 @@
 
     /* O Tab rola a página só até o controle entrar na janela, e a barra de baixo, presa, cobria o controle (WCAG
        2.4.11). A rolagem até o foco, e a de scrollIntoView (o erro, a explicação, o menu do nível, a conversa), param
-       acima dela, com o respiro. Os blocos não têm scroll-margin próprio: somado a este, o respiro contaria duas vezes.
+       acima dela, com o respiro. Os blocos não têm scroll-margin embaixo: somado a este, o respiro contaria duas vezes.
        Com o retorno do quiz na tela, também acima do "Próxima questão" preso: depois de responder, a linha com a marca
        ✓ ou ✗ e a nota fica à vista (App.jsx, submit). */
     html {
@@ -872,7 +872,8 @@
    As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
    abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
    "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
-   cabem juntos acima da barra. */
+   cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e ao virar o cartão quem tem a vez é a resposta
+   (App.jsx, turnCard). */
 @media (max-height: 30rem) {
     .lead {
         display: none

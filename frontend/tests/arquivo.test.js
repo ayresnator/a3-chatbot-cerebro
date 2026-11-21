@@ -182,6 +182,23 @@ test('pdfError: senha, leitor que não carregou e PDF ilegível têm frases dife
   assert.equal(pdfError({ name: 'InvalidPDFException', message: 'Invalid PDF structure.' }).code, 'pdf');
 });
 
+test('pdfError: sem rede ou no modo estudo, o leitor que não carregou pede a internet', () => {
+  const worker = Error('Setting up fake worker failed: "Failed to fetch dynamically imported module"');
+  globalThis.CEREBRO_CONFIG = { semIA: true };
+  try {
+    assert.deepEqual([pdfError(worker).code, pdfError(worker).message], ['rede', FILE_ERRORS.rede]);
+  } finally {
+    delete globalThis.CEREBRO_CONFIG;
+  }
+  Object.defineProperty(globalThis.navigator, 'onLine', { value: false, configurable: true });
+  try {
+    assert.equal(pdfError(worker).code, 'rede');
+  } finally {
+    delete globalThis.navigator.onLine;
+  }
+  assert.equal(pdfError(worker).code, 'leitor');
+});
+
 test('readFile: TXT e MD entram no editor; o maior que o editor recebe entra cortado, com cut', async () => {
   assert.deepEqual(await readFile(new File(['  Plano de aula.\n'], 'aula.txt', { type: 'text/plain' })), {
     text: 'Plano de aula.', cut: false,
@@ -205,7 +222,7 @@ test('readFile: tipo errado, Word, arquivo vazio e arquivo de mais de 20 MB não
 });
 
 test('FILE_ERRORS: cada arquivo que não abre tem uma frase que diz o que fazer', () => {
-  for (const code of ['tipo', 'office', 'grande', 'vazio', 'leitura', 'leitor', 'senha', 'imagem', 'pdf']) {
+  for (const code of ['tipo', 'office', 'grande', 'vazio', 'leitura', 'leitor', 'rede', 'senha', 'imagem', 'pdf']) {
     assert.ok(FILE_ERRORS[code]?.endsWith('.'), code);
   }
   assert.match(FILE_ERRORS.office, /PDF/);
