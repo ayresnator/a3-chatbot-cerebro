@@ -17,7 +17,7 @@ from .config import settings
 from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
                      QuizItem, StudyInput, StudyOutput, SummaryItem)
 from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
-from .providers import ai, budget, calls_today, fail, resolve_gemini_model
+from .providers import ai, budget, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
 # O uvicorn só configura os loggers dele: sem isto, os avisos do Cérebro saíam sem data e hora, e os de INFO sumiam.
@@ -111,10 +111,11 @@ def unreadable_body(*_):
     return JSONResponse(status_code=422, content={"detail": {"code": "INVALID_INPUT", "message": "Pedido em formato inválido.", "provider_status": ""}})
 
 # async: roda no laço do servidor, sem esperar vaga na fila de threads das chamadas à IA. Rota def, com 45 pedidos à IA
-# no ar, levou 6,8 s, e a tela desiste em 5 s ("Backend desligado"). Por isso nada aqui pode esperar rede ou disco.
+# no ar, levou 6,8 s, e a tela desiste em 5 s ("Cérebro desligado"). Por isso nada aqui pode esperar rede ou disco.
 @app.get("/api/health")
 async def health():
-    # Somente estado local: não confirma validade de chave ou cota no provedor.
+    # Somente estado local: não confirma validade de chave ou cota no provedor. quota_exhausted só repete o último
+    # AI_QUOTA_EXCEEDED que este backend recebeu no dia da cota.
     # Com AI_MODEL=auto o modelo é escolhido na primeira chamada à IA. Esta rota nunca chama o provedor: só usa a
     # escolha que resolve_gemini_model já guardou; antes disso, mostra o configurado ("auto").
     chosen = settings.model == "auto" and resolve_gemini_model.cache_info().currsize
@@ -125,6 +126,7 @@ async def health():
         "model": settings.model,
         "model_in_use": resolve_gemini_model() if chosen else settings.model,
         "calls_today": calls_today(),
+        "quota_exhausted": quota_exhausted(),
     }
 
 def reasons(exc: ValidationError, *where) -> list:

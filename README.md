@@ -25,7 +25,7 @@ O programa não aceita a resposta do modelo sem conferir. Ele valida cada item g
 
 O que a IA não faz: corrigir múltipla escolha, calcular o desempenho e montar o caderno de erros. Essas partes são código comum, sem chamada ao modelo.
 
-**Privacidade:** o texto do editor, as perguntas e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
+**Privacidade:** o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão vão para o Google. Na faixa gratuita, os termos da Gemini API permitem usar esse conteúdo para melhorar os produtos do Google e deixam revisores humanos lerem o que foi enviado. Não cole dados pessoais. A página Estudar mostra o aviso "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais." antes dos botões de gerar. O Cérebro é para uso local do grupo, no computador de cada aluno, e a chave gratuita do Gemini é só para isso.
 
 **Segurança da API:**
 
@@ -67,7 +67,7 @@ Também é possível escolher o nível de conhecimento:
 
 Essas configurações ajudam a IA a adaptar o conteúdo ao nível do estudante.
 
-O texto do editor, o material aberto e a conversa ficam guardados no navegador: recarregar a página ou fechar a aba não apaga o trabalho. O botão "Limpar" esvazia o editor e pode ser desfeito.
+O texto do editor, o material aberto e a conversa ficam guardados no navegador: recarregar a página ou fechar a aba não apaga o trabalho. Com o app aberto em duas abas, cada uma guarda o seu rascunho, e recarregar uma delas traz o texto dela; uma aba nova abre com o último rascunho gravado. O botão "Limpar" esvazia o editor e pode ser desfeito.
 
 ### 2. Resumos
 
@@ -81,7 +81,7 @@ O estudante pode:
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página.
 
-Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. Se só alguns tópicos ficaram com trecho, os outros ganham a etiqueta "Explicação da IA: confira".
+Quando o material veio de um texto, o tópico traz o trecho que o sustenta ("No seu texto: ..."). O backend só mantém o trecho que existe no texto enviado. O texto do "Usar um exemplo" não é do estudante: trecho que saiu do texto que a IA escreveu aparece como "No exemplo escrito pela IA: ...", e trecho de um exemplo pronto, como "No texto de exemplo: ...". O tópico sem trecho, ou com trecho do exemplo da IA, ganha a etiqueta "Explicação da IA: confira". O aviso sob o título diz de onde veio o material: de um texto do estudante, de um exemplo pronto, do exemplo da IA ou de nada que dê para conferir. O material da demonstração não usa IA e não leva aviso nem etiqueta; o trecho de cada tópico dele é a própria frase do texto.
 
 ### 3. Flashcards
 
@@ -94,6 +94,8 @@ Cada cartão apresenta uma pergunta. Ao clicar, o estudante revela a resposta e 
 - Deseja revisar posteriormente.
 
 O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê quantos cartões revisou e quantos voltaram por erro, e pode refazer só esses.
+
+Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
 ### 4. Quizzes
 
@@ -120,14 +122,15 @@ Permite conversar com o assistente para solicitar explicações, exemplos e escl
 Cada solicitação considera:
 
 - A pergunta realizada;
-- O texto atual;
-- A área selecionada;
-- O nível de conhecimento;
+- O material aberto (o título e o resumo dele) ou o texto do editor;
+- A área e o nível do material aberto, ou os escolhidos no editor;
 - As últimas 6 mensagens da conversa.
 
-O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero.
+Com um material aberto, a pergunta é sobre ele: a caixa do chat mostra "Sobre:" e o título do material no lugar das listas de área e nível, e a saudação diz qual material vai ser considerado. O botão "Usar o texto do editor" troca a fonte, e "Usar o material aberto" volta ao material. Perguntar pelo editor ("Perguntar ao Cérebro") também passa o chat para o texto do editor, e abrir outro material volta a valer o material. Se o material aberto foi gerado do texto que está no editor, vale o texto do editor, que é mais completo.
 
-O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto do editor; depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
+O servidor não guarda as conversas. A cada pergunta, o navegador envia junto as últimas 6 mensagens, sem repetir o texto do editor (ele já vai no pedido), e é assim que o assistente entende um pedido como "me dê um exemplo". A conversa fica guardada no navegador e continua depois de recarregar a página; "Nova conversa" recomeça do zero e pode ser desfeita até a próxima pergunta.
+
+O chat abre com uma saudação do Cérebro. Com a IA ativa, embaixo da caixa de texto ficam sugestões de perguntas sobre o assunto: antes da primeira resposta elas são sobre a área escolhida ou sobre o texto (o do editor ou o do material aberto); depois, são até três perguntas que a própria IA manda junto com cada resposta. Se ela não mandar nenhuma, entram três perguntas fixas. Um "/" no começo da caixa, ou o botão de atalhos, abre a lista dessas sugestões. A demonstração não mostra os chips de sugestão, mas a lista do "/" funciona nela.
 
 ### 6. Caderno de erros
 
@@ -172,10 +175,12 @@ O estudante pode:
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
 - Excluir materiais, com a opção de desfazer;
-- Exportar a biblioteca, o desempenho e o caderno de erros para um arquivo;
-- Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe.
+- Exportar a biblioteca, o desempenho, o caderno de erros e o perfil para um arquivo;
+- Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto.
 
-Ao gerar um material novo, o anterior que ainda não tinha sido salvo é guardado na biblioteca.
+Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, perfil) aparece na outra sem recarregar.
+
+No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só neste navegador e diz quando foi o último backup. O botão "Fazer backup" baixa o mesmo arquivo do Exportar e ganha destaque quando há 5 materiais novos desde o último backup, ou 7 dias ou mais sem backup com algum material ou resposta nova.
 
 ---
 
@@ -209,7 +214,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`. Esses dados não são armazenados em um banco de dados no servidor.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, a data do último backup e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor.
 
 ---
 
@@ -317,7 +322,7 @@ A interface local ficará disponível em:
 
 **http://localhost:5173**
 
-Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA.
+Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, o perfil e o rascunho dela não se misturam com os do app com IA.
 
 Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
 
@@ -348,7 +353,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 ## ⚠️ Limitações atuais
 
 - O perfil é local, sem autenticação real ou login com Google.
-- Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar e Importar na Biblioteca.
+- Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar (ou "Fazer backup") e Importar na Biblioteca.
 - Limpar os dados do navegador apaga materiais, desempenho e caderno de erros que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.

@@ -556,11 +556,12 @@ select {
 }
 
 /* "Pular para o conteúdo" (App.jsx): fora da vista até receber o foco, no primeiro Tab da página; com ele, aparece na
-   altura da barra de cima, por cima dela, em fundo sólido. Fixo: fora do grid do .app e à vista em qualquer rolagem. */
+   altura da barra de cima, por cima dela, em fundo sólido. Fixo: fora do grid do .app e à vista em qualquer rolagem. Do
+   lado, a margem do .app, fora do entalhe do iPhone deitado (viewport-fit=cover, index.html). */
 .skip-link {
     position: fixed;
     top: calc(var(--top-y) + (var(--top-h) - var(--control-h)) / 2);
-    left: var(--gutter);
+    left: max(var(--gutter), env(safe-area-inset-left, 0px));
     z-index: 100;
     display: flex;
     align-items: center;
@@ -584,7 +585,8 @@ select {
 
 /* O app numa coluna centrada. A barra de cima e o palco dividem as bordas; o dock fica na primeira coluna, de 24 px, e
    passa por cima da borda esquerda do palco (Glassy Dashboard). No HTML (e no Tab) a ordem é a da tela: a barra de
-   cima, o dock e o palco, os três células deste grid (o .shell não tem caixa). */
+   cima, o dock e o palco, os três células deste grid (o .shell não tem caixa). Com o iPhone deitado a página vai até
+   as bordas da tela (viewport-fit=cover, index.html): o respiro dos lados não fica menor que a área segura do entalhe. */
 .app {
     display: grid;
     grid-template-columns: var(--dock-out) minmax(0, 1fr);
@@ -593,7 +595,7 @@ select {
     min-height: 100vh;
     min-height: 100dvh;
     margin: 0 auto;
-    padding: var(--top-y) var(--gutter) var(--sp-5)
+    padding: var(--top-y) max(var(--gutter), env(safe-area-inset-right, 0px)) var(--sp-5) max(var(--gutter), env(safe-area-inset-left, 0px))
 }
 
 /* Dock das seções: pílula de vidro só com os ícones, na linha do palco, presa ao rolar. */
@@ -861,7 +863,7 @@ select {
 
 /* Barra de cima: pílula de vidro em três colunas, a marca, o atalho "Pergunte ao Cérebro" e as ações. As laterais
    dividem o que sobra por igual, com o atalho no meio (até 25 rem e 30vw), mas nunca ficam menores que o conteúdo: o
-   estado da IA vai inteiro, também o texto longo do backend ("IA ativa · modelo · N chamadas hoje"), e quem cede é o
+   estado da IA vai inteiro, também o texto longo ("IA ativa · modelo · N chamadas deste computador"), e quem cede é o
    atalho, que encolhe e sai um pouco do meio. Ela não fica presa ao rolar: a faixa de espera (.busy) é que fica. */
 .topbar {
     grid-column: 2;
@@ -996,6 +998,23 @@ select {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis
+}
+
+/* Com a barra estreita para o estado inteiro numa linha, o nome do modelo sai da vista e continua no leitor de tela: no
+   celular e, com a letra a 200%, no computador (a medida em rem cresce com a letra). Assim a conta de chamadas cabe. */
+.topbar {
+    container-type: inline-size
+}
+
+@container (max-width: 45rem) {
+    .status-model {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
 }
 
 /* No Dúvidas (#57) o chat chama mais atenção que o resto: a barra de cima e o dock das seções perdem o vidro forte, a
@@ -1160,6 +1179,18 @@ main:focus {
 .error .icon {
     margin-top: .05rem;
     color: var(--pen)
+}
+
+/* Os detalhes técnicos do erro (App.jsx, Problem): fechados, em tinta fraca, para quem instalou o Cérebro. */
+.error details {
+    margin-top: var(--sp-1);
+    color: var(--ink-2)
+}
+
+.error summary {
+    width: fit-content;
+    padding: var(--sp-1) 0;
+    cursor: pointer
 }
 
 /* ---------- Estudar ---------- */
@@ -1511,16 +1542,36 @@ main:focus {
     margin-top: .05rem
 }
 
-/* As ações de gerar: um grupo de botões comuns, Resumir em destaque. O ícone das outras leva a cor da seção onde o
-   material abre (--tab, hoje o ciano em todas). */
+/* O grupo de gerar: o botão principal ou, com o material do texto aberto, as três partes, que só abrem, e o "Gerar de
+   novo", à direita. O ícone de cada parte leva a cor da seção dela (--tab, hoje o ciano em todas). */
 .actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--sp-2)
 }
 
-.action:not(.primary):not(:disabled) .icon {
+/* Sem lugar na linha, o custo desce para uma linha dele, embaixo do nome. */
+.action {
+    flex-wrap: wrap;
+    row-gap: var(--sp-0)
+}
+
+.action[data-tab]:not(:disabled) .icon {
     color: var(--tab)
+}
+
+.open-parts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-right: auto
+}
+
+.open-parts > span {
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 600
 }
 
 /* Faixa "Seu progresso": números honestos, os mesmos do Desempenho. */
@@ -1760,8 +1811,16 @@ main:focus {
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
 .ai-ask small,
-.tool small {
+.tool small,
+.ask small,
+.action small {
     color: var(--ink-2);
+    font-weight: 400
+}
+
+/* No botão ciano o custo fica no preto do texto: o cinza não chegava a 4,5:1 sobre o ciano. */
+.primary small {
+    color: inherit;
     font-weight: 400
 }
 
@@ -1796,6 +1855,14 @@ main:focus {
     color: var(--ink-2);
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums
+}
+
+/* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
+   negativa deixa o alvo de 36 px na altura da etiqueta (24 px): o cabeçalho fica do tamanho do esqueleto da geração.
+   No toque o alvo tem 44 px, e a margem acompanha (pointer: coarse, no fim do arquivo). */
+.study-head .link {
+    margin-block: calc((1.5rem - var(--control-h-inline)) / 2);
+    margin-inline: 0 auto
 }
 
 /* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
@@ -2696,6 +2763,27 @@ main:focus {
     margin-left: auto
 }
 
+/* "Sobre:" e o material aberto no lugar da área e do nível (chat-composer.jsx), numa linha só: o título longo termina
+   em reticências. A base de 12rem manda o botão da fonte para a linha de baixo antes de o título sumir. */
+.composer-about {
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+.composer-about strong {
+    color: var(--ink);
+    font-weight: 600
+}
+
+.composer-bar .link {
+    min-height: var(--control-h-tool)
+}
+
 .shortcuts {
     width: var(--control-h-tool);
     min-height: var(--control-h-tool);
@@ -3151,15 +3239,42 @@ main:focus {
     color: var(--ink)
 }
 
+/* Pé da Biblioteca e do Desempenho (ui.jsx, BackupNote): onde os dados ficam, o último backup e o botão, no tom da
+   frase de apoio (.hint), separados do resto por um fio como a faixa "Seu progresso". O botão desce para a linha de
+   baixo quando não cabe ao lado. */
+.backup-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3) var(--sp-4);
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
+    border-top: var(--hair) solid var(--line);
+    color: var(--ink-2);
+    font-size: var(--fs-2)
+}
+
+.backup-note p {
+    flex: 1 1 20rem;
+    max-width: var(--measure)
+}
+
+.backup-note strong {
+    color: var(--ink);
+    font-weight: 650
+}
+
 /* ---------- Avisos, espera e janelas ---------- */
 
+/* O aviso fica no meio, fora das áreas seguras dos lados (o entalhe do iPhone deitado). */
 .toast-region {
     position: fixed;
     left: 50%;
     bottom: calc(var(--tabbar-h) + var(--sp-5));
     z-index: var(--z-top);
     width: max-content;
-    max-width: min(36rem, calc(100vw - 2rem));
+    max-width: min(36rem, calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
     translate: -50% 0;
     pointer-events: none
 }
@@ -3184,6 +3299,19 @@ main:focus {
     min-height: var(--control-h-inline);
     border-color: var(--line-strong);
     white-space: nowrap
+}
+
+/* Na tela de toque o aviso flutua às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
+   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
+   está saindo ([data-motion-pop-id]). Com mouse o corpo inteiro continua recebendo: o mouse em cima segura o aviso. */
+@media (hover: none) {
+    .toast {
+        pointer-events: none
+    }
+
+    .toast:not([data-motion-pop-id]) button {
+        pointer-events: auto
+    }
 }
 
 /* Espera de um pedido à IA longe do lugar da resposta: o que está acontecendo, os segundos, o limite e o Cancelar,
@@ -3302,6 +3430,13 @@ dialog[data-closing]::backdrop {
     transition-duration: var(--t-fade)
 }
 
+/* Com a janela ou a folha aberta, a página de trás não rola: o arrasto no fundo escuro e a roda do mouse a levavam
+   para outro ponto, e ao fechar o aluno tinha de achar de novo onde estava. A folha alta continua rolando por dentro, e
+   o scrollbar-gutter da raiz guarda o lugar da barra de rolagem que some. */
+html:has(dialog[open]) {
+    overflow: hidden
+}
+
 /* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, o balão de espera) não recebe
    clique: a troca nunca segura o aluno. */
 [data-motion-pop-id] {
@@ -3418,6 +3553,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     .toast button {
         min-height: var(--control-h)
     }
+
+    /* "Recomeçar" do quiz e do baralho: com o alvo de 44 px, o cabeçalho continua na altura da etiqueta (24 px), a do
+       esqueleto da geração. */
+    .study-head .link {
+        margin-block: calc((1.5rem - var(--control-h)) / 2)
+    }
 }
 
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
@@ -3514,11 +3655,12 @@ main[data-instant] > .view[data-motion-pop-id] {
         outline-color: Highlight
     }
 
-    /* O fundo vira Canvas e o gradiente some: as barras do gráfico, o fio de progresso e o sublinhado da questão atual
-       voltam na cor do texto do sistema. */
+    /* O fundo vira Canvas e o gradiente some: as barras do gráfico, o fio de progresso, o sublinhado da questão atual e
+       o trecho que corre no fio da espera da IA voltam na cor do texto do sistema. */
     .chart-bar,
     .meter > span,
-    .dots span {
+    .dots span,
+    .wait-bar::after {
         forced-color-adjust: none;
         background: CanvasText
     }
