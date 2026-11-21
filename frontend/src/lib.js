@@ -56,12 +56,14 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
 
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
 // não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
-// nela. O App liga a demonstração antes da primeira leitura.
+// nela. O App liga a demonstração antes da primeira leitura. O "Fundo animado" (fundo) fica de fora: não é dado do
+// estudante, é uma preferência do aparelho, como o movimento reduzido do sistema, e quem parou as ondas no app com IA
+// não as vê andando de novo na demonstração.
 let prefix = 'cerebro-';
 export function demoStorage(on) {
   prefix = on ? 'cerebro-demo-' : 'cerebro-';
 }
-export const storageKey = k => prefix + k;
+export const storageKey = k => (k === 'fundo' ? 'cerebro-' : prefix) + k;
 
 // session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
 // que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
@@ -217,6 +219,16 @@ export function originNote(summary) {
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
 }
 
+// O material temporário do modo estudo (o quiz do caderno de erros, o simulado, a revisão do dia) leva o aviso da IA?
+// Sim, a menos que cada questão ou cartão venha, pelo título que traz, de material do aparelho com a marca semIA. A
+// questão de material excluído, ou de um título que um material da IA também tem, leva o aviso.
+export function virtualNote(items, materials) {
+  return items.some(item => {
+    const from = materials.filter(m => m?.title === item.title);
+    return !from.length || from.some(m => m.semIA !== true);
+  });
+}
+
 // De onde veio o texto do material, na mesma ordem do aviso: 'ia' (algum trecho do exemplo escrito pela IA), 'pronto'
 // (de um exemplo pronto) ou '' (do aluno). A janela "Ver no texto" põe isso no título, e o texto levado de volta ao
 // editor continua valendo como exemplo (App.jsx, textToEditor).
@@ -290,6 +302,13 @@ export function readList(k) {
 export function readUser() {
   const user = read('user', null);
   return isText(user?.name) ? user : null;
+}
+
+// "Escrever antes de virar", nos Flashcards: a escolha gravada no navegador. Sem escolha, ou com uma que não é sim nem
+// não, o campo começa ligado no computador e desligado na tela de toque, onde digitar pesa mais.
+export function readWriteFirst(touch) {
+  const on = read('escrever', null);
+  return typeof on === 'boolean' ? on : !touch;
 }
 
 // Rascunho do que estava aberto (editor, material, conversa), gravado a cada mudança para sobreviver a um F5.
@@ -558,6 +577,34 @@ export function areaLine(events, area) {
     : 'Quiz sem respostas') + ' · ' + cards + (cards === 1 ? ' cartão' : ' cartões');
 }
 
+// A certeza que o aluno marca no quiz antes da correção (#80), na ordem dos botões: "Tenho certeza", "Acho que sei" e
+// "Chutei". A resposta gravada a leva em conf; a resposta antiga, ou dada com a caixa "Marcar certeza" desligada, não.
+export const CONF = ['certeza', 'acho', 'chute'];
+
+// Painel "Sua certeza" do Desempenho: o acerto de cada marca nos últimos days dias, pela primeira resposta de cada
+// questão no dia, como os outros números. Resposta sem marca, ou com marca fora de CONF (de um backup), fica de fora.
+export function calibration(events, now, days = 30) {
+  const span = new Set(recentDays(days, now));
+  const recent = firstAttempts(events).filter(e => span.has(localDay(e.date)));
+  return Object.fromEntries(CONF.map(conf => [conf, tally(recent.filter(e => e.conf === conf))]));
+}
+
+// O que vai ao lado de cada marca no painel. O percentual só aparece com SURE_MIN respostas da marca: com menos ele
+// engana. Antes disso a linha diz quantas faltam. O número de respostas fica sempre escrito.
+const SURE_MIN = 10;
+export function sureText({ total, correct, rate }) {
+  if (total >= SURE_MIN) return 'acertou ' + rate + '% (' + correct + ' de ' + total + ')';
+  const left = SURE_MIN - total;
+  return (total ? total + ' ' + plural(total, 'resposta', 'respostas') : 'nenhuma resposta') + ' · ' +
+    plural(left, 'falta ', 'faltam ') + left + ' para o percentual';
+}
+
+// Fim do quiz: quantos acertos foram chute. Sem nenhum, nada.
+export function guessLine(answers) {
+  const n = answers.filter(a => a.ok && a.conf === 'chute').length;
+  return n ? n + ' dos seus acertos ' + plural(n, 'foi chute.', 'foram chute.') : '';
+}
+
 // Busca só no texto do material: JSON.stringify também casava nomes de campo ("quiz", "answer") e datas.
 // O texto de cada material é dobrado uma vez só (SEARCH): a busca roda a cada tecla, e dobrar de novo o texto inteiro de
 // todos os materiais pesava com a Biblioteca cheia.
@@ -663,15 +710,25 @@ export function slashHints(list, text) {
 }
 
 // Saudação fixa: o Cérebro fala primeiro sem gastar chamada da IA. Não entra em chat, então não vai no histórico do pedido.
-// title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor.
-export function hello({ user, area, level, input, title, api }) {
+// title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor. study é o modo
+// estudo do celular (#85), também sem IA.
+export function hello({ user, area, level, input, title, api, study = false }) {
   return 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' +
     (area === 'Escolar' ? 'das matérias escolares' : 'de ' + area) + ' no nível ' + level + '. ' +
     (api
       ? 'Pergunte o que quiser ou escolha uma das sugestões abaixo. ' +
         (title ? 'Vou considerar o material "' + title + '".'
           : input.trim() ? 'Vou considerar o texto que está no editor.' : 'Se colar um texto no editor, respondo com base nele.')
+      : study ? 'No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as ' +
+        'respostas a dúvidas precisam do computador com a IA.'
       : 'Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.');
+}
+
+// O material em texto, para um pedido à IA: o título e um tópico por linha ("conceito: texto"), no limite do editor. Vai
+// no assunto do chat (chatSubject) e nas questões novas do material que não guardou o texto (quizSource).
+function summaryText(m) {
+  const topics = m.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
+  return cut([m.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT);
 }
 
 // Assunto do chat. Vale o texto do editor sem material aberto, quando o material saiu desse texto (é o mesmo assunto,
@@ -684,10 +741,9 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   if (!material || fromEditor || (editor && input.trim())) {
     return { title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '' };
   }
-  const topics = material.summary.map(s => [s.concept, s.text].filter(t => t.trim()).join(': '));
   return {
     title: material.title,
-    content: cut([material.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT),
+    content: summaryText(material),
     area: AREAS.includes(material.area) ? material.area : area,
     level: LEVELS.includes(material.level) ? material.level : level,
     swap: input.trim() ? 'Usar o texto do editor' : '',
@@ -865,6 +921,17 @@ export function deckSummary(deck) {
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
 }
 
+// Lembrete embaixo do "Você escreveu", com o cartão virado.
+export const CARD_REMINDER = 'Conte como acerto só se você disse o essencial.';
+
+// O que a região fixa diz ao virar o cartão (toAnswer: para a resposta). Com o que o aluno escreveu na tela (wrote), a
+// resposta vem com o lembrete: o foco não passa por ele. A resposta sem ponto final ganha um, para a pausa antes dele.
+export function spokenCard(card, toAnswer, wrote) {
+  if (!toAnswer) return 'Pergunta: ' + card.question;
+  const text = 'Resposta: ' + card.answer.trim();
+  return wrote ? text + (/[.!?…]$/.test(text) ? ' ' : '. ') + CARD_REMINDER : text;
+}
+
 // Revisão espaçada dos cartões, nas caixas de Leitner: cada cartão avaliado fica em cerebro-cartoes como { key, title,
 // box, due, date }: a chave (mistakeKey, o material e a pergunta), o título do material, a caixa de 1 a 4, o dia em que
 // ele volta e a hora da última mudança. Cada caixa volta em BOX_DAYS dias: a 1 em 1, a 2 em 3, a 3 em 7 e a 4 em 16.
@@ -942,14 +1009,25 @@ export function mistakeKey(title, question) {
 // Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova. Nos dois casos ela começa a
 // escada: degrau 0, e volta amanhã.
 // item leva só os campos da questão: a que vem da tela traz junto a resposta dada na sessão.
-export function addMistake(list, item, title, area, now) {
+// sure: o aluno marcou "Tenho certeza" antes da correção (#80). A entrada ganha sure: true, a marca "você tinha certeza"
+// do caderno; errar de novo sem a certeza troca a entrada, e a marca sai.
+export function addMistake(list, item, title, area, now, sure = false) {
   const { type, question, options, answer, explanation, steps } = item;
   const key = mistakeKey(title, question);
   const entry = {
     key, item: { type, question, options, answer, explanation, steps }, title, area, date: new Date(now).toISOString(),
     step: 0, due: addDays(localDay(now), 1),
   };
+  if (sure) entry.sure = true;
   return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
+}
+
+// O caderno depois de uma resposta do quiz. conf é a certeza marcada antes da correção (CONF), ou nada com a caixa
+// "Marcar certeza" desligada. Errou: addMistake, com a marca quando foi com "Tenho certeza". Acertou: clearMistake. O
+// acerto no chute não muda nada: não tira a questão nem a faz subir um degrau, porque não mostra que ela ficou.
+export function noteAnswer(list, item, title, area, ok, conf, now) {
+  if (!ok) return addMistake(list, item, title, area, now, conf === 'certeza');
+  return conf === 'chute' ? list : clearMistake(list, mistakeKey(title, item.question), now);
 }
 
 // Acertou: no dia marcado ou depois, a questão sobe um degrau e volta mais tarde; no último degrau ela sai do caderno.
@@ -985,6 +1063,13 @@ export function backOn(due, today) {
 // enquanto esperava a IA.
 export function removeMistake(list, key, until) {
   return list.filter(e => e?.key !== key || Date.parse(e.date) > Date.parse(until));
+}
+
+// A revisão da IA aceitou uma resposta marcada como chute (#80): é um acerto no chute, que não muda o caderno
+// (noteAnswer). O erro que a resposta gravou volta a ser o de antes dela (before), ou sai, se a questão não estava no
+// caderno. Como em removeMistake, o erro gravado depois do pedido (until) fica.
+export function restoreMistake(list, key, before, until) {
+  return list.flatMap(e => (e?.key !== key || Date.parse(e.date) > Date.parse(until) ? [e] : before ? [before] : []));
 }
 
 // Erro lido do navegador ou de um arquivo de backup, antes de ir para a tela. A chave tem de ser a do material e
@@ -1029,6 +1114,40 @@ export function gradeRequest(q, given, area, level) {
 // nos limites do backend: título do tópico com até 300 caracteres, texto com até 3.000 e a explicação com até 1.000.
 export function explainRequest(topic, answer, area, level) {
   return { concept: cut(topic.concept, 300), content: cut(topic.text, 3000), answer: cut(answer, 1000), area, level };
+}
+
+// "Questões novas deste material" (/api/quiz): um material guarda até QUIZ_CAP questões.
+export const QUIZ_CAP = 30;
+
+// O que vai no pedido de questões novas, nos limites do backend: o texto guardado (#89) com até 20.000 caracteres ou,
+// no material de antes dele, o título e o resumo (summaryText), e as perguntas que o material já tem, cada uma com até
+// 500. fromSummary, que fica fora do pedido, diz que o texto é o resumo: a tela avisa.
+export function quizSource(m) {
+  const fromSummary = !m.texto?.trim();
+  return {
+    content: fromSummary ? summaryText(m) : cut(m.texto, MAX_INPUT),
+    avoid: m.quiz.map(q => cut(q.question, 500)).filter(Boolean),
+    fromSummary,
+  };
+}
+
+// Junta ao quiz do material as questões novas que a IA mandou (incoming): só as que a tela desenha (validQuestion), sem
+// repetir uma pergunta do material nem outra das novas (sem maiúsculas, acentos e espaços a mais, como o backend
+// confere) e até o material ter cap questões. Devolve a lista inteira, com as novas no fim.
+export function mergeQuiz(quiz, incoming, cap = QUIZ_CAP) {
+  const key = q => fold(q.question).replace(/\s+/g, ' ').trim();
+  const seen = new Set(quiz.map(key));
+  const added = (Array.isArray(incoming) ? incoming : [])
+    .filter(q => validQuestion(q) && !seen.has(key(q)) && seen.add(key(q)));
+  return [...quiz, ...added.slice(0, Math.max(0, cap - quiz.length))];
+}
+
+// O material m como está gravado agora na biblioteca (saved, a lista inteira do navegador): outra aba pode ter juntado
+// questões à cópia de lá, e as desta aba que não chegaram lá (o navegador recusou a gravação) vão no fim. Fora da
+// biblioteca, ou com a cópia de lá estragada, o próprio m.
+export function savedCopy(m, saved) {
+  const kept = m.id && saved.find(s => s?.id === m.id);
+  return validMaterial(kept) ? { ...kept, quiz: mergeQuiz(kept.quiz, m.quiz) } : m;
 }
 
 // A revisão da IA aceitou a resposta que a comparação de texto marcou como errada: a última resposta de quiz

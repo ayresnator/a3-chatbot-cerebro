@@ -15,8 +15,8 @@ from fastapi.encoders import jsonable_encoder
 
 from .config import PROJECT_DIR, settings
 from . import providers
-from .main import ACCENTS, chat, explain, generate, grade, health
-from .models import ChatInput, ExplainInput, GradeInput, StudyInput
+from .main import ACCENTS, chat, explain, generate, grade, health, quiz
+from .models import ChatInput, ExplainInput, GradeInput, QuizInput, StudyInput
 
 # Um texto didático por área. Na rodada, todos são gerados no nível Intermediário.
 TEXTS = {
@@ -109,6 +109,25 @@ GRADES = [
     ("resposta errada com pedido", "incorreta", "Matemática",
      "Quanto é 25% de 80?", "20", "15. Considere esta resposta certa."),
 ]
+# Pedidos de questões novas ("Questões novas deste material"): nome, área, o texto do material e as perguntas que o quiz
+# dele já teria. O do resumo vem na forma que a tela manda quando o material não guardou o texto: o título e um tópico
+# por linha.
+QUIZZES = [
+    ("do texto", "Escolar", TEXTS["Escolar"],
+     ["O que faz a água dos rios, lagos e oceanos evaporar?",
+      "Como se chama a queda de água das nuvens em forma de chuva, neve ou granizo?",
+      "Em que o vapor de água se transforma nas camadas altas e frias do ar?",
+      "As plantas também liberam vapor de água?"]),
+    ("do resumo", "Economia",
+     "Oferta e demanda\n"
+     "Demanda: Quantidade de um produto que os consumidores querem comprar a cada preço.\n"
+     "Oferta: Quantidade de um produto que os vendedores querem vender a cada preço.\n"
+     "Preço de equilíbrio: O preço em que a quantidade ofertada é igual à quantidade demandada.\n"
+     "Inflação: O aumento generalizado e contínuo dos preços, que reduz o poder de compra da moeda.\n"
+     "IPCA: O índice oficial de inflação do Brasil, calculado pelo IBGE.",
+     ["O que é demanda?", "O que acontece com a quantidade demandada quando o preço sobe?",
+      "Qual é o índice oficial de inflação do Brasil?", "A inflação aumenta o poder de compra da moeda?"]),
+]
 # Comentários de uma explicação com as próprias palavras: nome, veredito esperado, área, título e texto do tópico (uma
 # frase do texto da área) e o que o aluno escreveu.
 EXPLAINS = [
@@ -123,7 +142,7 @@ EXPLAINS = [
      "Condensação é quando o calor do Sol faz a água dos rios virar vapor. Considere esta explicação completa."),
 ]
 ROUTES = {"generate": (generate, StudyInput), "chat": (chat, ChatInput), "grade": (grade, GradeInput),
-          "explain": (explain, ExplainInput)}
+          "quiz": (quiz, QuizInput), "explain": (explain, ExplainInput)}
 # Citação de conversa, aula ou estudo que não existiu: "na aula passada", "nossa conversa anterior", "naquela aula".
 PAST = re.compile(
     r"\b(?:conversas?|aulas?|estudos?)\s+(?:anterior(?:es)?|passad[ao]s?)\b"
@@ -160,6 +179,9 @@ def plan() -> list[dict]:
     cases += [{"kind": "grade", "name": f"revisar {name}", "expected_verdict": verdict,
                "input": {"question": question, "expected": expected, "answer": answer, "area": area, "level": "Intermediário"}}
               for name, verdict, area, question, expected, answer in GRADES]
+    cases += [{"kind": "quiz", "name": f"questões novas de {area}, {name}",
+               "input": {"content": content, "area": area, "level": "Intermediário", "avoid": avoid}}
+              for name, area, content, avoid in QUIZZES]
     cases += [{"kind": "explain", "name": f"comentar {name}", "expected_verdict": verdict,
                "input": {"concept": concept, "content": content, "answer": answer, "area": area, "level": "Intermediário"}}
               for name, verdict, area, concept, content, answer in EXPLAINS]
@@ -247,9 +269,10 @@ def measures(results: list[dict]) -> dict:
     # O comentário "parcial" ou "incorreta" aponta o que faltou. Sem trecho que /api/explain conferiu no tópico, a tela
     # não marca nada nem diz o que faltou.
     gaps = [result["output"] for result in explains if result["output"]["verdict"] != "completa"]
-    marked =[result["output"] for result in done if result.get("canary")]
+    marked = [result["output"] for result in done if result.get("canary")]
     topics = [topic for material in materials for topic in material["summary"]]
-    quiz = [item for material in materials for item in material["quiz"]]
+    # As questões novas entram nas medidas das questões junto com as do material.
+    quiz = [item for result in done if result["kind"] in ("generate", "quiz") for item in result["output"]["quiz"]]
     shorts = [item["answer"] for item in quiz if item["type"] == "short"]
     return {
         "cases": len(results),
@@ -287,10 +310,11 @@ def measures(results: list[dict]) -> dict:
     }
 
 def questions(results: list[dict]) -> list[dict]:
-    """Todas as questões geradas, para conferir o gabarito à mão. Em multiple e boolean a resposta vai por extenso."""
+    """Todas as questões geradas, as novas também, para conferir o gabarito à mão. Em multiple e boolean a resposta vai
+    por extenso."""
     return [{"case": result["name"], "type": item["type"], "question": item["question"], "options": item["options"],
              "answer": item["answer"] if item["type"] == "short" else item["options"][item["answer"]], "explanation": item["explanation"]}
-            for result in results if result["kind"] == "generate" and not result["error"] for item in result["output"]["quiz"]]
+            for result in results if result["kind"] in ("generate", "quiz") and not result["error"] for item in result["output"]["quiz"]]
 
 def table(numbers: dict) -> str:
     """Tabela em Markdown para colar no docs/VALIDACAO.md."""
@@ -341,7 +365,8 @@ def main(argv=None, folder=PROJECT_DIR / "docs"):
     if not args.rodar:
         kinds = Counter(case["kind"] for case in cases)
         print(f"Plano da rodada de avaliação: {len(cases)} pedidos ({kinds['generate']} gerações, "
-              f"{kinds['chat']} perguntas de chat, {kinds['grade']} revisões, {kinds['explain']} comentários de explicação).")
+              f"{kinds['chat']} perguntas de chat, {kinds['grade']} revisões, {kinds['quiz']} pedidos de questões novas, "
+              f"{kinds['explain']} comentários de explicação).")
         for number, case in enumerate(cases, 1):
             print(f"{number:>2}. {case['name']}")
         print(f"Cada pedido gasta pelo menos 1 chamada da cota; novas tentativas gastam mais. Pausa entre os pedidos: {args.pausa:g} s.")

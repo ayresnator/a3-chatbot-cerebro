@@ -40,7 +40,7 @@ Para o público, o plano tem de ser o pago. Falta decidir quem paga e qual o gas
 A LGPD dá a quem usa o app o direito de saber, de forma clara, a finalidade do tratamento, a forma e a duração, quem é o controlador e como falar com ele, com quem os dados são compartilhados, as responsabilidades de quem trata os dados e os direitos do titular (art. 9). O aviso do Cérebro precisa dizer pelo menos:
 
 - quem controla os dados (o grupo ou a instituição) e um contato;
-- para que eles servem: gerar o material, responder no chat, revisar respostas e comentar as explicações do aluno;
+- para que eles servem: gerar o material e questões novas dele, responder no chat, revisar respostas e comentar as explicações do aluno;
 - que o texto vai para o Google, fora do Brasil. É uma transferência internacional de dados (art. 33), e ela precisa se apoiar numa das hipóteses do artigo, como cláusulas-padrão contratuais (inciso II) ou o consentimento específico e em destaque de quem usa, depois de avisado de que os dados vão para fora do país (inciso VIII);
 - por quanto tempo os logs ficam guardados e o que eles registram. Hoje os logs só aparecem no terminal do backend, e uma hospedagem costuma guardar essa saída.
 
@@ -57,6 +57,10 @@ Hoje qualquer pessoa que alcance o backend usa a chave e a cota do grupo. Antes 
 7. `/docs`, `/redoc` e `/openapi.json` fechados. Hoje eles mostram a qualquer um todas as rotas e campos da API. Fora do computador local, o `FastAPI(...)` de `backend/app/main.py` recebe `docs_url=None`, `redoc_url=None` e `openapi_url=None`.
 8. Histórico do chat conferido. Hoje o navegador manda até 6 mensagens marcadas como da IA, e cada pergunta leva até 64 mil caracteres ao Gemini. Quem escreve essas mensagens conduz o modelo: na internet, o Cérebro viraria um Gemini de uso livre com a chave do grupo. O backend precisa conferir que as mensagens da IA saíram dele, por exemplo com uma assinatura, ou cortar bem o histórico.
 9. Chave e endereços na hospedagem. A chave do plano pago vai numa variável de ambiente da hospedagem, e não num `.env` copiado: `backend/app/config.py` já dá prioridade à variável. `ALLOWED_ORIGINS`, e o `ALLOWED_HOSTS` da issue #75, recebem o endereço público do app.
+
+## O modo estudo, sem IA
+
+Este documento trata do app com IA. O modo estudo do celular (README, "Estudar no celular") é publicado à parte, pelo fluxo `.github/workflows/publicar.yml`, e não depende das tarefas acima: ele não tem backend nem chave, não chama a IA e não manda a servidor o que o aluno faz. O endereço é público: qualquer pessoa com o link abre o app, e o GitHub vê o endereço IP de quem abre. Ativar o GitHub Pages e disparar o fluxo são decisões do dono do repositório.
 
 ## Fontes
 

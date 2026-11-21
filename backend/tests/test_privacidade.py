@@ -49,12 +49,21 @@ class PrivacyTests(unittest.TestCase):
         comment = json.dumps({"verdict": MODELO, "missing": [MODELO], "misconception": MODELO})
         invented = json.dumps({"verdict": "parcial", "missing": [f"Trecho do {MODELO} que não está no tópico"]})
         kept = json.dumps({"verdict": "incorreta", "missing": [f"Tópico do {ALUNO}"], "misconception": f"Equívoco do {MODELO}."})
+        # Questões novas: uma fora do formato, quatro repetindo a pergunta do material, que é texto do aluno, e três
+        # válidas. Sobram três, e o erro da lista curta traz as questões. Na segunda resposta a lista vem fora do formato,
+        # e o erro traz o valor recebido, como o título da geração. O log leva só o campo, o motivo e as contagens.
+        quiz = {**study, "avoid": [ALUNO]}
+        repeats = json.dumps({"quiz": [{"type": "multiple", "question": MODELO, "options": [MODELO], "answer": MODELO, "explanation": MODELO},
+                                       *[{"type": "short", "question": ALUNO, "options": [], "answer": "Sim", "explanation": MODELO}] * 4,
+                                       *[{"type": "short", "question": f"{MODELO} {n}?", "options": [], "answer": "Sim", "explanation": MODELO}
+                                         for n in range(3)]]})
         rounds = (("/api/chat", CHAT, [json.dumps({"answer": MODELO})], 200),
                   ("/api/chat", CHAT, [broken, broken], 502),
                   ("/api/chat", CHAT, [400], 502),
                   ("/api/chat", CHAT, [403], 502),
                   ("/api/generate", study, [material, material], 502),
                   ("/api/grade", grade, [review, review], 502),
+                  ("/api/quiz", quiz, [repeats, json.dumps({"quiz": MODELO})], 502),
                   ("/api/explain", explain, [comment, comment], 502),
                   ("/api/explain", explain, [invented], 200),
                   ("/api/explain", explain, [kept], 200),
@@ -77,7 +86,7 @@ class PrivacyTests(unittest.TestCase):
             with patch.object(providers, "settings", replace(CONFIG, daily_limit=1)), \
                     patch.dict(providers.calls, day=providers.quota_day(), count=1):
                 for path, body in (("/api/chat", CHAT), ("/api/generate", study), ("/api/grade", grade),
-                                   ("/api/example", example), ("/api/explain", explain)):
+                                   ("/api/example", example), ("/api/quiz", quiz), ("/api/explain", explain)):
                     response = self.client.post(path, json=body)
                     self.assertEqual((response.status_code, response.json()["detail"]["code"]),
                                      (429, "AI_BUDGET_REACHED"), path)

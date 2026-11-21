@@ -34,6 +34,18 @@ class StudyInput(Trimmed):
     area: Area
     level: Level
 
+# Pergunta que o material já tem. O limite vem antes da limpeza no Annotated: assim ele vale para o texto já limpo e sem
+# os espaços das pontas, e o erro é o dos outros textos (string_too_long).
+Question = Annotated[str, Field(max_length=500), BeforeValidator(visible)]
+
+class QuizInput(Trimmed):
+    # "Questões novas deste material", no fim do quiz: o texto do material (o guardado ou o resumo), a área, o nível e
+    # as perguntas que ele já tem (avoid), para não voltarem. Um material guarda até 30 questões.
+    content: Clean = Field(min_length=3, max_length=20000)
+    area: Area
+    level: Level
+    avoid: list[Question] = Field(default_factory=list, max_length=30)
+
 class ChatTurn(Trimmed):
     role: Literal["user", "assistant"]
     text: Clean = Field(max_length=4000)
@@ -201,6 +213,18 @@ class QuizItem(Trimmed):
             # Com duas opções iguais só uma contava como certa: o aluno errava marcando o mesmo texto.
             if len({option.casefold() for option in self.options}) < len(self.options):
                 raise ValueError("Options must be different")
+        return self
+
+class QuizOutput(Trimmed):
+    # Questões novas de um material. O esquema enviado ao provedor sai daqui, com a lista e a questão do esquema da
+    # geração, validado na API real: nenhuma palavra-chave nova.
+    quiz: list[QuizItem] = Field(min_length=1, max_length=15)
+
+    @model_validator(mode="after")
+    def check_size(self):
+        # A instrução pede 6; com menos de 4 o clique não valeu. O mínimo do campo continua 1, como no StudyOutput.
+        if len(self.quiz) < 4:
+            raise ValueError(f"Quiz needs 4 questions; got {len(self.quiz)}")
         return self
 
 class StudyOutput(Trimmed):

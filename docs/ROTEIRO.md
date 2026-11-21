@@ -29,24 +29,24 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
 
 1. Flashcards: vire um cartão e clique em "Errei". Mostre que a fila cresceu: o cartão volta até ser acertado. Com o arquivo da véspera importado, os cartões avaliados ontem voltam hoje: abra o link "N cartões para hoje", em "Seu progresso" no Estudar, e mostre a revisão do dia, com o material de cada cartão. Diga a regra: cada "Acertei" no dia marcado leva o cartão para uma caixa que volta mais tarde (1, 3, 7 e 16 dias), e "Errei" o traz de volta para amanhã.
-2. Quiz: erre a primeira questão de propósito. Mostre a opção certa marcada com "✓ certa", a sua com "✗ sua resposta" e a explicação.
+2. Quiz: erre a primeira questão de propósito e marque "Tenho certeza": a opção escolhida só vai à correção com a certeza marcada. Mostre o destaque "Você tinha certeza. Leia a explicação com atenção.", a opção certa marcada com "✓ certa", a sua com "✗ sua resposta" e a explicação. Se os três botões da certeza não aparecerem, a caixa "Marcar certeza", no cabeçalho do quiz, foi desligada neste navegador.
 3. Clique em "Não entendi, me explique". A resposta aparece ali mesmo, sem trocar de página.
-4. Na questão de resposta curta, digite a resposta certa com um erro pequeno de digitação, como uma letra trocada. A comparação de texto marca como errada. Clique em "Pedir revisão da IA" e mostre o veredito. Não use a sigla, o plural ou um sinônimo: o modelo costuma pôr essas formas no gabarito, a tela aceita a resposta e o botão de revisão não aparece.
+4. Na questão de resposta curta, digite a resposta certa com um erro pequeno de digitação, como uma letra trocada, e marque "Acho que sei". A comparação de texto marca como errada. Clique em "Pedir revisão da IA" e mostre o veredito. Não use a sigla, o plural ou um sinônimo: o modelo costuma pôr essas formas no gabarito, a tela aceita a resposta e o botão de revisão não aparece.
 5. Termine o quiz e mostre a lista das questões erradas.
-6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá, com "volta amanhã". Diga a regra: a questão volta no dia marcado (amanhã, depois em 3 e em 7 dias) e só sai depois de 3 acertos em dias diferentes, cada um no dia marcado; errar volta ao começo. As questões do arquivo da véspera aparecem "para hoje", no "Refazer os de hoje". O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
+6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá, com "volta amanhã", e a da primeira questão traz "você tinha certeza". Diga a regra: a questão volta no dia marcado (amanhã, depois em 3 e em 7 dias) e só sai depois de 3 acertos em dias diferentes, cada um no dia marcado; errar volta ao começo. As questões do arquivo da véspera aparecem "para hoje", no "Refazer os de hoje". O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
 
 ## Bloco 3: dúvidas e desempenho (2 minutos, 1 pedido à IA)
 
 1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
-3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
+3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia. O painel "Sua certeza" compara a certeza marcada com o acerto nos últimos 30 dias; o percentual de cada marca só aparece com 10 respostas.
 4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os de hoje", com as questões do caderno que voltam hoje, "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 
 Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
-1. A IA entra em cinco lugares: gerar o material, tirar dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever o texto do "Usar um exemplo". O resto é código comum.
+1. A IA entra em seis lugares: gerar o material, escrever questões novas de um material, tirar dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever o texto do "Usar um exemplo". O resto é código comum.
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).
@@ -63,14 +63,14 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "A cota de hoje da IA acabou" (`AI_QUOTA_EXCEEDED`, e o cabeçalho fica "Cota de hoje esgotada") ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo" (`AI_BUDGET_REACHED`, e o cabeçalho fica "Teto do dia atingido") | Abra um material importado na Biblioteca, como no caso da cota. Para liberar a IA, aumente ou esvazie o `AI_DAILY_LIMIT` no `.env`, reinicie o backend e recarregue a página: no teto nenhum pedido sai, e a aba aberta continuaria com os botões da IA desligados. |
 | "Cérebro desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre, quando a aba volta a aparecer e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique", "Pedir revisão da IA" e "Pedir comentário da IA" (o "Explicar com minhas palavras" fica, com o "Comparar"). A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique", "Pedir revisão da IA", "Pedir comentário da IA" (o "Explicar com minhas palavras" fica, com o "Comparar") e "Questões novas deste material". A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 A mensagem de erro mostra uma frase simples; o código entre parênteses na tabela fica embaixo dela, em "Detalhes técnicos". Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
 
 ## Perguntas prováveis
 
-**Onde está a inteligência artificial do trabalho?** Em cinco rotas do backend: gerar o material, responder dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
+**Onde está a inteligência artificial do trabalho?** Em seis rotas do backend: gerar o material, escrever questões novas de um material, responder dúvidas, revisar resposta curta, comentar a explicação que o aluno escreve com as próprias palavras e escrever um exemplo de estudo. O modelo é o Gemini, chamado pela API. O trabalho do grupo está em volta dele: as instruções, o formato da resposta, a validação de cada item e a medição.
 
 **Como vocês evitam que a IA invente?** Não evitamos por completo. Reduzimos e deixamos visível: o trecho de origem é conferido por código, todo tópico sem trecho, ou com trecho do exemplo que a própria IA escreveu, ganha a etiqueta "Explicação da IA: confira", o chat é instruído a avisar quando a resposta não está no texto, e a tela avisa que o conteúdo pode ter erros.
 
@@ -80,6 +80,6 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão e as explicações enviadas para comentário.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele, as respostas enviadas para revisão, as explicações enviadas para comentário e, nas questões novas, o texto do material e as perguntas do quiz dele.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.
