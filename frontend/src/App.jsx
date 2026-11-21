@@ -21,10 +21,10 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  validCardReview, scheduleCard, dueCards, DAY_CARDS,
+  validCardReview, scheduleCard, dueCards, dayCards,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  stepOf, dueOf, dueMistakes, backOn, DAY_MISTAKES,
+  stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
 } from './lib.js';
@@ -901,7 +901,7 @@ function App() {
   // no máximo 20 por vez, os mais atrasados primeiro. O material que estava aberto fica guardado e volta quando o aluno
   // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está.
   function dayDeck() {
-    const cards = cardsDue.slice(0, DAY_CARDS);
+    const cards = dayCards(cardsDue);
     setParked(opened);
     setResult({
       virtual: 'Flashcards',
@@ -2370,8 +2370,8 @@ function App() {
                 <m.section className="panel" variants={rise}>
                   {mistakes.length > 0 && (
                     <div className="erros-head">
-                      {/* A regra numa linha só dela, e a escada e os botões na de baixo. As de hoje vêm no máximo 10
-                          por vez, as mais atrasadas primeiro (lib.js, dueMistakes). Sem nenhuma para hoje, a frase diz
+                      {/* A regra numa linha só dela, e a escada e os botões embaixo. As de hoje vêm no máximo 10 por
+                          vez, as mais atrasadas primeiro (lib.js, dayMistakes). Sem nenhuma para hoje, a frase diz
                           quando volta a próxima, e treinar todas vira o principal: o acerto antes do dia marcado não
                           sobe degrau. */}
                       <div className="erros-rule">
@@ -2385,11 +2385,12 @@ function App() {
                           </p>
                         )}
                       </div>
-                      {/* As marcas são as da lista abaixo. A seta, como elas, fica fora do leitor de tela: ele lê os
-                          passos da lista em ordem. */}
+                      {/* As marcas são as da lista abaixo, na ordem do caminho, e o ✓ é a saída. A seta, como elas,
+                          fica fora do leitor de tela: ele lê os passos da lista em ordem. */}
                       <ol className="ladder" role="list" aria-label="Caminho de uma questão no caderno">
-                        <li><Pen kind="errei" /> errei</li>
-                        <li><Icon name="seta" /><Pen kind="refazer" /> volta em 1, 3 e 7 dias</li>
+                        <li><Pen kind="errei" /> errei: volta amanhã</li>
+                        <li><Icon name="seta" /><Pen kind="refazer" /> para hoje</li>
+                        <li><Icon name="seta" /><Pen kind="novo" /> acertei: volta em 3 e 7 dias</li>
                         <li><Icon name="seta" /><Pen kind="certo" /> 3 acertos: sai do caderno</li>
                       </ol>
                       <div className="erros-actions">
@@ -2397,7 +2398,7 @@ function App() {
                           <button
                             type="button"
                             className="primary"
-                            onClick={() => redoMistakes(mistakesDue.slice(0, DAY_MISTAKES))}
+                            onClick={() => redoMistakes(dayMistakes(mistakesDue))}
                           >
                             <Icon name="refazer" />
                             Refazer os de hoje ({mistakesDue.length})

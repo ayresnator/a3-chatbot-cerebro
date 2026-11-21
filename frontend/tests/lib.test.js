@@ -12,7 +12,7 @@ import {
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
-  addDays, validCardReview, scheduleCard, dueCards, DAY_CARDS, stepOf, dueOf, dueMistakes, backOn, DAY_MISTAKES,
+  addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
 } from '../src/lib.js';
 import { EXAMPLES, pickExample, opener, openers } from '../src/exemplos.js';
 
@@ -606,12 +606,13 @@ test('revisão do dia: no máximo 20 cartões por vez, os mais atrasados primeir
   const list = material.flashcards.map((c, i) => boxOf('Inflação', c.question, 1, addDays('2026-11-16', -i)));
   const due = dueCards(list, [material], today());
   assert.equal(due.length, 25, 'a contagem é de todos os vencidos');
-  assert.equal(DAY_CARDS, 20);
   assert.deepEqual(
-    due.slice(0, DAY_CARDS).map(c => c.question),
+    dayCards(due).map(c => c.question),
     Array.from({ length: 20 }, (_, k) => 'Cartão ' + (24 - k)),
     'do cartão 24 (o mais atrasado) ao 5'
   );
+  assert.deepEqual(dayCards(due.slice(0, 3)), due.slice(0, 3), 'com menos de 20, vêm todos');
+  assert.deepEqual(dayCards([]), []);
 });
 
 test('revisão do dia: avaliar o cartão o tira da revisão de hoje, com "Acertei" e com "Errei"', () => {
@@ -1804,7 +1805,21 @@ test('dueMistakes: só as que voltam hoje ou antes, das mais atrasadas às mais 
   const list = frozen([today16, null, late, tomorrow, { key: 'x', due: '2026-11-01' }, same]);
   assert.deepEqual(dueMistakes(list, today()), [late, today16, same]);
   assert.deepEqual(dueMistakes([], today()), []);
-  assert.equal(DAY_MISTAKES, 10);
+});
+
+test('Refazer os de hoje: no máximo 10 questões por vez, as mais atrasadas primeiro', () => {
+  // A questão i voltava há i dias.
+  const list = Array.from({ length: 12 }, (_, i) => ({
+    ...mistake({ ...Q_SHORT, question: 'Questão ' + i }, 'Inflação', 10), due: addDays('2026-11-16', -i),
+  }));
+  const due = dueMistakes(list, today());
+  assert.equal(due.length, 12, 'a contagem é de todas as de hoje');
+  assert.deepEqual(
+    dayMistakes(due).map(e => e.item.question),
+    Array.from({ length: 10 }, (_, k) => 'Questão ' + (11 - k)),
+    'da questão 11 (a mais atrasada) à 2'
+  );
+  assert.deepEqual(dayMistakes(due.slice(0, 3)), due.slice(0, 3), 'com menos de 10, vêm todas');
 });
 
 test('backOn: para hoje (também a atrasada), volta amanhã ou volta em dia e mês', () => {

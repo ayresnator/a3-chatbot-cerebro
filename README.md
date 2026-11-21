@@ -170,7 +170,7 @@ O acerto no quiz conta só a primeira resposta de cada questão no dia. Refazer 
 
 - Sem resposta no quiz: um botão para fazer o quiz do material aberto ou, sem material aberto, para gerar um;
 - Com respostas e nenhum material com erro: o aviso de que nenhum material pede revisão nos últimos 7 dias. Um material aparece ali quando tem 3 ou mais respostas no quiz e algum erro. Se o caderno de erros tem questões para hoje, fica o "Refazer os de hoje";
-- Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca.
+- Com um material com erro: o de maior taxa de erro nos últimos 7 dias, com "Refazer os erros de ...", que abre só as questões desse material no caderno de erros, e "Abrir ...", que abre o material no resumo quando ele está aberto ou na biblioteca. Se o caderno de erros tem questões para hoje, o principal é o "Refazer os de hoje", e "Refazer os erros de ..." fica ao lado, como treino: o acerto antes do dia marcado não sobe degrau.
 
 Ao abrir o app e ao importar um backup, o histórico perde as repetições de dias passados: de cada questão do quiz, em cada dia, ficam a primeira resposta e, se ela foi um erro, o primeiro acerto. As avaliações dos cartões ficam todas. Os números da tela não mudam, e o histórico ocupa menos espaço no navegador.
 
@@ -187,7 +187,7 @@ O estudante pode:
 - Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
 
-Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, perfil) aparece na outra sem recarregar.
+Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
 
 No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só neste navegador e diz quando foi o último backup. O botão "Fazer backup" baixa o mesmo arquivo do Exportar e ganha destaque quando há 5 materiais novos desde o último backup, ou 7 dias ou mais sem backup com algum material ou resposta nova.
 
@@ -334,7 +334,7 @@ A interface local ficará disponível em:
 
 **http://localhost:5173**
 
-Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, o perfil e o rascunho dela não se misturam com os do app com IA.
+Para ver a interface sem chave e sem backend, deixe só o frontend rodando (`npm run dev`, na pasta `frontend`) e abra **http://localhost:5173/?demo**. A demonstração organiza as frases do texto em resumo, flashcards e quiz, sem consultar a IA. Ela guarda à parte o que se faz nela: a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil e o rascunho dela não se misturam com os do app com IA.
 
 Consulte o arquivo `INICIAR-NO-VSCODE.md` para obter os comandos específicos de instalação e inicialização.
 
@@ -366,7 +366,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 
 - O perfil é local, sem autenticação real ou login com Google.
 - Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar (ou "Fazer backup") e Importar na Biblioteca.
-- Limpar os dados do navegador apaga materiais, desempenho e caderno de erros que não foram exportados.
+- Limpar os dados do navegador apaga materiais, desempenho, caderno de erros e caixas dos cartões que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.

@@ -331,7 +331,7 @@ const questionDay = e => localDay(e.date) + '\n' + e.title + '\n' + e.q;
 
 // Histórico enxuto, na abertura do app e depois de importar um backup: nos dias passados, de cada questão do quiz
 // ficam a primeira resposta do dia e, se ela foi erro, o primeiro acerto do dia. As outras repetições ("Refazer o quiz
-// todo", "Refazer meus erros") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
+// todo", "Treinar todas") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
 // Biblioteca. Ficam como estão o dia de hoje, todos os cartões (a regra aqui é a das questões do quiz), a resposta antiga
 // sem enunciado e o item estragado. Nada é resumido por dia, área ou material: o acerto que ficou (#78) precisa, por
 // questão, da resposta de cada dia. A revisão espaçada não usa o histórico: o estado dela fica em cada erro do caderno
@@ -644,7 +644,7 @@ export function deckSummary(deck) {
 // ele volta e a hora da última mudança. Cada caixa volta em BOX_DAYS dias: a 1 em 1, a 2 em 3, a 3 em 7 e a 4 em 16.
 const BOX_DAYS = [1, 3, 7, 16];
 // Cartões por vez na revisão do dia: quem fica dias sem estudar acha uma pilha, e ela vem aos poucos.
-export const DAY_CARDS = 20;
+const DAY_CARDS = 20;
 
 // Cartão lido do navegador ou de um backup. A chave tem de ser do material: é por ela que o cartão volta.
 export function validCardReview(e) {
@@ -667,7 +667,7 @@ export function scheduleCard(list, title, question, ok, now) {
 
 // Revisão do dia: os cartões vencidos (que voltam hoje ou antes) e que ainda estão num dos materiais, do mais atrasado
 // ao mais novo, e na mesma data na ordem da lista. Cada um leva a pergunta, a resposta e o título e a área do material.
-// Cartão de material excluído fica de fora. Quantos entram por vez é a tela que decide.
+// Cartão de material excluído fica de fora. A tela conta todos e abre os de dayCards.
 export function dueCards(list, materials, now) {
   const today = localDay(now);
   const due = list.filter(e => validCardReview(e) && e.due <= today)
@@ -684,6 +684,9 @@ export function dueCards(list, materials, now) {
   return due.filter(e => cards.has(e.key) && !seen.has(e.key) && seen.add(e.key)).map(e => cards.get(e.key));
 }
 
+// A revisão do dia que abre agora: os DAY_CARDS primeiros de dueCards, os mais atrasados.
+export const dayCards = due => due.slice(0, DAY_CARDS);
+
 // Caderno de erros: as questões erradas de todos os materiais, para refazer. Cada erro é { key, item, title, area,
 // date, step, due }: a questão inteira, o material e a área de onde veio, quando o aluno a errou por último, o degrau
 // da escada (0, 1 ou 2) e o dia em que ela volta.
@@ -693,7 +696,7 @@ export function dueCards(list, materials, now) {
 // acerto a tira. Cada acerto só conta no dia marcado ou depois: são 3 acertos em dias diferentes.
 const STEP_DAYS = [1, 3, 7];
 // Questões por vez no "Refazer os de hoje", como os cartões da revisão do dia.
-export const DAY_MISTAKES = 10;
+const DAY_MISTAKES = 10;
 
 // Degrau do erro. O erro gravado antes da escada, ou com degrau estragado, está no 0.
 export function stepOf(e) {
@@ -741,6 +744,9 @@ export function dueMistakes(list, now) {
   return list.filter(e => validMistake(e) && dueOf(e) <= today)
     .sort((a, b) => (dueOf(a) > dueOf(b)) - (dueOf(a) < dueOf(b)));
 }
+
+// O "Refazer os de hoje" que abre agora: as DAY_MISTAKES primeiras de dueMistakes, as mais atrasadas.
+export const dayMistakes = due => due.slice(0, DAY_MISTAKES);
 
 // Quando a questão volta, para a página do caderno: "para hoje" (também a atrasada), "volta amanhã" ou "volta em 23/11".
 export function backOn(due, today) {

@@ -46,8 +46,9 @@ export default function Biblioteca({
         <input ref={picker} type="file" accept=".json,application/json" hidden onChange={onImport} />
       </div>
       <p className="hint">
-        Exportar baixa um arquivo com a biblioteca, o desempenho, o caderno de erros e o perfil. Importar junta esse
-        arquivo ao que já está neste navegador, sem duplicar, e só traz o perfil se este navegador ainda não tem um.
+        Exportar baixa um arquivo com a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil.
+        Importar junta esse arquivo ao que já está neste navegador, sem duplicar, e só traz o perfil se este navegador
+        ainda não tem um.
       </p>
       {/* popLayout: a linha que sai deixa o fluxo na hora, e a lista sobe junto (App.jsx, undoNow; anim.js, flipList). */}
       <AnimatePresence mode="popLayout" custom={byKeyboard()}>

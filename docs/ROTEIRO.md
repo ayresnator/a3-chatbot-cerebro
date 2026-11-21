@@ -40,7 +40,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
 3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
-4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
+4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os de hoje", com as questões do caderno que voltam hoje, "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 
@@ -62,7 +62,7 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "O serviço de IA está temporariamente indisponível" (`AI_PROVIDER_UNAVAILABLE`) | É erro do lado do Gemini. Tente de novo uma vez. Se repetir, abra um material importado na Biblioteca. |
 | "A cota de hoje da IA acabou" (`AI_QUOTA_EXCEEDED`, e o cabeçalho fica "Cota de hoje esgotada") ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "Cérebro desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho e o caderno de erros dela são à parte: o material importado não está lá. Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 A mensagem de erro mostra uma frase simples; o código entre parênteses na tabela fica embaixo dela, em "Detalhes técnicos". Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
@@ -79,6 +79,6 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.
