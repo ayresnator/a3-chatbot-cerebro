@@ -292,10 +292,17 @@ def explain(data: ExplainInput):
             logger.warning("explain: comentário rejeitado %s", reasons(exc))
             if last:
                 fail(502, "AI_INVALID_ANSWER", "A IA devolveu um comentário fora do formato. Tente novamente.")
+    # A tela mostra o veredito em frase (App.jsx, OWN_VERDICT), e o resto do comentário não pode desmentir a frase. Pelas
+    # definições da instrução, explicação com equívoco é "incorreta", e a "completa" não tem trecho que faltou.
+    if review.misconception:
+        review.verdict = "incorreta"
+    if review.verdict == "completa":
+        review.missing = []
     # A tela marca os trechos no texto do tópico: só fica o que existe nele, pela regra do trecho de origem (grounded),
-    # sem repetir e até 3. Sem trecho conferido ficam o veredito e o equívoco.
+    # sem repetir e até 3. Sem trecho conferido ficam o veredito e o equívoco. Só os 10 primeiros são conferidos: uma
+    # resposta com milhares de trechos prendia o servidor por segundos.
     found = {}
-    for piece in review.missing:
+    for piece in review.missing[:10]:
         piece = grounded(piece, data.content)
         if piece:
             found.setdefault(plain(piece), piece)

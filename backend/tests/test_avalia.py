@@ -139,7 +139,7 @@ class AvaliaTests(unittest.TestCase):
             {"kind": "grade", "name": "h", "expected_verdict": "incorreta", "error": "", "calls": 1,
              "output": {"verdict": "correta", "feedback": "ok"}},
             {"kind": "explain", "name": "j", "expected_verdict": "parcial", "error": "", "calls": 1,
-             "output": {"verdict": "parcial", "missing": ["as nuvens"], "misconception": ""}},
+             "output": {"verdict": "parcial", "missing": [], "misconception": ""}},
             {"kind": "explain", "name": "k", "expected_verdict": "incorreta", "error": "", "calls": 2,
              "output": {"verdict": "completa", "missing": [], "misconception": ""}},
             {"kind": "explain", "name": "l", "expected_verdict": "completa", "error": "AI_INVALID_ANSWER", "calls": 2, "output": None},
@@ -156,7 +156,7 @@ class AvaliaTests(unittest.TestCase):
             "topics": 5, "topics_with_source": 2,
             "levels": {"Básico": {"topic_chars": 15, "explanation_chars": 30}},
             "grades": 2, "grades_as_expected": 1,
-            "explains": 2, "explains_as_expected": 1,
+            "explains": 2, "explains_as_expected": 1, "explains_with_gaps": 1, "gaps_with_piece": 0,
         })
         # A tabela sai pronta para colar no docs/VALIDACAO.md.
         lines = avalia.table(numbers).splitlines()
@@ -171,9 +171,10 @@ class AvaliaTests(unittest.TestCase):
                     "| Trechos de origem conferidos | 2 de 5 tópicos |",
                     "| Fotossíntese no nível Básico: média de caracteres por tópico e por explicação | 15 e 30 |",
                     "| Revisões com o veredito esperado | 1 de 2 |",
-                    "| Comentários de explicação com o veredito esperado | 1 de 2 |"):
+                    "| Comentários de explicação com o veredito esperado | 1 de 2 |",
+                    "| Comentários parcial ou incorreta com pelo menos um trecho conferido | 0 de 1 |"):
             self.assertIn(row, lines)
-        self.assertEqual(len(lines), 15)
+        self.assertEqual(len(lines), 16)
         # As questões vão para o arquivo com a resposta certa por extenso, para conferir o gabarito à mão.
         self.assertEqual(avalia.questions(results)[2], {
             "case": "a", "type": "multiple", "question": "?", "options": ["Raiz", "Folha", "Flor"], "answer": "Folha",
@@ -309,6 +310,7 @@ class AvaliaTests(unittest.TestCase):
         # A IA simulada responde "correta" às 4 revisões e "parcial" aos 3 comentários; só um de cada esperava esse veredito.
         self.assertEqual((numbers["grades_as_expected"], numbers["explains_as_expected"]), (1, 1))
         # Do comentário fica só o trecho que está no texto do tópico: o inventado sai.
+        self.assertEqual((numbers["gaps_with_piece"], numbers["explains_with_gaps"]), (3, 3))
         self.assertEqual([case["output"]["missing"] for case in report["cases"][24:]],
                          [[case["input"]["content"][:40].strip()] for case in report["cases"][24:]])
         # A segunda pergunta de cada conversa levou a primeira pergunta e a primeira resposta no histórico.

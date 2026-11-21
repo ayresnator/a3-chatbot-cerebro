@@ -123,7 +123,8 @@ const VERDICT_EFFECT = {
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
 // O veredito do comentário da IA sobre a explicação com as próprias palavras (#82), em frase: a palavra sozinha diz
-// pouco. As definições são as da instrução da IA (backend/app/prompts.py, EXPLAIN).
+// pouco. As definições são as da instrução da IA (backend/app/prompts.py, EXPLAIN), e o backend tira do comentário o que
+// desmentiria a frase (main.explain).
 const OWN_VERDICT = {
   completa: 'Explicação completa: as ideias essenciais do tópico estão no que você escreveu.',
   parcial: 'Explicação parcial: o que você escreveu está certo, mas faltou uma ideia essencial.',
@@ -491,6 +492,15 @@ function App() {
   if (opened && recall.of !== opened) {
     setRecall(recall.of && sameMaterial(recall.of, opened) ? { ...recall, of: opened } : recallStart(opened));
   }
+
+  // O campo do "Explicar com minhas palavras" é de um tópico do material aberto. Aberto outro material, ou outra cópia
+  // do mesmo (da biblioteca), o tópico dele sai da tela: o campo fecha, e o comentário pedido sai junto, porque não teria
+  // onde aparecer e seria anunciado sem nada na tela. O material temporário guarda o aberto (opened), e o campo fica.
+  useEffect(() => {
+    if (!own || opened?.summary?.includes(own.item)) return;
+    if (busy?.kind === 'own') cancelAI();
+    setOwn(null);
+  }, [opened]);
 
   // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
   // try: a que falha não impede a outra.
@@ -1047,17 +1057,22 @@ function App() {
 
   // "Explicar com minhas palavras" (#82): o texto do tópico sai da tela, e o aluno escreve o que lembra. O botão fica no
   // lugar e abre ou fecha, um tópico por vez. Fechar, ou abrir outro, apaga o que foi escrito e desiste do comentário
-  // pedido. No toque o foco fica no botão, para o teclado da tela não abrir sozinho, e o campo só rola até a vista.
+  // pedido. O texto que sai ou volta acima do botão o leva para fora da janela, e o foco que já está nele não rola a
+  // página: quem o traz de volta é o show (focusAfter).
   function toggleOwn(s, i) {
     if (busy?.kind === 'own') cancelAI();
     if (own?.item === s) {
       setOwn(null);
       // Com "Esconder o texto", o tópico volta escondido e o botão sai com ele: o foco vai ao "Mostrar".
-      focusAfter.current = ['#minhas-' + i, '#mostrar-' + i];
+      focusAfter.current = ['#minhas-' + i, '#mostrar-' + i, '#minhas-' + i + ', #mostrar-' + i];
       return;
     }
     setOwn({ item: s, text: '' });
-    focusAfter.current = TOUCH ? ['#minhas-' + i, null, '#proprio-campo'] : ['#proprio-campo'];
+    // No toque o foco fica no botão, para o teclado da tela não abrir sozinho, e o tópico inteiro vem à vista quando
+    // cabe; senão, o botão, com o campo embaixo.
+    focusAfter.current = TOUCH
+      ? ['#minhas-' + i, null, '#minhas-' + i, '.summary > li:nth-child(' + (i + 1) + ')']
+      : ['#proprio-campo'];
   }
 
   // "Pedir comentário da IA": a explicação vai como dado, e o comentário só fica na tela, sem entrar no desempenho nem
@@ -1475,6 +1490,9 @@ function App() {
   // As perguntas do "Tente responder antes de ler" e as marcas do modo lembrar dos tópicos que estão na lista.
   const pretest = pretestCards(result?.flashcards || []);
   const marked = shownMarks(recall.marks, topics.length);
+  // O campo do "Explicar com minhas palavras" só aparece no Resumo, no tópico dele: fora daí o erro do comentário não
+  // está na tela, e o aviso do alto conta a espera do limite por minuto (counted, alerts).
+  const ownShown = page === 'Resumos' && topics.includes(own?.item);
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1535,7 +1553,7 @@ function App() {
     // Quando o alerta de um pedido na tela já diz a frase, a região fixa não a repete. A frase que acabou de entrar nela
     // ("Material pronto", do pedido que gastou a última chamada) vai junto: trocada logo depois, não chegaria ao leitor
     // de tela.
-    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, own?.error] : [])];
+    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, ownShown && own.error] : [])];
     if (!alerts.some(e => rateAtCap(e)?.message?.endsWith(ERRORS.AI_BUDGET_REACHED))) {
       say([spoken.trim(), ERRORS.AI_BUDGET_REACHED].filter(Boolean).join(' '));
     }
@@ -1564,7 +1582,7 @@ function App() {
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
   const waitInline = making ? MATERIAL.includes(page)
     : busy?.kind === 'why' ? (page === 'Resumos' && topics.includes(why?.item)) || (page === 'Quizzes' && !done && why?.item === quiz)
-    : busy?.kind === 'own' ? page === 'Resumos' && own?.item === busy.item && topics.includes(busy.item)
+    : busy?.kind === 'own' ? ownShown && own.item === busy.item
     : busy?.kind === 'review' && page === 'Quizzes' && !done && answer === busy.answer;
   const band = !!busy && !waitInline;
   // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
@@ -1609,7 +1627,8 @@ function App() {
   // fim da espera.
   const pause = pauseNotice({
     until: pausedUntil, page, error, capped,
-    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error, own?.error].some(e => e?.until === pausedUntil),
+    counted: MATERIAL.includes(page)
+      && [why?.error, answer?.review?.error, ownShown && own.error].some(e => e?.until === pausedUntil),
   });
   const problem = pause || error;
   // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o

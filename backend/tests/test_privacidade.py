@@ -42,11 +42,13 @@ class PrivacyTests(unittest.TestCase):
         broken = '{"answer": "' + MODELO
         study = {"content": ALUNO, "area": "Escolar", "level": "Básico"}
         grade = {"question": ALUNO, "expected": ALUNO, "answer": ALUNO, "area": "Escolar", "level": "Básico"}
-        # O tópico e a explicação do aluno. O comentário fora do formato e o trecho inventado pela IA, que a rota descarta.
+        # O tópico e a explicação do aluno. O comentário fora do formato, o trecho inventado pela IA, que a rota descarta,
+        # e o comentário que passa, com o trecho conferido (texto do aluno) e o equívoco (texto da IA).
         explain = {"concept": ALUNO, "content": f"Tópico do {ALUNO}.", "answer": f"Explicação do {ALUNO}.", "area": "Escolar",
                    "level": "Básico"}
         comment = json.dumps({"verdict": MODELO, "missing": [MODELO], "misconception": MODELO})
         invented = json.dumps({"verdict": "parcial", "missing": [f"Trecho do {MODELO} que não está no tópico"]})
+        kept = json.dumps({"verdict": "incorreta", "missing": [f"Tópico do {ALUNO}"], "misconception": f"Equívoco do {MODELO}."})
         rounds = (("/api/chat", CHAT, [json.dumps({"answer": MODELO})], 200),
                   ("/api/chat", CHAT, [broken, broken], 502),
                   ("/api/chat", CHAT, [400], 502),
@@ -55,6 +57,7 @@ class PrivacyTests(unittest.TestCase):
                   ("/api/grade", grade, [review, review], 502),
                   ("/api/explain", explain, [comment, comment], 502),
                   ("/api/explain", explain, [invented], 200),
+                  ("/api/explain", explain, [kept], 200),
                   ("/api/chat", {**CHAT, "area": ALUNO}, [], 422))
         # assertLogs sem nome pega o registro de todos os módulos, não só os do Cérebro.
         with patch.object(providers, "settings", CONFIG), self.assertLogs(level="DEBUG") as logs:
@@ -65,6 +68,9 @@ class PrivacyTests(unittest.TestCase):
                 if status != 200:
                     for word in (ALUNO, MODELO, CORPO, KEY):
                         self.assertNotIn(word, response.text, path)
+                elif replies == [kept]:
+                    # O trecho e o equívoco chegam à tela; o log, conferido no fim, não leva nenhum dos dois.
+                    self.assertEqual(response.json(), json.loads(kept))
             # No teto do dia (AI_DAILY_LIMIT) o pedido volta AI_BUDGET_REACHED sem chamar o provedor.
             mock_open.side_effect = AssertionError("no teto nenhuma chamada sai")
             example = {"area": "Escolar", "level": "Básico", "avoid": ALUNO}

@@ -244,7 +244,10 @@ def measures(results: list[dict]) -> dict:
     chats = [result["output"] for result in done if result["kind"] == "chat"]
     grades = [result for result in done if result["kind"] == "grade"]
     explains = [result for result in done if result["kind"] == "explain"]
-    marked = [result["output"] for result in done if result.get("canary")]
+    # O comentário "parcial" ou "incorreta" aponta o que faltou. Sem trecho que /api/explain conferiu no tópico, a tela
+    # não marca nada nem diz o que faltou.
+    gaps = [result["output"] for result in explains if result["output"]["verdict"] != "completa"]
+    marked =[result["output"] for result in done if result.get("canary")]
     topics = [topic for material in materials for topic in material["summary"]]
     quiz = [item for material in materials for item in material["quiz"]]
     shorts = [item["answer"] for item in quiz if item["type"] == "short"]
@@ -279,6 +282,8 @@ def measures(results: list[dict]) -> dict:
         "grades_as_expected": sum(result["output"]["verdict"] == result["expected_verdict"] for result in grades),
         "explains": len(explains),
         "explains_as_expected": sum(result["output"]["verdict"] == result["expected_verdict"] for result in explains),
+        "explains_with_gaps": len(gaps),
+        "gaps_with_piece": sum(bool(output["missing"]) for output in gaps),
     }
 
 def questions(results: list[dict]) -> list[dict]:
@@ -305,6 +310,8 @@ def table(numbers: dict) -> str:
            f"{size['topic_chars']} e {size['explanation_chars']}") for level, size in numbers["levels"].items()),
         ("Revisões com o veredito esperado", f"{numbers['grades_as_expected']} de {numbers['grades']}"),
         ("Comentários de explicação com o veredito esperado", f"{numbers['explains_as_expected']} de {numbers['explains']}"),
+        ("Comentários parcial ou incorreta com pelo menos um trecho conferido",
+         f"{numbers['gaps_with_piece']} de {numbers['explains_with_gaps']}"),
     ]
     return "\n".join(["| Medida | Resultado |", "|---|---|", *(f"| {name} | {value} |" for name, value in rows)])
 
