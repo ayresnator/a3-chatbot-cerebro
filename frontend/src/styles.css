@@ -232,9 +232,10 @@
     /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard. */
     --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
     --main-x: clamp(1.5rem, 3.2vw, 3rem);
-    /* Camadas, de baixo para cima: os brilhos e a faixa atrás do conteúdo, a caixa presa do Dúvidas e a pílula de
-       espera dela, as listas que abrem por cima (atalhos e nível), o dock, a barra de baixo e, por cima de tudo, os
-       avisos e a faixa de espera. A janela e a folha ficam acima delas, na camada de cima do navegador (showModal). */
+    /* Camadas, de baixo para cima: os brilhos, o canvas das ondas (.waves) e a faixa atrás do conteúdo, a caixa presa
+       do Dúvidas e a pílula de espera dela, as listas que abrem por cima (atalhos e nível), o dock, a barra de baixo e,
+       por cima de tudo, os avisos e a faixa de espera. A janela e a folha ficam acima delas, na camada de cima do
+       navegador (showModal). */
     --z-behind: -1;
     --z-composer: 5;
     --z-chat-wait: 6;
@@ -406,6 +407,47 @@ body::before {
     z-index: var(--z-behind);
     background: var(--backdrop);
     pointer-events: none
+}
+
+/* Fundo em ondas (issue #92; Waves em ui.jsx, shader em waves.js): canvas preso à janela atrás de tudo, só no
+   computador com mouse. data-waves no html entra com o primeiro quadro do shader; até lá, e sem WebGL na GPU, ficam os
+   brilhos de cima. Com ele, a barra de cima, o dock e o palco ficam com o tom escuro de antes, mas opacos: as ondas
+   aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
+   espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
+   no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
+   ninguém vê. */
+.waves {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-behind);
+    display: block;
+    width: 100%;
+    height: 100%;
+    visibility: hidden;
+    pointer-events: none
+}
+
+/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá. */
+:root[data-waves] {
+    --glass: #080808;
+    --quiet: #040404
+}
+
+:root[data-waves] .waves {
+    visibility: visible
+}
+
+:root[data-waves] body::before {
+    display: none
+}
+
+:root[data-waves] .busy {
+    --glass-float: #0b0b0b
+}
+
+:root[data-waves] :is(.topbar, .rail, .busy) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none
 }
 
 ::selection {
@@ -1401,7 +1443,8 @@ main:focus {
 }
 
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
-   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. */
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da janela do perfil (App.jsx)
+   é um chip de ligar e desligar: ligado, fica marcado e ganha o ✓. */
 .chip {
     min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
@@ -1417,7 +1460,9 @@ main:focus {
 }
 
 .chip[aria-checked=true],
-.chip[aria-checked=true]:hover {
+.chip[aria-checked=true]:hover,
+.chip[aria-pressed=true],
+.chip[aria-pressed=true]:hover {
     border-color: var(--accent);
     background: var(--accent-off);
     color: var(--ink-hi)
@@ -1893,7 +1938,8 @@ main:focus {
     list-style: none
 }
 
-.summary li {
+/* Só as linhas da lista: a lista do comentário da IA, dentro do tópico (.own-review), é uma lista comum. */
+.summary > li {
     display: grid;
     grid-template-columns: var(--letter) minmax(0, 1fr);
     gap: var(--sp-3);
@@ -1949,7 +1995,8 @@ main:focus {
     font-weight: 650
 }
 
-/* Botões que chamam a IA de dentro do estudo: "Não entendi, me explique" e "Pedir revisão da IA". */
+/* Botões que chamam a IA de dentro do estudo: "Não entendi, me explique", "Pedir revisão da IA" e "Pedir comentário da
+   IA". No tópico do resumo, a linha leva também o "Explicar com minhas palavras", que não chama a IA. */
 .ai-ask {
     display: flex;
     flex-wrap: wrap;
@@ -2018,8 +2065,10 @@ main:focus {
     cursor: pointer
 }
 
-/* "Tente responder antes de ler", no começo do resumo, e "Confira o que você pensou", no fim: a mesma caixa. */
-.pretest {
+/* "Tente responder antes de ler", no começo do resumo, e "Confira o que você pensou", no fim: a mesma caixa. A do
+   "Explicar com minhas palavras" também (.own, abaixo). */
+.pretest,
+.own {
     margin: 0 0 var(--sp-5);
     padding: var(--sp-4) var(--sp-5);
     border: var(--hair) solid var(--line-strong);
@@ -2093,24 +2142,110 @@ main:focus {
     white-space: pre-wrap
 }
 
-/* Tópico escondido: só o título, o "Mostrar" e, se o aluno pediu antes de esconder, a resposta do "Não entendi". */
-.summary li[data-escondido] > div > :not(h3, .reveal, .why, .why-error) {
+/* Tópico escondido: só o título, o "Mostrar" e, se o aluno pediu antes de esconder, a resposta do "Não entendi".
+   Explicando com as próprias palavras (#82), o título, o "Explicar com minhas palavras" e o campo: o texto do tópico
+   volta na comparação. */
+.summary li[data-escondido] > div > :not(h3, .reveal, .why, .why-error),
+.summary li[data-proprio] > div > :not(h3, .ai-ask, .own, .why, .why-error),
+.summary li[data-proprio] > div > .ai-ask > :not(.own-toggle) {
     display: none
 }
 
 /* "Mostrar", como o "Ver resposta" do caderno de erros: a seta aponta para o lado com o texto escondido e para baixo com
-   ele à vista. A margem negativa alinha a seta ao título. */
+   ele à vista. A margem negativa alinha a seta ao título. "Explicar com minhas palavras" usa a mesma seta. */
 .reveal {
     margin-left: calc(-1 * var(--sp-2))
 }
 
-.reveal .icon {
+.reveal .icon,
+.own-toggle .icon {
     rotate: -90deg;
     transition: rotate var(--t-fast) var(--ease)
 }
 
-.reveal[aria-expanded=true] .icon {
+.reveal[aria-expanded=true] .icon,
+.own-toggle[aria-expanded=true] .icon {
     rotate: 0deg
+}
+
+/* Na linha dos pedidos à IA o custo desce para baixo do nome; aqui a seta fica ao lado do nome, mesmo quando ele quebra
+   (320 px). */
+.ai-ask .own-toggle {
+    flex-wrap: nowrap
+}
+
+/* "Explicar com minhas palavras": a caixa do "Tente responder antes de ler" dentro do tópico, com o campo e os botões
+   ou, depois de "Comparar", o que o aluno escreveu ao lado do texto do tópico. */
+.own {
+    display: grid;
+    gap: var(--sp-3);
+    margin: 0 0 var(--sp-4)
+}
+
+.own label {
+    font-weight: 650
+}
+
+/* O campo na medida de leitura, como os do "Tente responder antes de ler". */
+.own textarea {
+    max-width: var(--measure);
+    padding: var(--sp-2) var(--sp-3);
+    line-height: var(--lh-ui);
+    resize: vertical
+}
+
+.own .hint,
+.own .row,
+.own .ai-ask,
+.own-review p,
+.own-review ul {
+    margin: 0
+}
+
+/* Lado a lado quando cabem duas colunas de 15rem; senão, um embaixo do outro. */
+.own-compare {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: var(--sp-4) var(--sp-5)
+}
+
+.own h4 {
+    width: fit-content;
+    margin: 0 0 var(--sp-1);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    line-height: var(--lh-ui)
+}
+
+/* O que o aluno escreveu mantém as quebras de linha dele. */
+.own-text {
+    white-space: pre-wrap
+}
+
+/* O fio acima do comentário vai de uma borda à outra da caixa, como entre as perguntas do "Confira o que você pensou"; o
+   texto fica na medida. */
+.own-review {
+    display: grid;
+    gap: var(--sp-2);
+    padding-top: var(--sp-3);
+    border-top: var(--hair) solid var(--line);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
+}
+
+.own-review > * {
+    max-width: var(--measure)
+}
+
+/* O veredito recebe o foco quando o comentário chega: o anel abraça a frase. */
+.own-review > p:first-child {
+    width: fit-content;
+    color: var(--ink-hi)
+}
+
+.own-review ul {
+    padding-left: var(--sp-5);
+    list-style: disc
 }
 
 /* "Lembrei" e "Não lembrei": o marcado leva a borda ciano, o fundo ciano fraco, o texto branco e o ✓, não só a cor. */
@@ -2162,6 +2297,21 @@ main:focus {
     margin-inline: 0 auto
 }
 
+/* A etiqueta do tipo e a caixa "Marcar certeza" do quiz (#80), juntas na ponta do cabeçalho. A margem negativa deixa o
+   alvo da caixa na altura da etiqueta, como a do "Recomeçar". No celular elas vão para a linha de baixo (mobile.css). */
+.quiz-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-4);
+    margin-block: calc((1.5rem - var(--control-h-inline)) / 2)
+}
+
+/* A vaga da caixa no esqueleto da geração: a barra do rótulo na linha da caixa. */
+.quiz-tools .sk-check {
+    margin-block: calc((var(--control-h-inline) - .75rem) / 2)
+}
+
 /* Fila de marcas da caneta (cartões avaliados, questões do quiz). */
 .marks {
     display: flex;
@@ -2184,6 +2334,8 @@ main:focus {
     color: var(--ink)
 }
 
+/* A folga em cima vale quando o cartão sobe para o topo da janela (App.jsx, turnCard): o anel do foco fica inteiro, e
+   voltar à pergunta não faz a âncora de rolagem do navegador puxar a página 16 px. */
 .flashcard {
     --press: .99;
     flex-direction: column;
@@ -2195,7 +2347,14 @@ main:focus {
     border-radius: var(--r-3);
     background: var(--panel);
     font-weight: 400;
-    text-align: center
+    text-align: center;
+    scroll-margin-top: var(--sp-2)
+}
+
+/* Os filhos do cartão ficam fora da âncora de rolagem: com a resposta longa, o texto centralizado virava a âncora, e
+   voltar à pergunta puxava a página 31 px (683x312 com zoom de 200%). O topo do cartão não se mexe e fica de âncora. */
+.flashcard > * {
+    overflow-anchor: none
 }
 
 /* Sob o ponteiro, o vidro elevado: um tom acima. */
@@ -2235,6 +2394,67 @@ main:focus {
 
 .verdicts .primary .icon {
     color: var(--on-accent)
+}
+
+/* Virado o cartão, o texto inteiro do campo logo abaixo da resposta, com o lembrete embaixo. */
+.card-wrote {
+    max-width: var(--measure);
+    margin-top: var(--sp-4);
+    line-height: var(--lh-read)
+}
+
+.card-wrote .hint {
+    margin: var(--sp-1) 0 0
+}
+
+/* Campo "Sua resposta", entre o cartão e os botões de avaliação, com o rótulo em cima, como no perfil. Virado o cartão,
+   ele fica só para leitura e sem o fundo de campo; quem diz isso é o texto ("Você escreveu", ou o exemplo do campo
+   vazio). A borda continua a de campo: ele ainda recebe o foco, e com a do campo desligado ficava abaixo de 3:1. */
+.card-form {
+    display: grid;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4)
+}
+
+.card-form label {
+    width: fit-content;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650
+}
+
+.card-form input:read-only {
+    background: none
+}
+
+/* "Escrever antes de virar": a caixa do sistema, no ciano do app, centrada embaixo dos botões. O rótulo inteiro é o
+   alvo: 36 px, e 44 px no toque. */
+.write-first {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: fit-content;
+    min-height: var(--control-h-inline);
+    margin: 0 auto;
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    cursor: pointer
+}
+
+.write-first input {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+    cursor: pointer
+}
+
+@media (pointer: coarse) {
+    .write-first {
+        min-height: var(--control-h)
+    }
 }
 
 .quiz-question {
@@ -2314,11 +2534,46 @@ main:focus {
     color: var(--ink)
 }
 
-/* No simulado a escolhida fica marcada sem dizer se acertou (App.jsx, blind): a borda ciano e a nota "sua resposta". */
-.option.chosen {
+/* No simulado a escolhida fica marcada sem dizer se acertou (App.jsx, blind): a borda ciano e a nota "sua resposta".
+   Com "Marcar certeza" (#80), também a opção escolhida que espera a certeza, ainda ligada: sob o ponteiro (e no toque,
+   que deixa o ponteiro nela) a borda ciano continua. */
+.option.chosen,
+.option.chosen:hover:not(:disabled) {
     border-color: var(--accent);
     background: var(--accent-soft);
     color: var(--ink)
+}
+
+/* "Quanta certeza você tem?" e os três botões (#80), embaixo das opções ou do campo da resposta curta (fora do
+   formulário dela). Os botões ficam iguais: nenhum é o principal, para não puxar a escolha. */
+.sure-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    margin-top: var(--sp-4)
+}
+
+.sure-row > span {
+    margin-right: var(--sp-1);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650;
+    line-height: var(--lh-ui)
+}
+
+/* Errou com "Tenho certeza" (#80): a frase em destaque logo abaixo do título do retorno, com o ⚠. */
+.sure-miss {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    color: var(--ink-hi);
+    font-weight: 700
+}
+
+.sure-miss .icon {
+    margin-top: .2em;
+    color: var(--pen-text)
 }
 
 .feedback {
@@ -2428,6 +2683,14 @@ main:focus {
 .quiz-done .subjects {
     max-width: calc(var(--measure) + var(--mark) + var(--sp-3));
     margin: var(--sp-5) auto 0;
+    text-align: left
+}
+
+/* A espera e o erro das questões novas, embaixo dos botões do fim: na mesma largura, alinhados à esquerda. */
+.quiz-done .quiz-wait,
+.quiz-done .error {
+    max-width: calc(var(--measure) + var(--mark) + var(--sp-3));
+    margin: var(--sp-4) auto 0;
     text-align: left
 }
 
@@ -3455,6 +3718,12 @@ main:focus {
     line-height: var(--lh-ui)
 }
 
+/* A marca "você tinha certeza" (#80), embaixo dos acertos, no vermelho do texto da caneta. */
+.mistake-when .sure-note {
+    color: var(--pen-text);
+    font-weight: 700
+}
+
 .mistakes li strong {
     max-width: var(--measure);
     overflow-wrap: anywhere
@@ -4062,8 +4331,10 @@ main[data-instant] > .view[data-motion-pop-id] {
     overflow-wrap: anywhere
 }
 
-/* O trecho do tópico: fundo ciano fraco e sublinhado, que continua dizendo "é aqui" sem a cor. */
-.source-text mark {
+/* O trecho do tópico: fundo ciano fraco e sublinhado, que continua dizendo "é aqui" sem a cor. Os trechos que faltaram
+   na explicação com as próprias palavras (.own) são marcados do mesmo jeito. */
+.source-text mark,
+.own mark {
     border-radius: var(--r-0);
     background: var(--accent-off);
     color: var(--ink-hi);
@@ -4075,6 +4346,16 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .source-dialog .dialog-body > button:last-child {
     align-self: flex-start
+}
+
+.profile-dialog .chip {
+    align-self: flex-start
+}
+
+/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a janela abre, para o leitor de
+   tela ler o texto quando ele entra. Vazio, não ocupa lugar: a margem devolve o espaço entre os blocos (.dialog-body). */
+.profile-dialog [role=status]:empty {
+    margin-top: calc(var(--sp-4) * -1)
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
@@ -4148,14 +4429,16 @@ main[data-instant] > .view[data-motion-pop-id] {
         min-height: var(--control-h)
     }
 
-    /* "Recomeçar" do quiz e do baralho: com o alvo de 44 px, o cabeçalho continua na altura da etiqueta (24 px), a do
-       esqueleto da geração. */
-    .study-head .link {
+    /* "Recomeçar" do quiz e do baralho e a caixa "Marcar certeza": com o alvo de 44 px, o cabeçalho continua na altura
+       da etiqueta (24 px), a do esqueleto da geração. */
+    .study-head .link,
+    .quiz-tools {
         margin-block: calc((1.5rem - var(--control-h)) / 2)
     }
 
-    /* A vaga da caixa "Esconder o texto" no esqueleto do resumo: a barra do rótulo na linha de 44 px dela. */
-    .sk-check {
+    /* A vaga das caixas "Esconder o texto" e "Marcar certeza" nos esqueletos: a barra do rótulo na linha de 44 px dela. */
+    .sk-check,
+    .quiz-tools .sk-check {
         margin-block: calc((var(--control-h) - .75rem) / 2)
     }
 }
@@ -4168,6 +4451,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 :root[data-input=teclado] .meter > span,
 :root[data-input=teclado] .mistakes summary .icon,
 :root[data-input=teclado] .reveal .icon,
+:root[data-input=teclado] .own-toggle .icon,
 :root[data-input=teclado] .level-button .icon,
 :root[data-input=teclado] dialog::backdrop,
 :root[data-input=teclado] .ai-status {
@@ -4192,6 +4476,7 @@ main[data-instant] > .view[data-motion-pop-id] {
     button,
     .mistakes summary .icon,
     .reveal .icon,
+    .own-toggle .icon,
     .level-button .icon,
     .rail::before,
     .rail .nav-item,
@@ -4282,8 +4567,9 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: HighlightText
     }
 
-    /* O trecho marcado da janela "Ver no texto", com o sublinhado na cor do texto. */
-    .source-text mark {
+    /* O trecho marcado da janela "Ver no texto" e os que faltaram na explicação, com o sublinhado na cor do texto. */
+    .source-text mark,
+    .own mark {
         forced-color-adjust: none;
         background: Highlight;
         color: HighlightText;
@@ -4301,6 +4587,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     /* O ✓ da marca no texto dela: no CanvasText, como os outros ícones, ele sumia no Highlight. */
     .recall-marks [aria-pressed=true] .icon {
         stroke: HighlightText
+    }
+
+    /* Os botões da certeza antes da opção escolhida (aria-disabled): sem isto, no alto contraste eles pareciam ligados. */
+    .sure-row [aria-disabled=true] {
+        border-color: GrayText;
+        color: GrayText
     }
 
     /* A frase de exemplo do campo vazio no cinza do sistema, como a frase fixa de um campo: na cor do texto ela parecia

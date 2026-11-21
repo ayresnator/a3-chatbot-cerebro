@@ -14,9 +14,9 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .config import settings
-from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, GradeInput, GradeOutput,
-                     QuizItem, StudyInput, StudyOutput, SummaryItem)
-from .prompts import CHAT, EXAMPLE, GENERATE, GRADE, NO_SOURCE, TOPICS
+from .models import (Card, ChatInput, ChatOutput, ExampleInput, ExampleOutput, ExampleText, ExplainInput, ExplainOutput,
+                     GradeInput, GradeOutput, QuizInput, QuizItem, QuizOutput, StudyInput, StudyOutput, SummaryItem)
+from .prompts import CHAT, EXAMPLE, EXPLAIN, GENERATE, GRADE, NO_SOURCE, QUIZ, TOPICS
 from .providers import ai, budget, calls_today, fail, quota_exhausted, resolve_gemini_model
 
 logger = logging.getLogger("cerebro.api")
@@ -29,9 +29,13 @@ logging.getLogger("cerebro").setLevel(logging.INFO)
 STUDY_SCHEMA = StudyOutput.model_json_schema()
 # A revisão vai com esquema: são duas frases curtas, e o veredito tem de ser um dos três aceitos.
 GRADE_SCHEMA = GradeOutput.model_json_schema()
+# O comentário da explicação com as próprias palavras também: o veredito é um dos três aceitos, e os trechos vêm em lista.
+EXPLAIN_SCHEMA = ExplainOutput.model_json_schema()
 # O exemplo também: é um campo só, e o JSON quebrado (o chat, que vai sem esquema, recebe 1 em ~20) gastaria a única
 # segunda chamada do clique. Se as quebras de linha sumirem, como no chat com esquema, o texto fica num parágrafo só.
 EXAMPLE_SCHEMA = ExampleText.model_json_schema()
+# As questões novas de um material vão com o esquema delas: a questão é a mesma do material.
+QUIZ_SCHEMA = QuizOutput.model_json_schema()
 ACCENTS = re.compile("[áàâãéêíóôõúç]", re.IGNORECASE)
 # Listas do material e o modelo que valida cada item delas.
 ITEMS = {"summary": SummaryItem, "flashcards": Card, "quiz": QuizItem}
@@ -49,7 +53,7 @@ CITES_OPTION = re.compile(
 POINTS_ASIDE = re.compile(r"\b(?:acima|abaixo)\b", re.IGNORECASE)
 # Nome do campo de entrada na frase do erro 422.
 FIELDS = {"content": "conteúdo", "question": "pergunta", "area": "área", "level": "nível", "history": "histórico",
-          "expected": "gabarito", "answer": "resposta"}
+          "expected": "gabarito", "answer": "resposta", "concept": "tópico"}
 
 class RequestBudget:
     # Abre o teto de cada pedido (providers.next_call_timeout): no máximo request_calls chamadas à IA, até
@@ -98,6 +102,8 @@ def invalid_input(_, exc: RequestValidationError):
         message = f"Faltou o campo {field}."
     elif kind == "literal_error":
         message = f"Valor inválido em {field}."
+    elif kind == "too_long" and where[-1] == "avoid":
+        message = f"O material passou do limite de {limits['max_length']} questões."
     elif kind == "too_long":
         message = f"O histórico passou do limite de {limits['max_length']} mensagens."
     else:
@@ -137,32 +143,58 @@ def reasons(exc: ValidationError, *where) -> list:
     return [(".".join(map(str, (*where, *error["loc"]))), error["msg"])
             for error in exc.errors(include_input=False, include_url=False, include_context=False)]
 
-def build_material(raw: dict) -> StudyOutput:
+def valid_items(route: str, name: str, items: list) -> list:
     # Uma questão inválida em seis custava 2 chamadas e podia terminar em 502. Cada item passa sozinho pelo seu
-    # modelo e só o inválido sai. Título, formato e quantidade de itens (mínimos e máximos) ficam com o StudyOutput.
+    # modelo e só o inválido sai. route é a rota no começo da linha do log.
+    model, kept, dropped = ITEMS[name], [], []
+    for position, item in enumerate(items):
+        try:
+            kept.append(model.model_validate(item))
+        except ValidationError as exc:
+            dropped += reasons(exc, name, position)
+    if dropped:
+        logger.warning("%s: %s de %s itens de %s descartados %s", route, len(items) - len(kept), len(items), name, dropped)
+    if name != "summary":
+        # Cartão ou questão que repete a pergunta de outro também sai (sem contar maiúsculas, acentos e espaços a
+        # mais). O tópico não tem pergunta. O log leva só as contagens: as perguntas são texto da IA.
+        first = {}
+        for item in kept:
+            first.setdefault(plain(item.question), item)
+        if len(first) < len(kept):
+            logger.warning("%s: %s de %s itens de %s com pergunta repetida descartados", route, len(kept) - len(first), len(items), name)
+        kept = list(first.values())
+    return kept
+
+def build_material(raw: dict) -> StudyOutput:
+    # Cada lista passa item por item (valid_items). Título, formato e quantidade de itens (mínimos e máximos) ficam com
+    # o StudyOutput.
     material = dict(raw)
-    for name, model in ITEMS.items():
-        items, kept, dropped = raw.get(name), [], []
-        if not isinstance(items, list):
-            continue
-        for position, item in enumerate(items):
-            try:
-                kept.append(model.model_validate(item))
-            except ValidationError as exc:
-                dropped += reasons(exc, name, position)
-        if dropped:
-            logger.warning("generate: %s de %s itens de %s descartados %s", len(items) - len(kept), len(items), name, dropped)
-        if name != "summary":
-            # Cartão ou questão que repete a pergunta de outro também sai (sem contar maiúsculas, acentos e espaços a
-            # mais). O tópico não tem pergunta. O log leva só as contagens: as perguntas são texto da IA.
-            first = {}
-            for item in kept:
-                first.setdefault(plain(item.question), item)
-            if len(first) < len(kept):
-                logger.warning("generate: %s de %s itens de %s com pergunta repetida descartados", len(kept) - len(first), len(items), name)
-            kept = list(first.values())
-        material[name] = kept
+    for name in ITEMS:
+        if isinstance(raw.get(name), list):
+            material[name] = valid_items("generate", name, raw[name])
     return StudyOutput.model_validate(material)
+
+def build_quiz(raw: dict, avoid: set[str]) -> QuizOutput:
+    # A conferência das questões da geração (valid_items) e mais uma: sai a questão que repete uma pergunta que o
+    # material já tem (avoid, na forma de plain). Ficam no máximo 6; o mínimo de 4 é do QuizOutput.
+    items = raw.get("quiz")
+    if isinstance(items, list):
+        kept = valid_items("quiz", "quiz", items)
+        items = [item for item in kept if plain(item.question) not in avoid]
+        if len(items) < len(kept):
+            # Só a contagem: as perguntas são texto da IA.
+            logger.warning("quiz: %s de %s questões repetem uma pergunta do material e foram descartadas", len(kept) - len(items), len(raw["quiz"]))
+        items = items[:6]
+    return QuizOutput.model_validate({"quiz": items})
+
+def few_accents(quiz: list[QuizItem]) -> bool:
+    # O modelo às vezes "come" quase toda a acentuação e deixa um acento ou outro: na rodada real de 21/11/2026, as 6
+    # questões feitas do resumo vieram com 1 acento só. Texto em português tem uns 4 acentos a cada 100 letras; com
+    # menos de 1 a cada 200, as questões contam como sem acento.
+    # shortcut: só as questões novas usam esta conta; a geração e o exemplo ainda pedem "nenhum acento". Igualar quando a
+    # suíte da geração puder mudar: o material mínimo dos testes dela tem acento só no título.
+    text = " ".join(f"{item.question} {' '.join(item.options)} {item.explanation}" for item in quiz)
+    return len(ACCENTS.findall(text)) * 200 < sum(char.isalpha() for char in text)
 
 def shuffle_options(quiz: list[QuizItem]) -> None:
     # Sem embaralhar dava para acertar no chute: o modelo punha a certa em B ou C (36 de 45 nos testes)
@@ -250,6 +282,28 @@ def generate(data: StudyInput):
     shuffle_options(material.quiz)
     return material
 
+@app.post("/api/quiz", response_model=QuizOutput)
+def quiz(data: QuizInput):
+    # "Questões novas deste material", no fim do quiz: de 4 a 6 questões sobre o texto do material, sem as perguntas que
+    # ele já tem. Questões recusadas e questões sem nenhum acento ganham uma nova chamada, como o material da geração.
+    payload, avoid = data.model_dump(), {plain(question) for question in data.avoid}
+    for last in (False, True):
+        try:
+            result = build_quiz(ai(payload, QUIZ, QUIZ_SCHEMA), avoid)
+            break
+        except ValidationError as exc:
+            logger.warning("quiz: questões rejeitadas %s", reasons(exc))
+            if last:
+                fail(502, "AI_INVALID_MATERIAL", "As questões geradas não passaram pela validação. Tente novamente.")
+    if few_accents(result.quiz):
+        # Se a nova chamada falhar, ficam as primeiras: sem acento é melhor que erro.
+        try:
+            result = build_quiz(ai(payload, QUIZ, QUIZ_SCHEMA), avoid)
+        except (HTTPException, ValidationError):
+            pass
+    shuffle_options(result.quiz)
+    return result
+
 @app.post("/api/chat", response_model=ChatOutput)
 def chat(data: ChatInput):
     result = ai(data.model_dump(), CHAT)
@@ -276,6 +330,40 @@ def grade(data: GradeInput):
             if last:
                 fail(502, "AI_INVALID_ANSWER", "A IA devolveu uma revisão fora do formato. Tente novamente.")
     review.feedback = review.feedback[:600]
+    return review
+
+@app.post("/api/explain", response_model=ExplainOutput)
+def explain(data: ExplainInput):
+    # "Pedir comentário da IA" na explicação que o aluno escreveu de um tópico: a IA julga o sentido, como na revisão, e
+    # aponta os trechos do tópico que faltaram. Comentário fora do formato ganha uma segunda chamada, como a revisão.
+    for last in (False, True):
+        try:
+            review = ExplainOutput.model_validate(ai(data.model_dump(), EXPLAIN, EXPLAIN_SCHEMA))
+            break
+        except ValidationError as exc:
+            logger.warning("explain: comentário rejeitado %s", reasons(exc))
+            if last:
+                fail(502, "AI_INVALID_ANSWER", "A IA devolveu um comentário fora do formato. Tente novamente.")
+    # A tela mostra o veredito em frase (App.jsx, OWN_VERDICT), e o resto do comentário não pode desmentir a frase. Pelas
+    # definições da instrução, explicação com equívoco é "incorreta", e a "completa" não tem trecho que faltou.
+    if review.misconception:
+        review.verdict = "incorreta"
+    if review.verdict == "completa":
+        review.missing = []
+    # A tela marca os trechos no texto do tópico: só fica o que existe nele, pela regra do trecho de origem (grounded),
+    # sem repetir e até 3. Sem trecho conferido ficam o veredito e o equívoco. Só os 10 primeiros são conferidos: uma
+    # resposta com milhares de trechos prendia o servidor por segundos.
+    found = {}
+    for piece in review.missing[:10]:
+        piece = grounded(piece, data.content)
+        if piece:
+            found.setdefault(plain(piece), piece)
+    kept = list(found.values())[:3]
+    if len(kept) < len(review.missing):
+        # Só a contagem: o trecho e a explicação nunca vão para o log.
+        logger.warning("explain: %s de %s trechos que faltaram descartados", len(review.missing) - len(kept), len(review.missing))
+    review.missing = kept
+    review.misconception = review.misconception[:300]
     return review
 
 @app.post("/api/example", response_model=ExampleOutput)
