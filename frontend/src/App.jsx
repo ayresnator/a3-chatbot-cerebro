@@ -2199,6 +2199,19 @@ function App() {
                               type="button"
                               variants={hero.chip}
                               disabled={waiting}
+                              onKeyUp={e => {
+                                // O Tab que chega ao chip, na linha que rola de lado (mobile.css), rola a linha até ele:
+                                // o navegador sozinho não rola um chip que já aparece em parte. Com folga, o chip fica
+                                // inteiro junto da borda (o scroll-padding deixa um pedaço do vizinho); sem folga, no meio
+                                // da linha; mais largo que ela, com o começo à vista. Só no Tab: o clique não move o chip
+                                // entre apertar e soltar, e a volta para a aba, que dá o foco de novo ao chip, não rola nada.
+                                const chip = e.currentTarget;
+                                const row = chip.parentElement;
+                                if (e.key !== 'Tab' || row.scrollWidth <= row.clientWidth) return;
+                                const room = row.clientWidth - chip.offsetWidth;
+                                const pad = 2 * (parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0);
+                                chip.scrollIntoView({ block: 'nearest', inline: room < 0 ? 'start' : room < pad ? 'center' : 'nearest' });
+                              }}
                               onClick={() => {
                                 // O chip some durante a espera, e o foco iria para o body: vai para a caixa. No toque vai
                                 // para o título, sem rolar a página: o teclado da tela não abre sozinho, e o leitor de
