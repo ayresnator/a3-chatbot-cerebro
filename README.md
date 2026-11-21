@@ -241,7 +241,7 @@ O funcionamento da aplicação acontece por meio das seguintes etapas:
 5. O backend valida cada item da resposta, descarta o que não passa e, se sobrar pouco, pede o material de novo.
 6. O frontend apresenta o resultado e permite estudar ou salvar o material.
 
-**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
+**Armazenamento:** os materiais salvos, o perfil local, os registros de desempenho, o caderno de erros, as caixas dos cartões, a data do último backup, a conta de pulos do "Tente responder antes de ler", a escolha "Escrever antes de virar" dos Flashcards e o rascunho (texto do editor, material aberto e conversa) ficam armazenados no navegador, utilizando `localStorage`; cada aba guarda também o seu rascunho, no `sessionStorage`. A demonstração (`?demo`) grava à parte, em chaves com o prefixo `cerebro-demo-`. A escolha do "Fundo animado", na janela do perfil, também fica no navegador, na chave `cerebro-fundo`, igual na demonstração e no app com IA. Esses dados não são armazenados em um banco de dados no servidor. Cada material guarda também o texto de onde saiu, de até 20.000 caracteres, e por isso ocupa mais espaço no navegador; quando o espaço acaba, a tela avisa que não conseguiu salvar.
 
 ---
 
@@ -276,6 +276,7 @@ a3-chatbot-cerebro/
 │   │   ├── lib.js
 │   │   ├── arquivo.js
 │   │   ├── exemplos.js
+│   │   ├── waves.js
 │   │   ├── styles.css
 │   │   ├── mobile.css
 │   │   └── components/ui/chat-composer.jsx
@@ -323,7 +324,8 @@ a3-chatbot-cerebro/
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
-| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js` e `exemplos.js` |
+| `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js` |
 | `frontend/public/` | Arquivos públicos |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
