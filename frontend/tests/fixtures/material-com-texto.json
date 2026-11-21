@@ -1,0 +1,144 @@
+{
+  "versao": 1,
+  "saved": [
+    {
+      "title": "O Ciclo da Água",
+      "summary": [
+        {
+          "concept": "Evaporação",
+          "text": "O calor do Sol faz a água de corpos hídricos evaporar e subir para a atmosfera em forma de vapor.",
+          "source": "O calor do Sol faz a água de rios, lagos e oceanos evaporar e subir para a atmosfera como vapor."
+        },
+        {
+          "concept": "Transpiração",
+          "text": "As plantas contribuem para o ciclo liberando vapor de água através de seus processos biológicos.",
+          "source": "As plantas também liberam vapor de água pela transpiração."
+        },
+        {
+          "concept": "Condensação",
+          "text": "O vapor de água sofre resfriamento nas camadas altas da atmosfera, transformando-se em gotículas que formam as nuvens.",
+          "source": "Nas camadas mais altas e frias do ar, o vapor se condensa em gotículas e forma as nuvens."
+        },
+        {
+          "concept": "Precipitação",
+          "text": "Quando as gotículas nas nuvens aumentam de peso, elas caem sob diferentes formas como chuva, neve ou granizo.",
+          "source": "Quando as gotas ficam pesadas, caem como chuva, neve ou granizo: é a precipitação."
+        },
+        {
+          "concept": "Escoamento e Infiltração",
+          "text": "A água da chuva pode escoar pela superfície terrestre ou infiltrar-se no solo, abastecendo lençóis freáticos.",
+          "source": "Parte dessa água escorre pela superfície até os rios, e parte se infiltra no solo"
+        },
+        {
+          "concept": "Retorno aos Oceanos",
+          "text": "Eventualmente, a água retorna aos oceanos, reiniciando todo o processo de forma contínua.",
+          "source": "Com o tempo, a água volta aos oceanos e o ciclo recomeça."
+        }
+      ],
+      "flashcards": [
+        {
+          "question": "O que causa a evaporação da água no ciclo natural?",
+          "answer": "O calor do Sol."
+        },
+        {
+          "question": "Como as plantas participam do ciclo da água?",
+          "answer": "Através da transpiração."
+        },
+        {
+          "question": "O que é a condensação na atmosfera?",
+          "answer": "A transformação do vapor de água em gotículas devido ao ar frio, formando nuvens."
+        },
+        {
+          "question": "Quais são as formas possíveis de precipitação?",
+          "answer": "Chuva, neve ou granizo."
+        },
+        {
+          "question": "Para onde vai parte da água que se infiltra no solo?",
+          "answer": "Para os reservatórios subterrâneos."
+        },
+        {
+          "question": "O ciclo da água possui um fim definitivo?",
+          "answer": "Não, ele é contínuo e recomeça constantemente."
+        }
+      ],
+      "quiz": [
+        {
+          "type": "multiple",
+          "question": "Qual é a principal fonte de calor responsável pela evaporação da água dos oceanos e rios?",
+          "options": [
+            "O atrito do vento",
+            "O centro da Terra",
+            "A radiação das plantas",
+            "O Sol"
+          ],
+          "answer": 3,
+          "explanation": "O calor do Sol aquece a água de rios, lagos e oceanos, fazendo-a evaporar para a atmosfera.",
+          "steps": []
+        },
+        {
+          "type": "boolean",
+          "question": "As plantas liberam vapor de água para a atmosfera através de um processo chamado transpiração.",
+          "options": [
+            "Verdadeiro",
+            "Falso"
+          ],
+          "answer": 0,
+          "explanation": "Correto, o texto indica explicitamente que as plantas liberam vapor de água pela transpiração.",
+          "steps": []
+        },
+        {
+          "type": "multiple",
+          "question": "O que ocorre quando o vapor de água atinge as camadas mais altas e frias da atmosfera?",
+          "options": [
+            "Ele se transforma em solo",
+            "Ele congela instantaneamente virando magma",
+            "Ele se condensa formando nuvens",
+            "Ele desaparece no espaço"
+          ],
+          "answer": 2,
+          "explanation": "Nas camadas mais altas e frias, o vapor se condensa em gotículas que formam as nuvens.",
+          "steps": []
+        },
+        {
+          "type": "boolean",
+          "question": "A precipitação ocorre exclusivamente na forma de neve em todas as regiões do planeta.",
+          "options": [
+            "Verdadeiro",
+            "Falso"
+          ],
+          "answer": 1,
+          "explanation": "Falso. A precipitação pode cair como chuva, neve ou granizo.",
+          "steps": []
+        },
+        {
+          "type": "short",
+          "question": "Como é chamada a etapa em que a água da chuva penetra no solo e abastece reservatórios subterrâneos?",
+          "options": [],
+          "answer": "Infiltração",
+          "explanation": "A infiltração é o processo pelo qual a água penetra no solo.",
+          "steps": []
+        },
+        {
+          "type": "multiple",
+          "question": "O que acontece com a água após cair na superfície terrestre na forma de precipitação?",
+          "options": [
+            "Toda a água é absorvida pelas rochas de forma permanente",
+            "A água desaparece sem deixar vestígios",
+            "Parte escorre para os rios e parte se infiltra no solo",
+            "Toda a água evapora instantaneamente antes de tocar o solo"
+          ],
+          "answer": 2,
+          "explanation": "O texto aponta que parte da água escorre pela superfície até os rios e parte se infiltra no solo.",
+          "steps": []
+        }
+      ],
+      "area": "Escolar",
+      "level": "Intermediário",
+      "texto": "O ciclo da água é o caminho que a água percorre continuamente na natureza. O calor do Sol faz a água de rios, lagos e oceanos evaporar e subir para a atmosfera como vapor. As plantas também liberam vapor de água pela transpiração. Nas camadas mais altas e frias do ar, o vapor se condensa em gotículas e forma as nuvens. Quando as gotas ficam pesadas, caem como chuva, neve ou granizo: é a precipitação. Parte dessa água escorre pela superfície até os rios, e parte se infiltra no solo e abastece os reservatórios subterrâneos. Com o tempo, a água volta aos oceanos e o ciclo recomeça.",
+      "id": 1763395200000,
+      "date": "2026-11-17T16:00:00.000Z"
+    }
+  ],
+  "events": [],
+  "erros": []
+}

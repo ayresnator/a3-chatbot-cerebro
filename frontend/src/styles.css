@@ -1845,6 +1845,11 @@ main:focus {
     font-size: var(--fs-2)
 }
 
+/* "Ver no texto", embaixo do trecho: a palavra alinhada ao texto dele, depois do fio. */
+.source-link {
+    margin: calc(var(--sp-2) * -1) 0 0 calc(var(--sp-3) + var(--hair) - var(--sp-2))
+}
+
 /* Etiqueta do tópico que não saiu do texto do aluno. */
 .ai-tag {
     display: inline-flex;
@@ -1913,6 +1918,142 @@ main:focus {
     margin: var(--sp-1) 0 0
 }
 
+/* Resumo ativo (#81). "Esconder o texto": a caixa do sistema no ciano do app, e o rótulo inteiro é o alvo do clique. */
+.check {
+    min-height: var(--control-h-inline);
+    cursor: pointer
+}
+
+.check input {
+    width: 1.125rem;
+    height: 1.125rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+    cursor: pointer
+}
+
+/* "Tente responder antes de ler", no começo do resumo, e "Confira o que você pensou", no fim: a mesma caixa. */
+.pretest {
+    margin: 0 0 var(--sp-5);
+    padding: var(--sp-4) var(--sp-5);
+    border: var(--hair) solid var(--line-strong);
+    border-radius: var(--r-3);
+    background: var(--raised)
+}
+
+/* O título do bloco recebe o foco no "Tentar antes de ler" (no toque): o anel abraça a frase. */
+.pretest h3 {
+    width: fit-content;
+    font-size: var(--fs-4)
+}
+
+.pretest .row {
+    margin-bottom: 0
+}
+
+.pretest-item {
+    display: grid;
+    gap: var(--sp-2);
+    max-width: var(--measure);
+    margin-top: var(--sp-4)
+}
+
+.pretest-item label {
+    font-weight: 650;
+    overflow-wrap: anywhere;
+    text-wrap: pretty
+}
+
+.pretest-item textarea {
+    padding: var(--sp-2) var(--sp-3);
+    line-height: var(--lh-ui);
+    resize: vertical
+}
+
+/* O bloco a caminho (ui.jsx, SummarySkeleton): cada barra fica numa linha do título, da frase ou do rótulo, que dá a
+   altura; a frase tem 2 linhas, e 4 no celular (mobile.css). */
+.pretest .sk {
+    display: inline-block;
+    vertical-align: middle
+}
+
+.pretest .sk-phone {
+    display: none
+}
+
+.pretest-review {
+    margin: var(--sp-3) 0 0;
+    padding: 0;
+    list-style: none
+}
+
+/* O fio entre as perguntas vai de uma borda à outra da caixa, como na lista de tópicos; o texto fica na medida. */
+.pretest-review li {
+    display: grid;
+    gap: var(--sp-1);
+    padding: var(--sp-3) 0;
+    border-top: var(--hair) solid var(--line);
+    line-height: var(--lh-read);
+    overflow-wrap: anywhere
+}
+
+.pretest-review li > * {
+    max-width: var(--measure)
+}
+
+/* O que o aluno escreveu mantém as quebras de linha dele. */
+.pretest-review span {
+    color: var(--ink-2);
+    white-space: pre-wrap
+}
+
+/* Tópico escondido: só o título, o "Mostrar" e, se o aluno pediu antes de esconder, a resposta do "Não entendi". */
+.summary li[data-escondido] > div > :not(h3, .reveal, .why, .why-error) {
+    display: none
+}
+
+/* "Mostrar", como o "Ver resposta" do caderno de erros: a seta aponta para o lado com o texto escondido e para baixo com
+   ele à vista. A margem negativa alinha a seta ao título. */
+.reveal {
+    margin-left: calc(-1 * var(--sp-2))
+}
+
+.reveal .icon {
+    rotate: -90deg;
+    transition: rotate var(--t-fast) var(--ease)
+}
+
+.reveal[aria-expanded=true] .icon {
+    rotate: 0deg
+}
+
+/* "Lembrei" e "Não lembrei": o marcado leva a borda ciano, o fundo ciano fraco, o texto branco e o ✓, não só a cor. */
+.recall-marks [aria-pressed=true],
+.recall-marks [aria-pressed=true]:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--accent-off);
+    color: var(--ink-hi)
+}
+
+/* Placar do modo lembrar, no fim da lista. */
+.recall-score {
+    margin-bottom: var(--sp-5)
+}
+
+.recall-score > p:first-child {
+    color: var(--ink-hi);
+    font-size: var(--fs-4);
+    font-weight: 700
+}
+
+.recall-score ul {
+    margin: 0;
+    padding-left: var(--sp-5);
+    overflow-wrap: anywhere
+}
+
 .study-head {
     display: flex;
     flex-wrap: wrap;
@@ -1922,6 +2063,11 @@ main:focus {
     color: var(--ink-2);
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums
+}
+
+/* A frase do "Acertei" na revisão do dia: sem as abas, é ela que separa o cabeçalho do baralho, como as abas fazem. */
+.material .day-note {
+    margin: var(--sp-3) 0 var(--sp-5)
 }
 
 /* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
@@ -2257,6 +2403,11 @@ main:focus {
 .pen--errei .pen-note,
 .pen--refazer .pen-note {
     color: var(--pen-text)
+}
+
+/* A nota ao lado do ○ (a questão do caderno que espera o dia marcado) é texto: o cinza secundário, e não o dos ícones. */
+.pen--novo .pen-note {
+    color: var(--ink-2)
 }
 
 /* ---------- Dúvidas ---------- */
@@ -2615,6 +2766,12 @@ main:focus {
     border-radius: var(--r-2)
 }
 
+/* O campo de 2 linhas do "Tente responder antes de ler". */
+.sk-area {
+    height: calc(var(--fs-3) * var(--lh-ui) * 2 + var(--sp-2) * 2 + var(--hair) * 2);
+    border-radius: var(--r-2)
+}
+
 .sk-tag {
     height: 1.5rem
 }
@@ -2767,6 +2924,17 @@ main:focus {
     .chat-stage[data-state=conversa] .chat-dock::before {
         display: none
     }
+}
+
+/* No teto do dia (data-teto, App.jsx) o envio fica desligado até a contagem recomeçar, e o motivo entra embaixo da
+   caixa: presa, ela cobria no celular a maior parte da conversa que o aluno ainda pode reler. Ela fica no fim da
+   conversa, como na janela baixa. */
+.chat-stage[data-state=conversa][data-teto] .chat-dock {
+    position: static
+}
+
+.chat-stage[data-state=conversa][data-teto] .chat-dock::before {
+    display: none
 }
 
 .chat-dock .error {
@@ -3117,17 +3285,32 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
+/* A regra (e, sem questão para hoje, quando volta a próxima) ocupa a linha inteira: a escada e os botões vêm
+   embaixo dela, qualquer que seja o tamanho dos textos. */
+.erros-rule {
+    flex-basis: 100%
+}
+
 .erros-head .hint {
-    flex-basis: 100%;
     margin: 0
 }
 
-.erros-head .primary {
+.erros-next {
+    margin: var(--sp-2) 0 0;
+    font-weight: 650
+}
+
+/* "Refazer os de hoje" e "Treinar todas" ficam juntos, na ponta direita: com os quatro passos, a escada enche a
+   linha dela, e os botões vão para a de baixo. */
+.erros-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
     margin-left: auto
 }
 
-/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ refazer em outro dia, ✓ certo em outro
-   dia: sai do caderno. */
+/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei: volta amanhã, ↻ para hoje, ○ acertei:
+   volta em 3 e 7 dias, ✓ 3 acertos: sai do caderno. */
 .ladder {
     display: flex;
     flex-wrap: wrap;
@@ -3161,10 +3344,11 @@ main:focus {
     list-style: none
 }
 
-/* Cada questão: a marca e a nota à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno" embaixo. */
+/* Cada questão: a marca, quando ela volta e os acertos à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno"
+   embaixo. */
 .mistakes li {
     display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+    grid-template-columns: 8.75rem minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--sp-2) var(--sp-4);
     padding: var(--sp-4) 0;
@@ -3172,8 +3356,19 @@ main:focus {
     line-height: var(--lh-read)
 }
 
-.mistakes li > .pen {
-    grid-row: span 2
+.mistakes li > .mistake-when {
+    grid-row: span 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1)
+}
+
+/* Os acertos ficam embaixo da nota, alinhados ao texto dela. */
+.mistake-when small {
+    padding-left: calc(var(--mark) + var(--sp-1));
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    line-height: var(--lh-ui)
 }
 
 .mistakes li strong {
@@ -3227,6 +3422,11 @@ main:focus {
     grid-row: 1;
     min-height: var(--control-h-inline);
     white-space: nowrap
+}
+
+/* "Tirar", a palavra curta, só em 380 px ou menos (mobile.css). */
+.mistakes .drop .short {
+    display: none
 }
 
 /* "Desfazer" que fica na lista depois de uma exclusão. */
@@ -3687,6 +3887,56 @@ main[data-instant] > .view[data-motion-pop-id] {
     margin-top: var(--sp-2)
 }
 
+/* Janela "Ver no texto": na medida de leitura e, no máximo, na altura da janela do navegador. Só o texto rola; o título,
+   a nota e o botão ficam à vista. */
+.source-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    width: min(calc(var(--measure) + var(--sp-6) * 2), calc(100vw - 2rem))
+}
+
+.source-dialog .dialog-body {
+    min-height: 0
+}
+
+.source-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.source-dialog p {
+    color: var(--ink-2)
+}
+
+/* O texto como foi enviado, com as quebras de linha e os espaços dele. */
+.source-text {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--field);
+    line-height: var(--lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+}
+
+/* O trecho do tópico: fundo ciano fraco e sublinhado, que continua dizendo "é aqui" sem a cor. */
+.source-text mark {
+    border-radius: var(--r-0);
+    background: var(--accent-off);
+    color: var(--ink-hi);
+    text-decoration: underline var(--underline) var(--accent);
+    text-underline-offset: var(--underline-gap);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone
+}
+
+.source-dialog .dialog-body > button:last-child {
+    align-self: flex-start
+}
+
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
    rótulo fica na altura da linha dele e o botão com a margem dele: a janela não muda quando o formulário chega. */
 .profile-form {
@@ -3739,7 +3989,8 @@ main[data-instant] > .view[data-motion-pop-id] {
    ao Cérebro" do editor, os botões de texto ("Ver meu desempenho"), os pedidos à IA ("Não entendi"), o Cancelar das
    esperas, "Ver resposta" e "Tirar do caderno" no caderno de erros e o botão do aviso ("Desfazer"). Fica depois das
    regras deles: com a mesma força, vale a última. A faixa de espera cresce com o Cancelar e continua centrada na barra
-   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). */
+   de cima; no celular passa 3 px dela em cima e embaixo (sem o respiro, o fio que corre embaixo cruzava o botão). A
+   caixa "Esconder o texto" do resumo também ganha os 44 px. */
 @media (pointer: coarse) {
     :root {
         --busy-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
@@ -3752,7 +4003,8 @@ main[data-instant] > .view[data-motion-pop-id] {
     .wait .link,
     .mistakes summary,
     .mistakes .drop,
-    .toast button {
+    .toast button,
+    .check {
         min-height: var(--control-h)
     }
 
@@ -3760,6 +4012,11 @@ main[data-instant] > .view[data-motion-pop-id] {
        esqueleto da geração. */
     .study-head .link {
         margin-block: calc((1.5rem - var(--control-h)) / 2)
+    }
+
+    /* A vaga da caixa "Esconder o texto" no esqueleto do resumo: a barra do rótulo na linha de 44 px dela. */
+    .sk-check {
+        margin-block: calc((var(--control-h) - .75rem) / 2)
     }
 }
 
@@ -3770,6 +4027,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 :root[data-input=teclado] .rail .nav-item,
 :root[data-input=teclado] .meter > span,
 :root[data-input=teclado] .mistakes summary .icon,
+:root[data-input=teclado] .reveal .icon,
 :root[data-input=teclado] .level-button .icon,
 :root[data-input=teclado] dialog::backdrop,
 :root[data-input=teclado] .ai-status {
@@ -3793,6 +4051,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 @media (prefers-reduced-motion: reduce) {
     button,
     .mistakes summary .icon,
+    .reveal .icon,
     .level-button .icon,
     .rail::before,
     .rail .nav-item,
@@ -3872,19 +4131,36 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: CanvasText
     }
 
-    /* O item marcado da lista de atalhos, o chip da área escolhida e o nível escolhido no menu: sem isto o fundo deles
-       virava Canvas, igual aos outros. */
+    /* O item marcado da lista de atalhos, o chip da área escolhida, o nível escolhido no menu e o "Lembrei" ou "Não
+       lembrei" marcado: sem isto o fundo deles virava Canvas, igual aos outros. */
     .palette [role=option][aria-selected=true],
     .chip[aria-checked=true],
-    .level-menu [aria-checked=true] {
+    .level-menu [aria-checked=true],
+    .recall-marks [aria-pressed=true] {
         forced-color-adjust: none;
         background: Highlight;
         color: HighlightText
     }
 
-    /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
-    .chip[aria-checked=true]:focus-visible {
+    /* O trecho marcado da janela "Ver no texto", com o sublinhado na cor do texto. */
+    .source-text mark {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+        text-decoration-color: currentColor
+    }
+
+    /* O anel do chip marcado, o do "Lembrei" ou "Não lembrei" marcado e o do trecho marcado ficam fora deles, sobre o
+       Canvas: o ciano do foco sumia no tema claro. */
+    .chip[aria-checked=true]:focus-visible,
+    .recall-marks [aria-pressed=true]:focus-visible,
+    .source-text mark:focus-visible {
         outline-color: CanvasText
+    }
+
+    /* O ✓ da marca no texto dela: no CanvasText, como os outros ícones, ele sumia no Highlight. */
+    .recall-marks [aria-pressed=true] .icon {
+        stroke: HighlightText
     }
 
     /* A frase de exemplo do campo vazio no cinza do sistema, como a frase fixa de um campo: na cor do texto ela parecia

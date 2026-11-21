@@ -127,6 +127,9 @@ async def health():
         "model_in_use": resolve_gemini_model() if chosen else settings.model,
         "calls_today": calls_today(),
         "quota_exhausted": quota_exhausted(),
+        # O teto do dia escolhido pelo grupo (AI_DAILY_LIMIT), ou None: com ele a tela mostra "8 de 40 chamadas hoje" e,
+        # no teto, desliga os botões da IA.
+        "daily_limit": settings.daily_limit,
     }
 
 def reasons(exc: ValidationError, *where) -> list:

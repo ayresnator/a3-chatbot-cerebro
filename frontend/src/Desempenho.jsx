@@ -2,21 +2,22 @@ import React from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { Stat, BackupNote } from './ui.jsx';
-import { AREAS, spokenDay, areaLine, plural } from './lib.js';
+import { AREAS, spokenDay, areaLine, plural, dayMistakes } from './lib.js';
 
 // Página Desempenho, carregada à parte (App.jsx, lazyView): o código dela só vem quando o aluno chega nela ou quando
 // o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho. backup é a linha do pé (ui.jsx,
 // BackupNote).
 export default function Desempenho({
   rise, fade, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, openWeak,
-  hasMaterial, onStart, mistakes, redoMistakes, events, backup, onExport,
+  hasMaterial, onStart, mistakes, due, redoMistakes, events, backup, onExport,
 }) {
   // Questões do ponto fraco no caderno de erros: as que o "Refazer os erros de" abre.
-  const own = weakest ? mistakes.filter(e => e.title === weakest.name).length : 0;
-  const redoAll = mistakes.length > 0 && (
-    <button type="button" className="primary" onClick={() => redoMistakes()}>
+  const own = weakest ? mistakes.filter(e => e.title === weakest.name) : [];
+  // As questões do caderno para hoje (due, lib.js: dueMistakes), no máximo 10 por vez, como no caderno.
+  const redoToday = due.length > 0 && (
+    <button type="button" className="primary" onClick={() => redoMistakes(dayMistakes(due))}>
       <Icon name="refazer" />
-      Refazer meus erros ({mistakes.length})
+      Refazer os de hoje ({due.length})
     </button>
   );
   return (
@@ -77,7 +78,7 @@ export default function Desempenho({
           <>
             <p>Nenhum material pede revisão nos últimos 7 dias.</p>
             <p className="hint">Um material aparece aqui quando tem 3 ou mais respostas no quiz e algum erro.</p>
-            {redoAll && <div className="row">{redoAll}</div>}
+            {redoToday && <div className="row">{redoToday}</div>}
           </>
         ) : (
           <>
@@ -85,15 +86,17 @@ export default function Desempenho({
               {'Revise "' + weakest.name + '": você errou ' + weakest.wrong + ' de ' + weakest.total +
                 ' questões nos últimos 7 dias.'}
             </p>
-            {/* Sem botão nenhum, a linha vazia somava a margem dela ao vão até a lista de áreas. */}
-            {(own > 0 || redoAll || openWeak) && (
+            {/* Sem botão nenhum, a linha vazia somava a margem dela ao vão até a lista de áreas. As de hoje vêm
+                primeiro, como no caderno; os erros do material ficam ao lado, como o "Treinar todas" de lá. */}
+            {(own.length > 0 || redoToday || openWeak) && (
               <div className="row next-step">
-                {own > 0 ? (
-                  <button type="button" className="primary" onClick={() => redoMistakes(weakest.name)}>
-                    <Icon name="refazer" />
-                    {'Refazer os erros de "' + weakest.name + '" (' + own + ')'}
+                {redoToday}
+                {own.length > 0 && (
+                  <button type="button" className={redoToday ? undefined : 'primary'} onClick={() => redoMistakes(own)}>
+                    {!redoToday && <Icon name="refazer" />}
+                    {'Refazer os erros de "' + weakest.name + '" (' + own.length + ')'}
                   </button>
-                ) : redoAll}
+                )}
                 {openWeak && (
                   <button type="button" onClick={openWeak}>
                     {'Abrir "' + weakest.name + '"'}

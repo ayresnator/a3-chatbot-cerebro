@@ -87,11 +87,14 @@ const validQuestion = q =>
 // Confere o formato de um material antes de ele ir para a tela. O que vem do navegador (biblioteca, rascunho) pode
 // estar estragado: um material sem summary deixava a tela branca. Só o título precisa ter texto: material gravado
 // por versão antiga pode ter item em branco. source e steps são opcionais: material antigo não tem.
-// area e level também são opcionais, mas, se vierem, são texto: a tela os escreve no cabeçalho do material.
+// area e level também são opcionais, mas, se vierem, são texto: a tela os escreve no cabeçalho do material. texto, o
+// texto de onde o material saiu (a janela "Ver no texto"), também: material de antes dele não tem; se vier, é texto de
+// até 20.000 caracteres, o limite do editor.
 export function validMaterial(m) {
   const filled = (list, ok) => Array.isArray(list) && list.length > 0 && list.every(item => !!item && ok(item));
   const optional = v => v == null || isText(v);
   return !!m && isText(m.title) && m.title.trim() !== '' && optional(m.area) && optional(m.level) &&
+    (m.texto == null || (isText(m.texto) && m.texto.length <= MAX_INPUT)) &&
     filled(m.summary, s => isText(s.concept) && isText(s.text) && optional(s.source)) &&
     filled(m.flashcards, c => isText(c.question) && isText(c.answer)) &&
     filled(m.quiz, validQuestion);
@@ -117,8 +120,53 @@ export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu mate
 // backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend os tira do texto antes de
 // conferir (models.py, visible), e o exemplo guardado na tela pode tê-los.
 export function inText(source, text) {
-  const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
-  return !!plain(source) && plain(text).includes(plain(source));
+  const needle = comparable(source).form;
+  return !!needle && comparable(text).form.includes(needle);
+}
+
+// A forma de comparar do inText, montada letra a letra para guardar, de cada letra dela, onde começa e onde termina o
+// caractere do texto original que a deu. O acento solto (letra e acento em dois caracteres) e o invisível colados a uma
+// letra entram no fim dela: a marca não corta a letra do acento.
+function comparable(text) {
+  let form = '';
+  const spans = [];
+  let at = 0;
+  let gap = false;
+  for (const ch of String(text ?? '')) {
+    const end = at + ch.length;
+    // Invisível (Cf) e metade de emoji cortado (Cs) não contam; o espaço só vale entre duas letras. A volta pelas
+    // maiúsculas desfaz as ligaduras de texto copiado de PDF (ﬁ, ﬂ) e o ß, como o casefold do backend.
+    const folded = /[\p{Cf}\p{Cs}]/u.test(ch) ? '' : /\s/.test(ch) ? ' ' : fold(fold(ch).toLocaleUpperCase('pt-BR'));
+    if (folded === ' ') {
+      gap = form !== '';
+    } else if (folded) {
+      if (gap) spans.push([at, at]);
+      form += (gap ? ' ' : '') + folded;
+      for (let i = 0; i < folded.length; i++) spans.push([at, end]);
+      gap = false;
+    } else if (spans.length && !gap) {
+      spans[spans.length - 1][1] = end;
+    }
+    at = end;
+  }
+  return { form, spans };
+}
+
+// Pontas que o modelo põe no trecho sem estarem no texto (main.py, grounded).
+const EDGES = /^[\s.,;:…"'“”‘’«»]+|[\s.,;:…"'“”‘’«»]+$/g;
+
+// Onde o trecho do tópico está no texto do material, pela regra do inText e do backend (main.py, plain e grounded): sem
+// maiúsculas, sem acentos, sem os invisíveis e com os espaços em sequência e as quebras de linha reduzidos a um. Trecho
+// que não existe como veio vale sem as pontas de pontuação e aspas, como no backend. Devolve [início, fim] no texto
+// original, a parte que a janela "Ver no texto" marca (App.jsx), ou null se o trecho não está lá.
+export function findSource(text, source) {
+  const { form, spans } = comparable(text);
+  for (const piece of [source, String(source ?? '').replace(EDGES, '')]) {
+    const needle = comparable(piece).form;
+    const at = needle ? form.indexOf(needle) : -1;
+    if (at >= 0) return [spans[at][0], spans[at + needle.length - 1][1]];
+  }
+  return null;
 }
 
 // O trecho de um exemplo do "Usar um exemplo" não é do aluno: o tópico com trecho no texto que a IA escreveu (ai) leva
@@ -142,6 +190,63 @@ export function originNote(summary) {
   if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
   if (summary.some(s => s.source?.trim())) return AI_NOTE;
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
+}
+
+// De onde veio o texto do material, na mesma ordem do aviso: 'ia' (algum trecho do exemplo escrito pela IA), 'pronto'
+// (de um exemplo pronto) ou '' (do aluno). A janela "Ver no texto" põe isso no título, e o texto levado de volta ao
+// editor continua valendo como exemplo (App.jsx, textToEditor).
+export function textOrigin(summary) {
+  return summary.some(s => s.ia) ? 'ia' : summary.some(s => s.pronto) ? 'pronto' : '';
+}
+
+// Resumo ativo (#81): tentar lembrar antes de ler e esconder o texto dos tópicos. O bloco "Tente responder antes de
+// ler" usa as 2 primeiras perguntas dos flashcards do material; com menos de 2 cartões ele não aparece.
+export const pretestCards = flashcards => (flashcards.length >= 2 ? flashcards.slice(0, 2) : []);
+
+// Quantas vezes seguidas o aluno pulou o bloco: a única coisa do resumo ativo gravada no navegador. A resposta escrita
+// zera a conta (nextSkips). Valor estragado vale zero.
+export function readSkips() {
+  const skips = read('antes-de-ler', 0);
+  return Number.isSafeInteger(skips) && skips > 0 ? skips : 0;
+}
+
+// O bloco abre sozinho até o aluno pulá-lo 2 vezes seguidas; depois fica fechado, no botão "Tentar antes de ler". O
+// esqueleto da geração também pergunta (ui.jsx, SummarySkeleton).
+export const pretestOpens = () => readSkips() < 2;
+
+// O resumo ativo de um material aberto (of), do zero: nada escrito (tries), mostrado (shown) nem marcado (marks, pelo
+// índice do tópico: true em "Lembrei", false em "Não lembrei"). O bloco começa aberto ('aberto') ou fechado (null), por
+// pretestOpens. 'lido' é o bloco fechado pelo "Ler o resumo".
+export function recallStart(of) {
+  return { of, tries: ['', ''], pre: pretestOpens() ? 'aberto' : null, shown: {}, marks: {} };
+}
+
+// A conta de pulos (before) quando o bloco fecha. tries é o que o aluno escreveu, no "Ler o resumo" (no "Pular", nada):
+// só a resposta escrita zera a conta, e o bloco fechado em branco conta como pulo. warn é o 2º pulo seguido, quando o
+// bloco passa a abrir fechado.
+export function nextSkips(before, tries) {
+  const skips = tries.some(t => t.trim()) ? 0 : before + 1;
+  return { skips, warn: skips === 2 };
+}
+
+// "Lembrei" (ok true) ou "Não lembrei" (false) no tópico i. Os botões são de alternância: apertar de novo a marca
+// escolhida a tira.
+export function markRecall(marks, i, ok) {
+  const next = { ...marks, [i]: ok };
+  if (marks[i] === ok) delete next[i];
+  return next;
+}
+
+// As marcas dos count primeiros tópicos, os que a lista "Mostrar" deixa na tela: os outros não contam no placar.
+export const shownMarks = (marks, count) =>
+  Array.from({ length: count }, (_, i) => marks[i]).filter(ok => ok !== undefined);
+
+// Placar do modo lembrar: marks são os tópicos já marcados, true em "Lembrei" e false em "Não lembrei". Sem tópico
+// marcado não há placar.
+export function recallLine(marks) {
+  if (!marks.length) return '';
+  return 'Você lembrou ' + marks.filter(Boolean).length + ' de ' + marks.length + ' ' +
+    plural(marks.length, 'tópico', 'tópicos') + '.';
 }
 
 // Resposta registrada no desempenho. Sem data válida ela estragava a sequência de dias e o gráfico.
@@ -208,6 +313,15 @@ export function localDay(date) {
   }
   return day;
 }
+
+// Um dia no formato de localDay mais n dias do calendário (n negativo volta): 30/11 mais 1 dá 01/12. A conta é feita ao
+// meio-dia, longe da virada do dia.
+export function addDays(day, n) {
+  return localDay(new Date(+day.slice(0, 4), day.slice(5, 7) - 1, +day.slice(8, 10) + n, 12));
+}
+
+// Dia no formato de localDay que existe no calendário: '2026-02-30' não vale.
+const isDay = v => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && addDays(v, 0) === v;
 
 // Compara texto sem ligar para maiúsculas e acentos ("fotossintese" vale como "Fotossíntese").
 export function fold(text) {
@@ -322,10 +436,11 @@ const questionDay = e => localDay(e.date) + '\n' + e.title + '\n' + e.q;
 
 // Histórico enxuto, na abertura do app e depois de importar um backup: nos dias passados, de cada questão do quiz
 // ficam a primeira resposta do dia e, se ela foi erro, o primeiro acerto do dia. As outras repetições ("Refazer o quiz
-// todo", "Refazer meus erros") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
+// todo", "Treinar todas") saem: nenhuma conta da tela as usa, e elas ocupavam o espaço do navegador que guarda a
 // Biblioteca. Ficam como estão o dia de hoje, todos os cartões (a regra aqui é a das questões do quiz), a resposta antiga
-// sem enunciado e o item estragado. Nada é resumido por dia, área ou material: a revisão espaçada e o acerto que ficou
-// (#77 e #78) precisam, por questão e por cartão, da resposta de cada dia. Devolve outra lista, na mesma ordem.
+// sem enunciado e o item estragado. Nada é resumido por dia, área ou material: o acerto que ficou (#78) precisa, por
+// questão, da resposta de cada dia. A revisão espaçada não usa o histórico: o estado dela fica em cada erro do caderno
+// e em cerebro-cartoes. Devolve outra lista, na mesma ordem.
 export function compactEvents(events, now) {
   const today = localDay(now);
   // A questão no dia: a resposta que ficou dela já é um acerto?
@@ -558,19 +673,30 @@ export function chatSubject({ material, made, editor, input, area, level }) {
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
   'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
 
+// O teto de chamadas por dia que o grupo escolheu (AI_DAILY_LIMIT, no /api/health em daily_limit) chegou: os botões da
+// IA ficam desligados até a contagem recomeçar. Sem teto (null, ou backend antigo, sem o campo), nunca.
+export function capReached(health) {
+  return !!health && health.daily_limit > 0 && health.calls_today >= health.daily_limit;
+}
+
 // Estado da IA no cabeçalho, a partir da resposta de /api/health: null enquanto ela não chegou, false se a consulta
 // falhou ou não veio JSON. tone é a classe do ponto colorido, e note, a dica do selo. Com a IA ativa, model e count são
 // partes do text: na barra estreita o modelo sai da vista (styles.css, @container), e o text, chave da troca animada,
-// fica inteiro.
+// fica inteiro. Com o teto do dia, a conta é "8 de 40 chamadas hoje", e o ponto fica âmbar a partir de 80% dele.
 export function healthLabel(health) {
   if (health == null) return { text: 'Conferindo a IA…', tone: '' };
   if (!health) return { text: 'Cérebro desligado', tone: 'off' };
   if (!health.ai_configured) return { text: 'IA não configurada', tone: 'warn' };
+  if (capReached(health)) return { text: 'Teto do dia atingido', tone: 'warn', note: QUOTA_NOTE };
   if (health.quota_exhausted) return { text: 'Cota de hoje esgotada', tone: 'warn', note: QUOTA_NOTE };
   const calls = health.calls_today;
+  const limit = health.daily_limit > 0 ? health.daily_limit : 0;
   const model = health.model_in_use || health.model || '';
-  const count = typeof calls === 'number' ? calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador' : '';
-  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone: 'ok', model, count, note: QUOTA_NOTE };
+  const count = typeof calls !== 'number' ? ''
+    : limit ? calls + ' de ' + limit + ' ' + plural(limit, 'chamada', 'chamadas') + ' hoje'
+    : calls + (calls === 1 ? ' chamada' : ' chamadas') + ' deste computador';
+  const tone = limit && calls * 5 >= limit * 4 ? 'warn' : 'ok';
+  return { text: ['IA ativa', model, count].filter(Boolean).join(' · '), tone, model, count, note: QUOTA_NOTE };
 }
 
 // Frase de cada erro para o aluno: o que houve e o que ele consegue fazer. As frases do backend falam de .env, proxy e
@@ -581,6 +707,9 @@ const SHAPE = 'A IA respondeu fora do formato esperado. Tente de novo.';
 export const ERRORS = {
   AI_RATE_LIMITED: 'Muitos pedidos em pouco tempo. Os botões da IA voltam sozinhos em alguns segundos.',
   AI_QUOTA_EXCEEDED: 'A cota de hoje da IA acabou. Enquanto isso, estude o que já está na Biblioteca.',
+  // A mesma frase fica junto dos botões da IA enquanto o teto vale (App.jsx, capNote).
+  AI_BUDGET_REACHED: 'As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo. Os botões da IA voltam amanhã; ' +
+    'enquanto isso, a Biblioteca, os flashcards, o quiz e o caderno de erros funcionam sem ela.',
   AI_NOT_CONFIGURED: 'A IA não está ligada neste computador. Quem instalou o Cérebro precisa configurar a chave. ' +
     'Enquanto isso, use a demonstração.',
   AI_NETWORK_ERROR: 'O Cérebro não conseguiu falar com a IA. Confira a internet deste computador e tente de novo.',
@@ -617,6 +746,15 @@ export function errorText(detail, status) {
     tech: [code || 'HTTP ' + status, detail?.provider_status, said !== message && said].filter(Boolean).join(' · '),
     wait: detail?.retry_after > 0 ? Math.ceil(detail.retry_after) : 0,
   };
+}
+
+// Erro do limite por minuto (o que tem until, App.jsx, callAI) quando o teto do dia chega: a chamada recusada entrou
+// na conta do dia, e os botões da IA não voltam em alguns segundos. A frase passa a ser a do teto, sem a contagem; os
+// detalhes técnicos ficam. Outro erro volta como veio.
+export function rateAtCap(error) {
+  return error?.until
+    ? { ...error, message: error.message.replace(ERRORS.AI_RATE_LIMITED, ERRORS.AI_BUDGET_REACHED), until: 0 }
+    : error;
 }
 
 // Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
@@ -682,30 +820,119 @@ export function deckSummary(deck) {
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
 }
 
+// Revisão espaçada dos cartões, nas caixas de Leitner: cada cartão avaliado fica em cerebro-cartoes como { key, title,
+// box, due, date }: a chave (mistakeKey, o material e a pergunta), o título do material, a caixa de 1 a 4, o dia em que
+// ele volta e a hora da última mudança. Cada caixa volta em BOX_DAYS dias: a 1 em 1, a 2 em 3, a 3 em 7 e a 4 em 16.
+const BOX_DAYS = [1, 3, 7, 16];
+// Cartões por vez na revisão do dia: quem fica dias sem estudar acha uma pilha, e ela vem aos poucos.
+const DAY_CARDS = 20;
+
+// Cartão lido do navegador ou de um backup. A chave tem de ser do material: é por ela que o cartão volta.
+export function validCardReview(e) {
+  return !!e && isText(e.title) && e.title.trim() !== '' && isText(e.key) && e.key.startsWith(fold(e.title) + '|') &&
+    [1, 2, 3, 4].includes(e.box) && isDay(e.due) && isDate(e.date);
+}
+
+// O aluno avaliou o cartão (ok é o "Acertei"). O cartão novo entra na caixa 1, e o "Errei" o leva de volta a ela.
+// "Acertei" no dia marcado ou depois sobe uma caixa (a 4 continua na 4); antes dele não muda nada: rever o baralho no
+// mesmo dia não empurra o cartão para longe. Entrada estragada com a mesma chave é trocada no lugar.
+export function scheduleCard(list, title, question, ok, now) {
+  const key = mistakeKey(title, question);
+  const today = localDay(now);
+  const old = list.find(e => e?.key === key && validCardReview(e));
+  if (old && ok && today < old.due) return list;
+  const box = old && ok ? Math.min(old.box + 1, 4) : 1;
+  const entry = { key, title, box, due: addDays(today, BOX_DAYS[box - 1]), date: new Date(now).toISOString() };
+  return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
+}
+
+// Revisão do dia: os cartões vencidos (que voltam hoje ou antes) e que ainda estão num dos materiais, do mais atrasado
+// ao mais novo, e na mesma data na ordem da lista. Cada um leva a pergunta, a resposta e o título e a área do material.
+// Cartão de material excluído fica de fora. A tela conta todos e abre os de dayCards.
+export function dueCards(list, materials, now) {
+  const today = localDay(now);
+  const due = list.filter(e => validCardReview(e) && e.due <= today)
+    .sort((a, b) => (a.due > b.due) - (a.due < b.due));
+  if (!due.length) return [];
+  const cards = new Map();
+  for (const m of materials) {
+    for (const c of m.flashcards) {
+      const key = mistakeKey(m.title, c.question);
+      if (!cards.has(key)) cards.set(key, { question: c.question, answer: c.answer, title: m.title, area: m.area });
+    }
+  }
+  const seen = new Set();
+  return due.filter(e => cards.has(e.key) && !seen.has(e.key) && seen.add(e.key)).map(e => cards.get(e.key));
+}
+
+// A revisão do dia que abre agora: os DAY_CARDS primeiros de dueCards, os mais atrasados.
+export const dayCards = due => due.slice(0, DAY_CARDS);
+
 // Caderno de erros: as questões erradas de todos os materiais, para refazer. Cada erro é { key, item, title, area,
-// date }: a questão inteira, o material e a área de onde veio e quando o aluno a errou por último.
+// date, step, due }: a questão inteira, o material e a área de onde veio, quando o aluno a errou por último, o degrau
+// da escada (0, 1 ou 2) e o dia em que ela volta.
 // As funções recebem a lista como está gravada no navegador: item que a tela ignora fica onde está.
+
+// A escada do caderno: depois do erro a questão volta em 1 dia, depois do 1º acerto em 3 e depois do 2º em 7. O 3º
+// acerto a tira. Cada acerto só conta no dia marcado ou depois: são 3 acertos em dias diferentes.
+const STEP_DAYS = [1, 3, 7];
+// Questões por vez no "Refazer os de hoje", como os cartões da revisão do dia.
+const DAY_MISTAKES = 10;
+
+// Degrau do erro. O erro gravado antes da escada, ou com degrau estragado, está no 0.
+export function stepOf(e) {
+  return [0, 1, 2].includes(e?.step) ? e.step : 0;
+}
+
+// Dia em que a questão volta. O erro gravado antes da escada, ou com dia estragado, volta no dia seguinte ao do erro.
+export function dueOf(e) {
+  return isDay(e?.due) ? e.due : addDays(localDay(e?.date), 1);
+}
 
 // Chave de uma questão no caderno: o material e o enunciado, sem acentos nem maiúsculas.
 export function mistakeKey(title, question) {
   return fold(title) + '|' + fold(question);
 }
 
-// Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova.
+// Errou: a questão entra no caderno ou, se já estava, fica no mesmo lugar com a data nova. Nos dois casos ela começa a
+// escada: degrau 0, e volta amanhã.
 // item leva só os campos da questão: a que vem da tela traz junto a resposta dada na sessão.
 export function addMistake(list, item, title, area, now) {
   const { type, question, options, answer, explanation, steps } = item;
   const key = mistakeKey(title, question);
   const entry = {
     key, item: { type, question, options, answer, explanation, steps }, title, area, date: new Date(now).toISOString(),
+    step: 0, due: addDays(localDay(now), 1),
   };
   return list.some(e => e?.key === key) ? list.map(e => (e?.key === key ? entry : e)) : [...list, entry];
 }
 
-// Acertou: a questão só sai do caderno se o erro guardado é de outro dia. Acertar no mesmo dia, logo depois de
-// ver a explicação, não prova que aprendeu.
+// Acertou: no dia marcado ou depois, a questão sobe um degrau e volta mais tarde; no último degrau ela sai do caderno.
+// Acertar antes do dia marcado não muda nada: logo depois de ver a explicação, a resposta certa não prova que ficou.
 export function clearMistake(list, key, now) {
-  return list.filter(e => e?.key !== key || localDay(e.date) === localDay(now));
+  const today = localDay(now);
+  return list.flatMap(e => {
+    if (e?.key !== key || today < dueOf(e)) return [e];
+    const step = stepOf(e) + 1;
+    return step < STEP_DAYS.length ? [{ ...e, step, due: addDays(today, STEP_DAYS[step]) }] : [];
+  });
+}
+
+// As questões para hoje: as que voltam hoje ou já deviam ter voltado, das mais atrasadas às mais novas (na mesma data,
+// na ordem da lista). Item estragado fica de fora.
+export function dueMistakes(list, now) {
+  const today = localDay(now);
+  return list.filter(e => validMistake(e) && dueOf(e) <= today)
+    .sort((a, b) => (dueOf(a) > dueOf(b)) - (dueOf(a) < dueOf(b)));
+}
+
+// O "Refazer os de hoje" que abre agora: as DAY_MISTAKES primeiras de dueMistakes, as mais atrasadas.
+export const dayMistakes = due => due.slice(0, DAY_MISTAKES);
+
+// Quando a questão volta, para a página do caderno: "para hoje" (também a atrasada), "volta amanhã" ou "volta em 23/11".
+export function backOn(due, today) {
+  if (due <= today) return 'para hoje';
+  return due === addDays(today, 1) ? 'volta amanhã' : 'volta em ' + due.slice(8) + '/' + due.slice(5, 7);
 }
 
 // O aluno tirou a questão do caderno, ou a revisão da IA aceitou a resposta: sai na hora.
@@ -768,7 +995,8 @@ export function fixLastQuizEvent(events, title, q, until) {
 // objeto com versao 1). O arquivo vem de fora: cada item passa pela mesma conferência da leitura do navegador, e
 // o que não passa fica de fora e é contado em fora, para o aviso dizer o que não entrou. Material sem data válida
 // também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
-// limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área.
+// limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
+// espaçada não tem cartoes (as caixas dos cartões): vale lista vazia.
 export function readBackup(text) {
   let data;
   try {
@@ -781,13 +1009,18 @@ export function readBackup(text) {
   const saved = list(data.saved, m => validMaterial(m) && isDate(m.date));
   const events = list(data.events, validEvent);
   const erros = list(data.erros, validMistake);
+  const cartoes = list(data.cartoes, validCardReview);
   const left = (value, kept) => (Array.isArray(value) ? value.length - kept.length : 0);
   const name = isText(data.user?.name) ? data.user.name.trim() : '';
   return {
     saved,
     events,
     erros,
-    fora: { saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros) },
+    cartoes,
+    fora: {
+      saved: left(data.saved, saved), events: left(data.events, events), erros: left(data.erros, erros),
+      cartoes: left(data.cartoes, cartoes),
+    },
     user: name && name.length <= 50 && AREAS.includes(data.user.area) ? { name, area: data.user.area } : null,
   };
 }
@@ -824,15 +1057,25 @@ export function mergeBackup(atual, novo) {
   }
   const time = e => Date.parse(e?.date) || 0;
   events.sort((a, b) => time(a) - time(b));
-  // Erro com a mesma chave fica com a data mais recente.
-  const erros = [...atual.erros];
-  for (const e of novo.erros) {
-    const at = erros.findIndex(old => old?.key === e.key);
-    if (at < 0) erros.push(e);
-    else if (!(time(erros[at]) >= time(e))) erros[at] = e;
-  }
+  // Erros e cartões juntam pela chave: o que tem chave nova entra no fim, e o que já está gravado só dá lugar ao do
+  // arquivo quando newer diz que ele é mais novo.
+  const byKey = (current, incoming, newer) => {
+    const merged = [...current];
+    for (const e of incoming) {
+      const at = merged.findIndex(old => old?.key === e.key);
+      if (at < 0) merged.push(e);
+      else if (newer(e, merged[at])) merged[at] = e;
+    }
+    return merged;
+  };
+  // Erro com a mesma chave fica com a data mais recente (errar de novo volta a questão ao degrau 0) e, com a mesma
+  // data, com o degrau mais alto: os acertos que vieram depois do erro.
+  const erros = byKey(atual.erros, novo.erros, (e, old) =>
+    time(e) > time(old) || (time(e) === time(old) && stepOf(e) > stepOf(old)));
+  // Cartão com a mesma chave fica com a mudança mais recente.
+  const cartoes = byKey(atual.cartoes, novo.cartoes, (e, old) => time(e) > time(old));
   // O que entra fica no topo da biblioteca, como o material recém-salvo.
-  return { saved: [...fresh, ...atual.saved], events, erros };
+  return { saved: [...fresh, ...atual.saved], events, erros, cartoes };
 }
 
 // Contagens numa frase: "2 materiais, 1 resposta e 3 questões do caderno de erros", cada palavra no singular ou no
@@ -842,11 +1085,12 @@ function countList(items) {
   return said.length > 1 ? said.slice(0, -1).join(', ') + ' e ' + said[said.length - 1] : said.join('');
 }
 
-// As três partes do backup, cada uma com o seu número, para countList.
-const backupItems = ({ saved, events, erros }) => [
+// As quatro partes do backup, cada uma com o seu número, para countList.
+const backupItems = ({ saved, events, erros, cartoes }) => [
   [saved, 'material', 'materiais'],
   [events, 'resposta', 'respostas'],
   [erros, 'questão do caderno de erros', 'questões do caderno de erros'],
+  [cartoes, 'cartão com data de volta', 'cartões com data de volta'],
 ];
 
 // Aviso depois de exportar: o que foi no arquivo, contado como a tela mostra (só o que passa na conferência).
@@ -855,19 +1099,22 @@ export function backupSummary(backup) {
     saved: backup.saved.filter(validMaterial).length,
     events: backup.events.filter(validEvent).length,
     erros: backup.erros.filter(validMistake).length,
+    cartoes: backup.cartoes.filter(validCardReview).length,
   })) + '.';
 }
 
-// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas ou erros. Depois,
-// só quando houver, o que ficou de fora por estar incompleto (fora, de readBackup) e o nome do perfil que entrou.
+// Aviso depois de importar: quantos materiais entraram ou, sem material novo, se vieram respostas, erros ou caixas de
+// cartões. Depois, só quando houver, o que ficou de fora por estar incompleto (fora, de readBackup) e o nome do perfil
+// que entrou.
 // As respostas que a tela usa valem pelo conteúdo, não pelo tamanho: no histórico compactado (compactEvents), a resposta
 // anterior que o backup traz toma o lugar da que ficou e muda o acerto sem mudar o tamanho da lista. O item estragado
 // fica de fora: mergeBackup o leva para o começo da lista, e a tela não o mostra.
 export function backupNote(atual, junto, fora = {}, perfil = '') {
   const materials = junto.saved.length - atual.saved.length;
   const shown = list => JSON.stringify(list.filter(validEvent));
+  const same = k => JSON.stringify(junto[k]) === JSON.stringify(atual[k]);
   const main = materials ? (materials === 1 ? '1 material importado' : materials + ' materiais importados')
-    : shown(junto.events) !== shown(atual.events) || JSON.stringify(junto.erros) !== JSON.stringify(atual.erros)
+    : shown(junto.events) !== shown(atual.events) || !same('erros') || !same('cartoes')
       ? 'Desempenho e caderno de erros atualizados'
       : 'Nada novo neste arquivo';
   const left = countList(backupItems(fora).filter(([n]) => n > 0));
