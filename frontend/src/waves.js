@@ -22,8 +22,9 @@ export const RESTART_S = 3600;
 // até lá a GPU ainda cuida dos primeiros quadros, e o getContext esperava por ela de 0,1 a 0,7 s na thread principal
 // (Chromium com GPU de verdade, sem cache); depois, ~3 ms.
 const SETTLE_MS = 1500;
-// Canvas que já têm contexto: neles o getContext só devolve o que existe, sem esperar a GPU, e o começo novo (a troca
-// do "Fundo animado") não espera.
+// Canvas que já têm contexto: neles o getContext só devolve o que existe, sem esperar a GPU (menos de 1 ms), e o
+// começo novo (a troca do "Fundo animado", a janela alargada de novo) sai na própria chamada. Pelo requestIdleCallback
+// ele às vezes ficava para o prazo de 2 s, com a janela do perfil fechando logo depois do clique.
 const warm = new WeakSet();
 
 export const UNIFORMS = {
@@ -362,12 +363,12 @@ function compile(gl, type, source) {
   return shader;
 }
 
-// Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando. O trabalho
-// começa quando a página fica livre (requestIdleCallback; sem ele, na hora); a primeira vez num canvas, não antes de
-// SETTLE_MS da abertura nem de 1 s depois da chamada. Só roda com WebGL na GPU: com failIfMajorPerformanceCaveat, o
-// renderizador por software não dá contexto, e fica o fundo de CSS. Com KHR_parallel_shader_compile o driver compila e
-// liga o shader fora da thread principal, e cada quadro só pergunta se acabou; sem ela, a ligação trava a página até
-// acabar, como antes.
+// Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando. A primeira
+// vez num canvas, o trabalho começa quando a página fica livre (requestIdleCallback; sem ele, na hora marcada), não
+// antes de SETTLE_MS da abertura nem de 1 s depois da chamada; no canvas que já tem contexto (warm), começa na própria
+// chamada. Só roda com WebGL na GPU: com failIfMajorPerformanceCaveat, o renderizador por software não dá contexto, e
+// fica o fundo de CSS. Com KHR_parallel_shader_compile o driver compila e liga o shader fora da thread principal, e
+// cada quadro só pergunta se acabou; sem ela, a ligação trava a página até acabar, como antes.
 // onActive(true) sai junto com o primeiro quadro, também quando o contexto volta; onActive(false), quando falta WebGL,
 // o shader é recusado ou o contexto se perde (ou já chega perdido).
 // animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands).
@@ -437,8 +438,8 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
 
   // Compila e liga sem perguntar o estado: a pergunta trava até o driver acabar. A extensão é pedida de novo a cada
   // vez, porque a de um contexto perdido não vale no que volta. Contexto já perdido (o canvas é o mesmo da vez
-  // anterior, e ele se perdeu entre um stop() e este começo, sem ninguém ouvindo): fica o fundo de CSS, e o
-  // webglcontextrestored chama de novo se ele voltar.
+  // anterior, e ele se perdeu com as ondas desligadas; quem ouviu a perda foi o ouvinte fixo do Waves, em ui.jsx):
+  // fica o fundo de CSS, e o webglcontextrestored chama de novo quando ele voltar.
   function link() {
     if (gl.isContextLost()) return onActive(false);
     ext = gl.getExtension('KHR_parallel_shader_compile');
@@ -554,10 +555,14 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   }
 
   let idle = 0;
-  const timer = setTimeout(() => {
-    if ('requestIdleCallback' in window) idle = requestIdleCallback(begin, { timeout: 2000 });
-    else begin();
-  }, warm.has(canvas) ? 0 : Math.max(SETTLE_MS - performance.now(), 1000));
+  let timer = 0;
+  if (warm.has(canvas)) begin();
+  else {
+    timer = setTimeout(() => {
+      if ('requestIdleCallback' in window) idle = requestIdleCallback(begin, { timeout: 2000 });
+      else begin();
+    }, Math.max(SETTLE_MS - performance.now(), 1000));
+  }
 
   return () => {
     clearTimeout(timer);

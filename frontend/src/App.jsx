@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
@@ -161,6 +161,16 @@ function App() {
   const [wavesActive, setWavesActive] = useState(null);
   // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
   const [fundoUnsaved, setFundoUnsaved] = useState(false);
+  // O botão some com a janela do perfil aberta (sem WebGL na GPU, movimento reduzido ligado, contexto perdido, janela
+  // estreitada). Com o foco nele, o foco cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai
+  // para o "Fechar". A função do ref não muda, e o React só a chama com null logo antes de tirar o botão do DOM.
+  const fundoButton = useRef(null);
+  const fundoRef = useCallback(el => {
+    if (!el && fundoButton.current === document.activeElement) {
+      fundoButton.current.closest('dialog')?.querySelector('.close')?.focus();
+    }
+    fundoButton.current = el;
+  }, []);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
@@ -2223,6 +2233,7 @@ function App() {
               {wavesAllowed && !wavesStill && wavesActive !== false && (
                 <>
                   <button
+                    ref={fundoRef}
                     type="button"
                     className="chip"
                     aria-pressed={fundo}

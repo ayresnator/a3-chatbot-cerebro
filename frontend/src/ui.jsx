@@ -305,6 +305,12 @@ export function Waves({ on, animate, onActive }) {
       stop?.();
     };
   }, [on, animate]);
-  useEffect(() => () => document.documentElement.removeAttribute('data-waves'), []);
+  // O contexto pode se perder com as ondas desligadas (a janela estreitada para menos de 851 px, por exemplo): sem
+  // ninguém ouvindo a perda, o navegador não o devolve, e as ondas só voltariam com a página recarregada. Este ouvinte
+  // fica o tempo todo e só pede a volta; com as ondas ligadas, o do waves.js cuida do resto.
+  useEffect(() => {
+    canvas.current.addEventListener('webglcontextlost', e => e.preventDefault());
+    return () => document.documentElement.removeAttribute('data-waves');
+  }, []);
   return <canvas ref={canvas} className="waves" aria-hidden="true" />;
 }

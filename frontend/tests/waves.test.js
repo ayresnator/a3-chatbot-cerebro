@@ -1,9 +1,10 @@
 // Testes do fundo em ondas (src/waves.js): o tamanho do canvas, o relógio e o corte a 30 quadros por segundo, a espera
-// do laço no temporizador, as faixas do scissor em volta do palco e os valores da receita do Shader Builder. npm test
+// do laço no temporizador, as faixas do scissor em volta do palco, os valores da receita do Shader Builder e o começo
+// num canvas novo e num que já tem contexto. npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasSize, tick, bands, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, FRAME_WAIT_MS, MAX_STEP_MS, FRAG,
+  canvasSize, tick, bands, startWaves, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, FRAME_WAIT_MS, MAX_STEP_MS, FRAG,
 } from '../src/waves.js';
 
 // Quantos quadros o laço desenha em 1 s numa tela de hz quadros por segundo; o primeiro, logo ao tocar, não conta.
@@ -54,15 +55,16 @@ test('tick: ao tocar o relógio não anda, e um quadro atrasado anda no máximo 
 
 // O laço de startWaves fora do navegador: depois de um quadro desenhado, o pedido do próximo sai FRAME_WAIT_MS depois
 // (o quadro roda 1 ms depois da hora dele, e o temporizador atrasa late ms) e roda no quadro seguinte da tela; o quadro
-// que chega cedo pede o seguinte direto. Devolve os desenhos em 1 s e quantas vezes o laço acordou a página.
+// que chega cedo pede o seguinte direto. Devolve os desenhos em 1 s e quantos pedidos de quadro rodaram; cada desenho
+// dispara também um temporizador.
 function loop(hz, late = 0) {
   const at = n => 1000 + n * 1000 / hz;
   let seconds = 0;
   let last = null;
   let drawn = -1;
-  let woke = 0;
+  let frames = 0;
   for (let n = 0; n <= hz;) {
-    woke++;
+    frames++;
     const next = tick(seconds, last, at(n));
     if (next === null) {
       n++;
@@ -74,14 +76,14 @@ function loop(hz, late = 0) {
     const asked = last + 1 + FRAME_WAIT_MS + late;
     while (at(n) <= asked) n++;
   }
-  return { drawn, woke };
+  return { drawn, frames };
 }
 
-test('laço: a espera no temporizador não tira nenhum quadro, e a página acorda no máximo duas vezes por quadro', () => {
+test('laço: a espera no temporizador não tira nenhum quadro, e cada desenho pede no máximo dois quadros', () => {
   for (const hz of [30, 60, 75, 90, 100, 120, 144, 165, 240]) {
-    const { drawn, woke } = loop(hz);
+    const { drawn, frames } = loop(hz);
     assert.equal(drawn, run(hz).drawn, hz + ' Hz');
-    assert.ok(woke <= 2 * (drawn + 1), hz + ' Hz: ' + woke);
+    assert.ok(frames <= 2 * (drawn + 1), hz + ' Hz: ' + frames);
   }
   // A 60 Hz o temporizador pode atrasar 4 ms sem perder o quadro.
   assert.equal(loop(60, 4).drawn, 30);
@@ -196,4 +198,39 @@ test('o shader declara cada uniform que startWaves preenche', () => {
     'vec4 u_transform', 'vec4 u_space', 'vec4 u_cursor']) {
     assert.ok(FRAG.includes(`uniform ${decl};`), decl);
   }
+});
+
+test('startWaves: a primeira vez num canvas espera a folga da página; no que já tem contexto, começa na chamada', t => {
+  // O mínimo que o começo toca fora do navegador: ouvintes que não fazem nada e um contexto que já chega perdido, com
+  // que o link() para no aviso sem chamar o WebGL.
+  const quiet = { addEventListener() {}, removeEventListener() {} };
+  let idle = null;
+  const fake = {
+    window: { ...quiet, devicePixelRatio: 1, matchMedia: () => quiet, requestIdleCallback: true },
+    document: quiet,
+    requestIdleCallback: begin => (idle = begin),
+    cancelIdleCallback() {},
+    cancelAnimationFrame() {},
+  };
+  Object.assign(globalThis, fake);
+  t.after(() => Object.keys(fake).forEach(name => delete globalThis[name]));
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let contexts = 0;
+  const reports = [];
+  const canvas = { ...quiet, getContext: () => (contexts++, { isContextLost: () => true }) };
+  const options = { onActive: active => reports.push(active) };
+
+  const stop = startWaves(canvas, options);
+  t.mock.timers.tick(999);
+  assert.equal(idle, null, 'antes de 1 s, nem o pedido da folga sai');
+  t.mock.timers.tick(1500);
+  assert.equal(contexts, 0, 'o contexto espera a página ficar livre');
+  idle();
+  assert.deepEqual([contexts, reports], [1, [false]]);
+  stop();
+
+  idle = null;
+  startWaves(canvas, options)();
+  assert.equal(idle, null, 'o começo novo não passa pelo requestIdleCallback');
+  assert.deepEqual([contexts, reports], [2, [false, false]]);
 });
