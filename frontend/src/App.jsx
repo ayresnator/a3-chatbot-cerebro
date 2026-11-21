@@ -2170,6 +2170,50 @@ function App() {
                   </div>
                   {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
                   <div className="chat-dock">
+                    {API_BASE && (
+                      <>
+                        {/* O filtro do vidro dos chips (#110, do Liquid Glass Button do 21st.dev): um ruído que distorce e
+                            desfoca o fundo atrás de cada chip (styles.css, .suggestions button::before). Um só para todos
+                            os chips, fora da vista e do leitor de tela. */}
+                        <svg className="glass-filter" aria-hidden="true" focusable="false">
+                          <filter id="vidro-liquido" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.05 0.05" numOctaves="1" seed="1" result="ruido" />
+                            <feGaussianBlur in="ruido" stdDeviation="2" result="ruido-suave" />
+                            <feDisplacementMap in="SourceGraphic" in2="ruido-suave" scale="70" xChannelSelector="R" yChannelSelector="B" result="distorcido" />
+                            <feGaussianBlur in="distorcido" stdDeviation="4" />
+                          </filter>
+                        </svg>
+                        {/* Os chips ficam acima da caixa (#109), também antes dela no Tab. Durante a espera da resposta eles
+                            somem (data-espera): a pílula de espera fica no lugar deles, e os chips da resposta nova chegam
+                            com ela. Com a lista do "/" aberta eles também somem (styles.css). */}
+                        <m.div
+                          className="suggestions"
+                          role="group"
+                          aria-label="Sugestões de perguntas"
+                          data-espera={asking ? '' : undefined}
+                          variants={hero.chips}
+                        >
+                          {chatHints.map((h, i) => (
+                            <m.button
+                              key={i}
+                              type="button"
+                              variants={hero.chip}
+                              disabled={waiting}
+                              onClick={() => {
+                                // O chip some durante a espera, e o foco iria para o body: vai para a caixa. No toque vai
+                                // para o título, sem rolar a página: o teclado da tela não abre sozinho, e o leitor de
+                                // tela não fica num chip escondido.
+                                if (TOUCH) document.getElementById('chat-titulo').focus({ preventScroll: true });
+                                else document.getElementById('pergunta').focus();
+                                ask(h);
+                              }}
+                            >
+                              {h}
+                            </m.button>
+                          ))}
+                        </m.div>
+                      </>
+                    )}
                     <ChatComposer
                       value={question}
                       onChange={setQuestion}
@@ -2203,26 +2247,6 @@ function App() {
                       }
                     />
                     {errorBanner}
-                    {API_BASE && (
-                      <m.div className="suggestions" role="group" aria-label="Sugestões de perguntas" variants={hero.chips}>
-                        {chatHints.map((h, i) => (
-                          <m.button
-                            key={i}
-                            type="button"
-                            variants={hero.chip}
-                            disabled={waiting}
-                            onClick={() => {
-                              // O chip fica desligado durante a espera, e o foco iria para o body: vai para a caixa (no
-                              // toque não, para o teclado da tela não abrir sozinho).
-                              if (!TOUCH) document.getElementById('pergunta').focus();
-                              ask(h);
-                            }}
-                          >
-                            {h}
-                          </m.button>
-                        ))}
-                      </m.div>
-                    )}
                   </div>
                   <div ref={chatEnd} className="chat-end"></div>
                 </section>
