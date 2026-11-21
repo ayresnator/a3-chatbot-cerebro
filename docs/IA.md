@@ -15,7 +15,7 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No "Usar um exemplo", e no celular também no "Perguntar ao Cérebro" e no "Enviar", o aviso fica só no nome do botão, lido pelo leitor de tela: na tela ele não cabe ao lado das outras ferramentas. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 
@@ -124,7 +124,7 @@ Com `AI_MODEL=auto` o backend consulta o catálogo e escolhe o Flash estável ma
 
 O que sai do computador do aluno para o Google, pelo backend: o texto do editor, as perguntas, as últimas 6 mensagens do chat, as respostas enviadas para revisão e a resposta dada a uma questão errada quando o aluno clica em "Não entendi, me explique", junto com a área e o nível. A revisão e o "Não entendi, me explique" levam também a parte do material em questão: o tópico, ou o enunciado, o gabarito e a explicação. Nas perguntas do chat sobre o material aberto vão o título e o resumo dele. O nome e o desempenho não saem: ficam no navegador.
 
-Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador, e alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever. A fonte da tela vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora.
+Um pedido não passa pelo backend: o ditado ("Falar conteúdo") usa o reconhecimento de voz do navegador, e alguns navegadores, como o Chrome, mandam o áudio a um serviço na internet para transcrever. A fonte da tela vem junto com o aplicativo: abrir a tela não faz pedido a servidores de fora. O "Abrir arquivo" também não sai do computador: o PDF, o TXT ou o MD é lido no navegador, pelo leitor de PDF que vem junto com o aplicativo, e só o texto que fica no editor vai para o Google, quando o aluno gera o material. Abrir o arquivo não gasta chamada da IA.
 
 Na faixa gratuita, os [termos da Gemini API](https://aistudio.google.com/docs/terms) (versão de 23/03/2026) dizem que o conteúdo enviado e as respostas podem ser usados para melhorar produtos do Google e lidos por revisores humanos, e pedem que não se envie informação sensível, confidencial ou pessoal. Por isso a tela avisa antes de enviar: "Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais."
 

@@ -18,12 +18,12 @@ import {
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
-  backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo,
+  backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo, capText, MAX_INPUT,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   validCardReview, scheduleCard, dueCards, dayCards,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, ERRORS, FAILS,
-  dictate, dictationError, examPool, mockExam, examScore, examLine,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
+  FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
@@ -261,6 +261,11 @@ function App() {
   const [passage, setPassage] = useState(null);
   // Ditado em andamento: o botão vira "Parar ditado".
   const [listening, setListening] = useState(false);
+  // Arquivo sendo lido pelo "Abrir arquivo" (openFile): o botão diz que está lendo e não abre outro.
+  const [reading, setReading] = useState(false);
+  // Escolha de páginas do PDF com mais texto que o editor recebe: { reader, name, pages, total, from, to }. reader é o
+  // arquivo.js, que junta as páginas escolhidas; total, os caracteres do PDF inteiro.
+  const [pick, setPick] = useState(null);
   // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
   // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
@@ -279,6 +284,10 @@ function App() {
   // Pedido à IA em andamento (AbortController): o botão "Cancelar" da espera o interrompe.
   const pending = useRef(null);
   const recognition = useRef(null);
+  // O campo de arquivo, escondido, que o "Abrir arquivo" abre.
+  const picker = useRef(null);
+  // As páginas escolhidas na janela de páginas, que entram no editor quando ela sai (takePages).
+  const pickDone = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
   // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
@@ -1254,6 +1263,81 @@ function App() {
     } else toast(note);
   }
 
+  // "Abrir arquivo", ou o arquivo solto sobre o editor: o PDF, o TXT ou o MD é lido no navegador (arquivo.js, que chega
+  // no primeiro uso), sem chamar a IA. O texto entra no editor (putFile); o PDF com mais texto que o editor recebe abre
+  // antes a escolha de páginas (pick).
+  async function openFile(file) {
+    if (!file || reading) return;
+    setError(null);
+    setReading(true);
+    // O botão diz "Lendo o arquivo…", mas o leitor de tela não relê o nome do botão que tem o foco.
+    say('Lendo o arquivo…');
+    let reader;
+    let got;
+    try {
+      reader = await import('./arquivo.js');
+      got = await reader.readFile(file);
+    } catch (e) {
+      // A frase de cada arquivo que não abre vem do arquivo.js (code); sem ela, o próprio arquivo.js não chegou. file:
+      // o aviso fica à frente da contagem do limite por minuto (lib.js, pauseNotice).
+      setError(Object.assign(e.code ? e : {
+        message: 'Não foi possível abrir arquivos agora. Recarregue a página e tente de novo.', tech: String(e),
+      }, { file: true }));
+      return;
+    } finally {
+      setReading(false);
+    }
+    // O aluno mexeu no editor durante a leitura, ou saiu do Estudar com texto nele: o que ele fez vale mais, como no
+    // exemplo (addExample).
+    const now = latest.current;
+    const changed = now.input !== input ? 'o texto do editor mudou'
+      : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
+    if (changed) {
+      toast('O arquivo não entrou: ' + changed + ' durante a leitura');
+      return;
+    }
+    if (got.pages) {
+      const { pages } = got;
+      setPick({
+        reader, name: file.name, pages, total: reader.pageSpan(pages, 1, pages.length).length, from: 1,
+        to: reader.firstPages(pages),
+      });
+    } else {
+      putFile(got.text, 'Texto do arquivo: ' + file.name +
+        (got.cut ? '. Entrou só o começo: o editor recebe até 20.000 caracteres' : ''));
+    }
+  }
+
+  // O texto do arquivo toma o lugar do que estava no editor. É do aluno: os exemplos guardados saem, e o trecho do
+  // material volta a ser "No seu texto". Com outro texto lá, o Desfazer devolve os dois, como no exemplo (addExample).
+  function putFile(text, note) {
+    const before = input;
+    const examples = [aiExample.current, readyExample.current];
+    aiExample.current = readyExample.current = '';
+    setInput(text);
+    // O campo cresce com o texto e empurra as ferramentas para baixo: o "Abrir arquivo", onde o foco costuma estar,
+    // fica à vista, sem ir para trás da barra de baixo do celular.
+    focusAfter.current = [null, null, '#abrir-arquivo'];
+    if (before.trim()) {
+      offerUndo('texto', note, () => {
+        [aiExample.current, readyExample.current] = examples;
+        setInput(before);
+      }, ['#limpar', 'main h1']);
+    } else toast(note);
+  }
+
+  // "Usar estas páginas" na escolha de páginas. Passou do limite, o botão fica desligado; com uma página só, ela entra
+  // cortada no limite, como o TXT longo. O texto e o aviso entram quando a janela já saiu (pickDone, no onExitComplete
+  // dela): com ela aberta, a região do aviso fica inerte e o leitor de tela não o lia.
+  function takePages() {
+    const { name, from, to } = pick;
+    const text = capText(picked);
+    const note = 'Texto do arquivo: ' + name + ', ' + (from === to ? 'página ' + from : 'páginas ' + from + ' a ' + to) +
+      (over ? '. Entrou só o começo da página: o editor recebe até 20.000 caracteres' : '');
+    pickDone.current = () => putFile(text, note);
+    setPick(null);
+  }
+
   // "Levar este texto ao editor", na janela "Ver no texto": o texto do material volta ao Estudar, para gerar de novo.
   // Com outro texto no editor dá para desfazer, como no exemplo, e o texto anterior volta com os exemplos dele. O texto
   // de um exemplo continua valendo como exemplo: o material gerado dele de novo não diz "No seu texto" (markExample).
@@ -1418,6 +1502,9 @@ function App() {
   // O material aberto saiu do texto, da área e do nível do editor: no lugar do botão de gerar ficam os que só abrem.
   const fresh = !!result && made.current.key === JSON.stringify([input, area, level]);
   const isSaved = !!result?.id && saved.some(s => s.id === result.id);
+  // A escolha de páginas: o texto das páginas marcadas, contado como o contador do editor, e se ele passa do limite.
+  const picked = pick ? pick.reader.pageSpan(pick.pages, pick.from, pick.to) : '';
+  const over = picked.length > MAX_INPUT;
   const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
@@ -1467,14 +1554,14 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
-  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
-  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
-  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta. No
-  // teto do dia, não: os botões não voltam no fim da espera.
-  const pause = !!pausedUntil && !capped && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page)
-    && error?.until !== pausedUntil
-    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
-    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados (lib.js,
+  // pauseNotice). Se a mensagem que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão
+  // fechou) ou não conta esta espera, o aviso de erro conta no lugar dela. No teto do dia, não: os botões não voltam no
+  // fim da espera.
+  const pause = pauseNotice({
+    until: pausedUntil, page, error, capped,
+    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil),
+  });
   const problem = pause || error;
   // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o
   // campo e o botão de enviar (reason). Enquanto o aviso de erro já diz o mesmo (o pedido que bateu no teto, ou a espera
@@ -1692,6 +1779,7 @@ function App() {
                       waiting={waiting}
                       cost={cost}
                       reason={capNote ? 'aviso-ia' : undefined}
+                      onFile={openFile}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1703,6 +1791,32 @@ function App() {
                         <span className="full">{listening ? 'Parar ditado' : 'Falar conteúdo'}</span>
                         <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
                       </button>
+                      {/* PDF, TXT ou MD, lido aqui mesmo (openFile); soltar o arquivo sobre a caixa faz o mesmo. Na
+                          leitura, aria-disabled, como o exemplo na espera. A palavra curta vale em toda largura: com
+                          "Abrir arquivo", no computador o contador e o "Perguntar ao Cérebro" desciam para outra linha. */}
+                      <button
+                        type="button"
+                        id="abrir-arquivo"
+                        className="tool"
+                        aria-disabled={reading || undefined}
+                        onClick={() => !reading && picker.current.click()}
+                      >
+                        <Icon name="arquivo" />
+                        <span className="sr-only">{reading ? 'Lendo o arquivo…' : 'Abrir arquivo'}</span>
+                        <span aria-hidden="true">{reading ? 'Lendo…' : 'Arquivo'}</span>
+                      </button>
+                      <input
+                        ref={picker}
+                        type="file"
+                        accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+                        hidden
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          // Sem esvaziar o campo, abrir o mesmo arquivo de novo não dispararia o onChange.
+                          e.target.value = '';
+                          openFile(file);
+                        }}
+                      />
                       {/* Na espera, aria-disabled e não disabled: o botão desligado perdia o foco (addExample não pede
                           outro exemplo enquanto espera). No teto do dia ele fica ligado, com o exemplo pronto. */}
                       <button
@@ -1714,8 +1828,10 @@ function App() {
                       >
                         <Icon name="exemplo" />
                         <span className="full">Usar um exemplo</span>
-                        {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
-                        {cost && <small className="full">1 chamada de IA</small>}
+                        {/* O custo vai no nome quando o clique chama a IA (addExample); sem ela o exemplo é pronto. Fica
+                            fora da tela: com ele, as quatro ferramentas não cabiam na linha do contador e do "Perguntar
+                            ao Cérebro" no computador. */}
+                        {cost && <small className="sr-only">1 chamada de IA</small>}
                         <span className="short" aria-hidden="true">Exemplo</span>
                       </button>
                       {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
@@ -3029,6 +3145,77 @@ function App() {
                 setMore(false);
                 setLogin(true);
               })}
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+      {/* Escolha de páginas do PDF com mais texto que o editor recebe (openFile). As duas listas não deixam o
+          intervalo ao contrário: a outra ponta acompanha. A contagem é lida a cada mudança: a região fica dentro da
+          janela, porque com ela aberta o resto da página, o #anuncio também, fica inerte. */}
+      <AnimatePresence
+        onExitComplete={() => {
+          pickDone.current?.();
+          pickDone.current = null;
+        }}
+      >
+        {pick && (
+          <Modal
+            key="paginas"
+            className="pages-dialog"
+            labelledBy="paginas-titulo"
+            describedBy="paginas-texto"
+            back="#abrir-arquivo"
+            onClose={() => setPick(null)}
+          >
+            <div className="dialog-body">
+              <h2 id="paginas-titulo">Escolha as páginas</h2>
+              <p id="paginas-texto">
+                {'"' + pick.name + '" tem ' + pick.pages.length + ' páginas e ' + pick.total.toLocaleString('pt-BR') +
+                  ' caracteres. O editor recebe até 20.000: escolha as páginas que vão para ele.'}
+              </p>
+              <div className="page-range">
+                <label>
+                  Da página
+                  <select
+                    value={pick.from}
+                    onChange={e => {
+                      const from = Number(e.target.value);
+                      setPick(p => ({ ...p, from, to: Math.max(p.to, from) }));
+                    }}
+                  >
+                    {pick.pages.map((_, i) => <option key={i}>{i + 1}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Até a página
+                  <select
+                    value={pick.to}
+                    onChange={e => {
+                      const to = Number(e.target.value);
+                      setPick(p => ({ ...p, to, from: Math.min(p.from, to) }));
+                    }}
+                  >
+                    {pick.pages.map((_, i) => <option key={i}>{i + 1}</option>)}
+                  </select>
+                </label>
+              </div>
+              <p id="paginas-contagem" className="page-count" role="status" data-over={over || undefined}>
+                {picked.length.toLocaleString('pt-BR') + ' de 20.000 caracteres' + (!over ? ''
+                  : pick.from === pick.to ? ': a página entra cortada no limite'
+                  : ': passa do limite. Escolha menos páginas.')}
+              </p>
+              <div className="row">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={over && pick.from !== pick.to}
+                  aria-describedby="paginas-contagem"
+                  onClick={takePages}
+                >
+                  Usar estas páginas
+                </button>
+                <button type="button" onClick={() => setPick(null)}>Cancelar</button>
+              </div>
             </div>
           </Modal>
         )}

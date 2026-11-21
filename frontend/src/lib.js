@@ -9,7 +9,7 @@ export const LEVEL_NOTES = {
   Avançado: 'Com os termos técnicos da área',
 };
 // Limite do texto do editor, o mesmo do backend.
-const MAX_INPUT = 20000;
+export const MAX_INPUT = 20000;
 // Perguntas de partida de cada área: aparecem como sugestão no chat antes da primeira resposta, sem chamar a IA.
 export const STARTERS = {
   Tecnologia: ['O que são hardware e software?', 'Como a internet funciona?'],
@@ -750,6 +750,20 @@ export function errorText(detail, status) {
   };
 }
 
+// Contagem do limite por minuto no aviso de erro (App.jsx, Problem), ou null. Na espera (until: a hora em que os botões
+// da IA voltam), as páginas com esses botões explicam por que eles estão desligados: a contagem fica no lugar do erro
+// que não conta esta espera. Ela não aparece se a tela já conta (o próprio erro ou, no resumo e no quiz, a explicação
+// ou a revisão que falhou: counted), no teto do dia (capped: os botões não voltam no fim da espera), nem por cima do
+// aviso do arquivo no Estudar (file, App.jsx, openFile): abrir um arquivo não usa a IA, e é o que o aluno faz enquanto
+// espera.
+export function pauseNotice({ until, page, error, counted = false, capped = false }) {
+  if (!until || counted || capped || error?.until === until
+    || !['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page)) {
+    return null;
+  }
+  return error?.file && page === 'Estudar' ? null : { message: ERRORS.AI_RATE_LIMITED, until };
+}
+
 // Erro do limite por minuto (o que tem until, App.jsx, callAI) quando o teto do dia chega: a chamada recusada entrou
 // na conta do dia, e os botões da IA não voltam em alguns segundos. A frase passa a ser a do teto, sem a contagem; os
 // detalhes técnicos ficam. Outro erro volta como veio.
@@ -759,10 +773,16 @@ export function rateAtCap(error) {
     : error;
 }
 
-// Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
-// sem o corte o ditado passava de 20.000 caracteres e o backend recusava o texto.
+// Corta o texto no limite do editor, sem deixar meio emoji no fim: o backend recusa texto maior. Conta como o contador
+// do editor e o rascunho (length), e não por caractere inteiro como cut, abaixo: um emoji vale 2.
+export function capText(text) {
+  return text.slice(0, MAX_INPUT).replace(/[\uD800-\uDBFF]$/, '');
+}
+
+// Soma o trecho ditado ao texto do editor e corta no limite (capText): sem o corte o ditado passava de 20.000
+// caracteres e o backend recusava o texto.
 export function dictate(text, spoken) {
-  return (text + ' ' + spoken).trim().slice(0, MAX_INPUT).replace(/[\uD800-\uDBFF]$/, '');
+  return capText((text + ' ' + spoken).trim());
 }
 
 // Motivo da falha do ditado (o campo error do evento do navegador) em frase para o aluno.

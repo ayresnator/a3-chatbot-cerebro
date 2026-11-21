@@ -48,7 +48,10 @@ O aluno pode inserir informações de diferentes maneiras:
 - Colar um texto;
 - Escrever um tema;
 - Fazer uma pergunta;
-- Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz.
+- Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz;
+- Abrir um arquivo PDF, TXT ou MD de até 20 MB, pelo botão "Arquivo" do editor ("Abrir arquivo" para o leitor de tela) ou soltando o arquivo sobre o editor.
+
+O arquivo é lido no próprio navegador e não sai do computador: só o texto que fica no editor vai para a IA, quando o estudante gera o material. O texto do arquivo toma o lugar do que estava no editor, com "Desfazer". O do PDF chega limpo: a palavra quebrada por hífen no fim da linha volta inteira, e saem o cabeçalho e o rodapé que se repetem nas páginas e as linhas que só têm o número da página. Se o PDF passar de 20.000 caracteres, o limite do editor, uma janela pede as páginas e conta os caracteres enquanto o estudante escolhe; um TXT ou MD maior entra cortado no limite, com aviso. Um TXT gravado no formato antigo do Bloco de Notas (Windows-1252) entra com os acentos certos. PDF digitalizado (só imagem) ou com senha não abre, e a tela diz o que fazer; arquivo do Word ou do PowerPoint também não: a tela pede para salvá-lo em PDF. O leitor de PDF (pdf.js) só é baixado no primeiro PDF aberto.
 
 O sistema permite selecionar uma das seis áreas de conhecimento:
 
@@ -213,6 +216,7 @@ No pé da Biblioteca e do Desempenho, uma linha lembra que os dados ficam só ne
 | CSS | Estilização e adaptação da interface |
 | Motion | Animações e transições da interface |
 | thinking-orbs | Orbe animado nas esperas da IA |
+| pdf.js | Leitura do texto dos PDFs abertos no editor, no próprio navegador: pacote `pdfjs-dist`, licença Apache-2.0 |
 | Manrope | Fonte da interface, servida pelo próprio aplicativo: pacote `@fontsource-variable/manrope`, licença SIL Open Font License 1.1 |
 | Python | Implementação do backend |
 | FastAPI | Criação das rotas de comunicação |
@@ -268,6 +272,7 @@ a3-chatbot-cerebro/
 │   │   ├── marks.jsx
 │   │   ├── anim.js
 │   │   ├── lib.js
+│   │   ├── arquivo.js
 │   │   ├── exemplos.js
 │   │   ├── waves.js
 │   │   ├── styles.css
@@ -315,9 +320,10 @@ a3-chatbot-cerebro/
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |
 | `frontend/src/lib.js` | Regras da interface sem React: correção, desempenho, caderno de erros, simulado, backup |
+| `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
-| `frontend/tests/` | Testes das regras de `lib.js`, `exemplos.js` e `waves.js` |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js` |
 | `frontend/public/` | Arquivos públicos |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
 | `docs/ROTEIRO.md` | Roteiro da apresentação |
@@ -381,6 +387,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - Não há sincronização entre dispositivos. Para levar os dados a outro navegador, use Exportar (ou "Fazer backup") e Importar na Biblioteca.
 - Limpar os dados do navegador apaga materiais, desempenho, caderno de erros e caixas dos cartões que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
+- O "Abrir arquivo" lê o texto que o PDF guarda: PDF digitalizado (só imagem) e PDF com senha não abrem, e o de duas colunas pode sair com os trechos fora de ordem. Confira o texto no editor antes de gerar o material.
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.

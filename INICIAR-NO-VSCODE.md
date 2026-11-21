@@ -1,6 +1,6 @@
 # Iniciar no VS Code
 
-Requisitos: Git, Python 3.11 ou mais novo e Node.js 22 ou mais novo. Os comandos são do PowerShell do Windows; os de macOS e Linux estão no fim.
+Requisitos: Git, Python 3.11 ou mais novo e Node.js 22.13 ou mais novo (o leitor de PDF do frontend pede essa versão). Os comandos são do PowerShell do Windows; os de macOS e Linux estão no fim.
 
 ## 0. Baixar o projeto e conferir as ferramentas
 
@@ -119,6 +119,7 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 - "O Cérebro não respondeu como esperado" (nos detalhes, resposta sem JSON) ou "O Cérebro não está ligado neste computador" (sem conexão): confira o terminal do Python e a porta 8000.
 - Invalid host header (HTTP 400, ou "O Cérebro não respondeu como esperado" na tela, com HTTP 400 nos detalhes técnicos): o backend só responde pelos nomes de ALLOWED_HOSTS, no .env (padrão 127.0.0.1 e localhost; a porta não conta). Isso impede que um site de fora use o backend pelo seu navegador. Abra pelo endereço do guia ou acrescente o nome em ALLOWED_HOSTS e reinicie o backend.
 - App com outra letra (a fonte do sistema no lugar da Manrope), ou o aviso `didn't resolve at build time` com `@fontsource-variable` no `npm run build`: falta o pacote da fonte, que entrou no projeto depois da sua instalação. Depois de atualizar o projeto, pare o frontend (Ctrl+C no terminal do `npm run dev`, ou feche a janela dele), rode `npm ci` na pasta frontend e suba o frontend de novo. Com o frontend rodando, o `npm ci` falha no Windows (EPERM): ele começa apagando a pasta node_modules e não consegue apagar o esbuild.exe que o Vite está usando, e a pasta pode ficar pela metade. O `iniciar.ps1` confere os pacotes e avisa qual falta.
+- O botão "Arquivo", no Estudar, diz que não foi possível abrir arquivos agora, e o terminal do frontend (ou o `npm run build`) cita `pdfjs-dist`: falta o pacote do leitor de PDF, que também entrou no projeto depois da instalação. Faça como no item acima: pare o frontend, rode `npm ci` na pasta frontend e suba o frontend de novo.
 - content.js com chrome-extension://: teste sem extensões; não desative CSP.
 
 ## Testes

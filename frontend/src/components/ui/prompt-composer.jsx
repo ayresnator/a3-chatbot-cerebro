@@ -10,8 +10,8 @@ import { AREAS, LEVELS, LEVEL_NOTES, askKey, rove, typeDelay } from '../../lib.j
 // em chips, o nível num menu e o "Perguntar ao Cérebro" que pulsa quando há o que enviar. Do original ficaram de fora o
 // registro de construção e a prévia (uma simulação: aqui a espera e o resultado são de verdade e ficam na página do
 // material), os anexos (o backend só recebe texto), os ícones de pixel e as frases que se escrevem e se apagam sem fim
-// (WCAG 2.2.2). O texto, a área, o nível e quem pergunta continuam no App; as ferramentas do editor (ditado, exemplo,
-// limpar) chegam prontas, como filhos.
+// (WCAG 2.2.2). O texto, a área, o nível e quem pergunta continuam no App; as ferramentas do editor (ditado, arquivo,
+// exemplo, limpar) chegam prontas, como filhos, e o arquivo solto sobre a caixa vai para o App (onFile).
 
 // Mouse ou caneta: no toque não há ponteiro parado sobre a caixa para o brilho seguir.
 const FINE = window.matchMedia('(pointer: fine)').matches;
@@ -205,10 +205,29 @@ function LevelMenu({ value, onChange }) {
 // reason: o id do aviso que diz por que o "Perguntar" está desligado (o teto do dia, App.jsx). Ele descreve o botão e o
 // campo, onde o Ctrl + Enter não pergunta e não diz nada.
 export function PromptComposer({
-  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, reason, children,
+  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, reason, onFile, children,
 }) {
   const field = useRef(null);
   const [focused, setFocused] = useState(false);
+  // Um arquivo arrastado sobre a caixa: ela mostra onde soltar, e o arquivo solto vai para onFile, como o do "Abrir
+  // arquivo" (App.jsx, openFile). Só arquivo: o texto arrastado continua indo para o campo, como sempre.
+  const [drop, setDrop] = useState(false);
+  const carriesFile = e => e.dataTransfer.types.includes('Files');
+  // O arquivo solto fora da caixa (no título, na dica, no botão de gerar) não abre aqui, e o navegador também não o
+  // abre na aba no lugar do Cérebro: o cursor mostra que ali não se solta. O que a caixa já tratou passa.
+  useEffect(() => {
+    const away = e => {
+      if (e.defaultPrevented || !carriesFile(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', away);
+    window.addEventListener('drop', away);
+    return () => {
+      window.removeEventListener('dragover', away);
+      window.removeEventListener('drop', away);
+    };
+  }, []);
   const ready = !waiting && !!value.trim();
   // Lido quando o botão liga ou desliga: o botão que liga pelo teclado (o texto digitado) não pulsa (styles.css).
   const quiet = useMemo(byKeyboard, [ready]);
@@ -229,7 +248,23 @@ export function PromptComposer({
   }
 
   return (
-    <div className="editor" onPointerMove={FINE ? sheen : undefined}>
+    <div
+      className="editor"
+      data-drop={drop || undefined}
+      onPointerMove={FINE ? sheen : undefined}
+      onDragOver={e => {
+        if (!carriesFile(e)) return;
+        e.preventDefault();
+        setDrop(true);
+      }}
+      onDragLeave={e => !e.currentTarget.contains(e.relatedTarget) && setDrop(false)}
+      onDrop={e => {
+        if (!carriesFile(e)) return;
+        e.preventDefault();
+        setDrop(false);
+        onFile(e.dataTransfer.files[0]);
+      }}
+    >
       <div className="editor-field">
         <textarea
           ref={field}
@@ -253,6 +288,7 @@ export function PromptComposer({
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}
         {!value && !focused && examples && <Typed key={area} lines={examples.openers(area)} />}
+        {drop && <span className="drop-note" aria-hidden="true">Solte para abrir o arquivo</span>}
       </div>
       <div className="editor-bar">
         <Chips label="Área de conhecimento" options={AREAS} value={area} onChange={onArea} />
@@ -271,8 +307,8 @@ export function PromptComposer({
             aria-describedby={reason}
             onClick={onSend}
           >
-            {/* Em 550 px ou menos o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome
-                inteiro e o custo continuam no botão. */}
+            {/* Em 550 px ou menos e no celular deitado o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece
+                (mobile.css); o nome inteiro e o custo continuam no botão. */}
             <span className="full">Perguntar ao Cérebro</span>
             {cost && <small>1 chamada de IA</small>}
             <span className="short" aria-hidden="true">Perguntar</span>

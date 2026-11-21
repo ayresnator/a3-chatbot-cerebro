@@ -1337,6 +1337,27 @@ main:focus {
     outline-offset: var(--ring)
 }
 
+/* Arquivo arrastado sobre a caixa (prompt-composer.jsx): o anel ciano marca onde soltar, e o campo dá lugar à frase
+   "Solte para abrir o arquivo" (.drop-note). */
+.editor[data-drop] {
+    outline: var(--ring) solid var(--accent);
+    outline-offset: var(--ring)
+}
+
+.drop-note {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--sp-4);
+    border-radius: var(--r-box) var(--r-box) 0 0;
+    background: var(--palette);
+    color: var(--ink-hi);
+    font-weight: 650;
+    text-align: center;
+    pointer-events: none
+}
+
 .editor-field {
     position: relative
 }
@@ -1928,7 +1949,6 @@ main:focus {
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
 .ai-ask small,
-.tool small,
 .ask small,
 .action small {
     color: var(--ink-2);
@@ -3930,6 +3950,54 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .profile-dialog .primary {
     margin-top: var(--sp-2)
+}
+
+/* Escolha de páginas do PDF (App.jsx, openFile): o título, o texto e os rótulos como os da janela do perfil, as duas
+   listas lado a lado, a contagem e os botões, que dividem a linha. Passou do limite, a contagem fica no laranja de
+   aviso e diz isso por escrito. */
+.pages-dialog h2 {
+    font-size: var(--fs-5)
+}
+
+.pages-dialog p {
+    color: var(--ink-2);
+    overflow-wrap: anywhere
+}
+
+.page-range {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3)
+}
+
+.page-range label {
+    display: grid;
+    gap: var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-2);
+    font-weight: 650
+}
+
+.page-range select {
+    color: var(--ink);
+    font-weight: 400
+}
+
+.pages-dialog .page-count {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums
+}
+
+.pages-dialog .page-count[data-over] {
+    color: var(--warn)
+}
+
+.pages-dialog .row {
+    margin: var(--sp-2) 0 0
+}
+
+.pages-dialog .row button {
+    flex: 1 1 auto
 }
 
 /* Janela "Ver no texto": na medida de leitura e, no máximo, na altura da janela do navegador. Só o texto rola; o título,
