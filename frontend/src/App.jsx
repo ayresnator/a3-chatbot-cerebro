@@ -231,6 +231,8 @@ function App() {
   latest.current = { page, result: opened, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
+  // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
+  const chipsRow = useRef(null);
   // Pedido à IA em andamento (AbortController): o botão "Cancelar" da espera o interrompe.
   const pending = useRef(null);
   const recognition = useRef(null);
@@ -1184,6 +1186,13 @@ function App() {
   useLayoutEffect(() => {
     if (!asking && !TOUCH && document.activeElement?.closest('.chat-status')) document.getElementById('pergunta')?.focus();
   }, [asking]);
+  // A lista de sugestões mudou (a resposta trouxe outras, "Nova conversa", o Desfazer dela, outro assunto): a linha de
+  // chips, que rola de lado no celular (mobile.css), volta ao começo. Ela guardava a rolagem do aluno, e a lista nova
+  // chegava com o 1º chip fora da vista. Antes da pintura: a lista nova não chega a aparecer rolada. Com a mesma
+  // lista, a linha fica onde o aluno a pôs.
+  useLayoutEffect(() => {
+    if (chipsRow.current) chipsRow.current.scrollLeft = 0;
+  }, [chatHints.join('\n')]);
   // Dica do dock (styles.css): o Esc esconde a que está aberta sem mexer no ponteiro nem no foco (WCAG 1.4.13).
   useEffect(() => {
     const hide = e => {
@@ -2187,6 +2196,7 @@ function App() {
                             somem (data-espera): a pílula de espera fica no lugar deles, e os chips da resposta nova chegam
                             com ela. Com a lista do "/" aberta eles também somem (styles.css). */}
                         <m.div
+                          ref={chipsRow}
                           className="suggestions"
                           role="group"
                           aria-label="Sugestões de perguntas"
