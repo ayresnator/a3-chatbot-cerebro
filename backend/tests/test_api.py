@@ -1290,6 +1290,16 @@ class ApiTests(unittest.TestCase):
                 response = self.client.post("/api/quiz", json=self.QUIZ)
         self.assertEqual(len(response.json()["quiz"]), 6)
         self.assertIn("quiz: 1 de 7 itens de quiz com pergunta repetida descartados", logs.output[0])
+        # O corte em 6 vem depois: de 8 válidas, com 3 perguntas do material entre as 6 primeiras, ficam as 5 novas, numa
+        # chamada só.
+        repeated = [{**item, "question": question} for item, question in zip(self.NEW, self.QUIZ["avoid"])]
+        reply = [self.NEW[0], repeated[0], self.NEW[1], repeated[1], self.NEW[2], repeated[2], self.NEW[3], self.NEW[4]]
+        with patch("app.main.ai", return_value={"quiz": reply}) as mock_ai:
+            with self.assertLogs("cerebro.api", level="WARNING"):
+                response = self.client.post("/api/quiz", json=self.QUIZ)
+        self.assertEqual((response.status_code, [item["question"] for item in response.json()["quiz"]]),
+                         (200, [item["question"] for item in self.NEW[:5]]))
+        mock_ai.assert_called_once()
 
     def test_quiz_below_four_questions_gets_a_second_call_and_then_the_error(self):
         # Com menos de 4 questões válidas e novas, fora do formato ou sem a lista, vale uma segunda chamada e, se ela
@@ -1312,17 +1322,20 @@ class ApiTests(unittest.TestCase):
         mock_ai.assert_called_once()
 
     def test_quiz_without_accents_gets_one_more_call(self):
-        # Questões sem nenhum acento ganham a nova chamada da geração, uma só. Se ela falhar, ficam as primeiras.
+        # Questões sem nenhum acento ganham a nova chamada da geração, uma só, com a mesma instrução, o mesmo esquema e
+        # a mesma conferência: a questão que repete uma pergunta do material sai. Se ela falhar, ficam as primeiras.
         def strip(text):
             return "".join(char for char in unicodedata.normalize("NFD", text) if not unicodedata.combining(char))
         plain = {"quiz": json.loads(strip(json.dumps(self.NEW, ensure_ascii=False)))}
-        good, down = {"quiz": self.NEW}, HTTPException(503, {"code": "AI_PROVIDER_UNAVAILABLE"})
+        good = {"quiz": [{**self.NEW[0], "question": self.QUIZ["avoid"][0]}, *self.NEW]}
+        down = HTTPException(503, {"code": "AI_PROVIDER_UNAVAILABLE"})
         for replies, first in (([plain, good], "Que gás a planta libera?"), ([plain, plain], "Que gas a planta libera?"),
                                ([plain, {"quiz": self.NEW[:2]}], "Que gas a planta libera?"), ([plain, down], "Que gas a planta libera?")):
             with patch("app.main.ai", side_effect=[*replies, good]) as mock_ai:
                 response = self.client.post("/api/quiz", json=self.QUIZ)
             self.assertEqual((response.status_code, response.json()["quiz"][0]["question"]), (200, first), replies[1])
             self.assertEqual(mock_ai.call_count, 2)
+            self.assertEqual(mock_ai.call_args_list[1].args, (self.QUIZ, prompts.QUIZ, QuizOutput.model_json_schema()))
 
     @patch("app.main.ai", return_value={"quiz": NEW})
     def test_quiz_refuses_invalid_input_before_the_ai_call(self, mock_ai):

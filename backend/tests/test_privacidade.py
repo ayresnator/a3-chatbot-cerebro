@@ -42,18 +42,21 @@ class PrivacyTests(unittest.TestCase):
         broken = '{"answer": "' + MODELO
         study = {"content": ALUNO, "area": "Escolar", "level": "Básico"}
         grade = {"question": ALUNO, "expected": ALUNO, "answer": ALUNO, "area": "Escolar", "level": "Básico"}
-        # Questões novas: uma fora do formato e as outras repetindo a pergunta do material, que é texto do aluno. Saem
-        # todas, e o log leva só o campo, o motivo e as contagens.
+        # Questões novas: uma fora do formato, quatro repetindo a pergunta do material, que é texto do aluno, e três
+        # válidas. Sobram três, e o erro da lista curta traz as questões. Na segunda resposta a lista vem fora do formato,
+        # e o erro traz o valor recebido, como o título da geração. O log leva só o campo, o motivo e as contagens.
         quiz = {**study, "avoid": [ALUNO]}
         repeats = json.dumps({"quiz": [{"type": "multiple", "question": MODELO, "options": [MODELO], "answer": MODELO, "explanation": MODELO},
-                                       *[{"type": "short", "question": ALUNO, "options": [], "answer": "Sim", "explanation": MODELO}] * 4]})
+                                       *[{"type": "short", "question": ALUNO, "options": [], "answer": "Sim", "explanation": MODELO}] * 4,
+                                       *[{"type": "short", "question": f"{MODELO} {n}?", "options": [], "answer": "Sim", "explanation": MODELO}
+                                         for n in range(3)]]})
         rounds = (("/api/chat", CHAT, [json.dumps({"answer": MODELO})], 200),
                   ("/api/chat", CHAT, [broken, broken], 502),
                   ("/api/chat", CHAT, [400], 502),
                   ("/api/chat", CHAT, [403], 502),
                   ("/api/generate", study, [material, material], 502),
                   ("/api/grade", grade, [review, review], 502),
-                  ("/api/quiz", quiz, [repeats, repeats], 502),
+                  ("/api/quiz", quiz, [repeats, json.dumps({"quiz": MODELO})], 502),
                   ("/api/chat", {**CHAT, "area": ALUNO}, [], 422))
         # assertLogs sem nome pega o registro de todos os módulos, não só os do Cérebro.
         with patch.object(providers, "settings", CONFIG), self.assertLogs(level="DEBUG") as logs:

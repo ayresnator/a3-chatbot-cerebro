@@ -11,7 +11,7 @@ import {
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
-  quizSource, mergeQuiz, QUIZ_CAP,
+  quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
@@ -2392,6 +2392,31 @@ test('mergeQuiz: um material guarda até 30 questões', () => {
   // O material com mais de 30 (importado de um backup) fica como está, sem perder questões.
   assert.deepEqual(mergeQuiz(make(35, 'Antiga'), make(6, 'Nova')), make(35, 'Antiga'));
   assert.equal(mergeQuiz(GOOD.quiz, make(6, 'Nova'), 4).length, 4);
+});
+
+test('savedCopy: as questões que outra aba juntou ao material na biblioteca ficam, e as novas entram depois delas', () => {
+  // Duas abas com o mesmo material de 2 questões: a outra aba juntou 3 (B), e esta, parada na cópia antiga, pede mais 3.
+  const make = (n, name) => Array.from({ length: n }, (_, i) => ({ ...Q_SHORT, question: name + ' ' + (i + 1) }));
+  const mine = frozen([{ ...GOOD, id: 7, texto: 'Texto antigo.' }])[0];
+  const saved = frozen([{ ...GOOD, id: 3 }, { ...GOOD, id: 7, texto: 'Texto de lá.', quiz: [...GOOD.quiz, ...make(3, 'B')] }]);
+  const copy = savedCopy(mine, saved);
+  assert.deepEqual(copy, saved[1], 'a cópia gravada, com os campos dela');
+  const quiz = mergeQuiz(copy.quiz, make(3, 'A'));
+  assert.deepEqual(quiz.map(q => q.question), [...GOOD.quiz.map(q => q.question), 'B 1', 'B 2', 'B 3', 'A 1', 'A 2', 'A 3']);
+  // As desta aba que a biblioteca não tem (o navegador recusou a gravação) também ficam, sem passar de 30.
+  const unsaved = { ...mine, quiz: [...GOOD.quiz, ...make(2, 'C')] };
+  assert.deepEqual(savedCopy(unsaved, saved).quiz.map(q => q.question).slice(2), ['B 1', 'B 2', 'B 3', 'C 1', 'C 2']);
+  const full = [{ ...GOOD, id: 7, quiz: make(29, 'B') }];
+  assert.equal(savedCopy(unsaved, full).quiz.length, 30);
+});
+
+test('savedCopy: fora da biblioteca, sem id ou com a cópia de lá estragada, vale o material desta aba', () => {
+  const mine = { ...GOOD, id: 7 };
+  for (const saved of [[], [{ ...GOOD, id: 8 }], [null, 'x', { ...GOOD, id: 7, quiz: [] }], [{ id: 7 }]]) {
+    assert.equal(savedCopy(mine, saved), mine, JSON.stringify(saved));
+  }
+  // Material sem id não casa com um item da biblioteca que também não tem id.
+  assert.equal(savedCopy(GOOD, [{ ...GOOD, quiz: [...GOOD.quiz, Q_SHORT] }]), GOOD);
 });
 
 test('fixLastQuizEvent: a última resposta de quiz da questão vira acerto; as outras não mudam', () => {

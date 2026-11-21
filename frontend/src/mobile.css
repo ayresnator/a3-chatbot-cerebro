@@ -529,8 +529,9 @@
         font-size: var(--fs-1)
     }
 
-    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. */
-    .action {
+    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. Só
+       no grupo de gerar do Estudar: no fim do quiz, o "Questões novas" fica do tamanho dos vizinhos. */
+    .actions .action {
         flex: 1 1 auto;
         padding: var(--sp-1) var(--sp-3)
     }

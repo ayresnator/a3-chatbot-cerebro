@@ -46,7 +46,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 
-1. A IA entra em quatro lugares: gerar o material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
+1. A IA entra em cinco lugares: gerar o material, escrever questões novas de um material, tirar dúvidas, revisar resposta curta e escrever o texto do "Usar um exemplo". O resto é código comum.
 2. Saída estruturada: o backend manda o esquema JSON da resposta. Antes disso, 4 de 7 respostas reais eram recusadas.
 3. O backend não aceita a resposta sem conferir: valida cada item, descarta a questão com gabarito fora das opções, embaralha as alternativas e confere o trecho de origem.
 4. Ordem escondida no texto do aluno: mostre a linha da palavra-canário na tabela da rodada de avaliação, em [VALIDACAO.md](VALIDACAO.md).

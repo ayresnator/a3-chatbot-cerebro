@@ -1032,6 +1032,14 @@ export function mergeQuiz(quiz, incoming, cap = QUIZ_CAP) {
   return [...quiz, ...added.slice(0, Math.max(0, cap - quiz.length))];
 }
 
+// O material m como está gravado agora na biblioteca (saved, a lista inteira do navegador): outra aba pode ter juntado
+// questões à cópia de lá, e as desta aba que não chegaram lá (o navegador recusou a gravação) vão no fim. Fora da
+// biblioteca, ou com a cópia de lá estragada, o próprio m.
+export function savedCopy(m, saved) {
+  const kept = m.id && saved.find(s => s?.id === m.id);
+  return validMaterial(kept) ? { ...kept, quiz: mergeQuiz(kept.quiz, m.quiz) } : m;
+}
+
 // A revisão da IA aceitou a resposta que a comparação de texto marcou como errada: a última resposta de quiz
 // gravada para a questão (mesmo material e mesmo enunciado) passa a valer como acerto.
 // until é a hora do pedido de revisão: resposta gravada depois dela não é a que a IA viu.

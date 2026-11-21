@@ -27,7 +27,7 @@ import {
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  quizSource, mergeQuiz, QUIZ_CAP,
+  quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   originNote, findSource, textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
@@ -256,9 +256,10 @@ function App() {
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
   // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
-  // confere se o aluno mexeu neles durante a espera. virtual: o material temporário está na tela.
+  // confere se o aluno mexeu neles durante a espera. virtual: o material temporário está na tela. done: o quiz
+  // terminou, e o fim dele está na página do quiz.
   const latest = useRef({});
-  latest.current = { page, result: opened, virtual: !!result?.virtual, input, area, level };
+  latest.current = { page, result: opened, virtual: !!result?.virtual, done, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
   // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
@@ -1102,25 +1103,39 @@ function App() {
   // guardado ou, no material de antes dele, o resumo: lib.js, quizSource), sem repetir as que ele já tem. Elas entram no
   // material e, se ele está na biblioteca, também lá (lib.js, mergeQuiz), e o quiz recomeça só com elas. O botão fica
   // fora do material temporário. Durante a espera o aluno pode sair do quiz: as questões vão para o material do pedido.
+  // Como nas outras gravações, o material parte do que está no navegador, não da cópia desta aba (lib.js, savedCopy):
+  // as questões que outra aba juntou a ele ficam, o pedido evita as perguntas delas e o teto conta com elas.
   async function addQuestions() {
     const material = result;
     if (waiting || material.quiz.length >= QUIZ_CAP) return;
-    const { fromSummary, ...source } = quizSource(material);
+    const base = savedCopy(material, readList('saved'));
+    if (base.quiz.length >= QUIZ_CAP) {
+      setExtra({ of: material, error: { message: 'Este material já tem ' + QUIZ_CAP + ' questões na Biblioteca. Abra-o de lá para ver todas.' } });
+      focusAfter.current = [null, null, '#erro-questoes'];
+      return;
+    }
+    const { fromSummary, ...source } = quizSource(base);
     const from = origin(material);
+    // O material do pedido está aberto: esta cópia ou outra dele, aberta de novo da biblioteca durante a espera.
+    const isOpen = now => now.result === material || (!!material.id && now.result?.id === material.id);
     setExtra(null);
     setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', orb: 'composing', since: Date.now(), of: material });
-    // A espera nasce no fim do quiz e não seria lida.
+    // A espera nasce no fim do quiz e não seria lida. Com o botão no pé da janela ela nasceria fora da vista: a página
+    // rola até ela, e o foco fica no botão.
     say('Escrevendo questões novas…');
+    focusAfter.current = [null, null, '.quiz-wait'];
     try {
       const data = await callAI('/api/quiz', { ...source, area: from.area, level: from.level });
-      const quiz = mergeQuiz(material.quiz, data?.quiz);
-      const list = quiz.slice(material.quiz.length);
-      if (!list.length) throw Error('A IA não mandou questões novas para este material. Tente de novo.');
-      // As questões são texto da IA: o material da demonstração (semIA) passa a mostrar o aviso.
-      const { semIA, ...rest } = material;
-      const next = { ...rest, quiz };
       const stored = readList('saved');
       const at = material.id ? stored.findIndex(s => s?.id === material.id) : -1;
+      const copy = savedCopy(base, stored);
+      const quiz = mergeQuiz(copy.quiz, data?.quiz);
+      const list = quiz.slice(copy.quiz.length);
+      if (!list.length) throw Error('A IA não mandou questões novas para este material. Tente de novo.');
+      // As questões são texto da IA: o material da demonstração (semIA) passa a mostrar o aviso. O que saiu da
+      // biblioteca durante a espera perde a id: aberto, ele volta a ser guardado quando outro toma o lugar (keep).
+      const { semIA, id, ...rest } = copy;
+      const next = at >= 0 ? { ...rest, id, quiz } : { ...rest, quiz };
       if (at >= 0) {
         stored[at] = next;
         if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
@@ -1128,7 +1143,7 @@ function App() {
       // O material do pedido continua aberto (ou guardado atrás do quiz do caderno de erros ou do simulado): ele troca
       // pelo novo, e o resumo ativo, que não mudou, continua onde estava.
       const now = latest.current;
-      const open = now.result === material || (!!material.id && now.result?.id === material.id);
+      const open = isOpen(now);
       if (open) {
         if (now.virtual) setParked(next);
         else {
@@ -1151,8 +1166,18 @@ function App() {
         else toast(open || at >= 0 ? note : 'As questões novas não entraram: o material foi fechado durante a espera');
       }
     } catch (e) {
-      // Cancelado, nada muda. O erro fica no fim do quiz, embaixo do botão, que fica com o foco e à vista com ele.
-      if (!e.cancelled) setExtra({ of: material, error: e });
+      // Cancelado, nada muda. O erro fica no fim do quiz, embaixo do botão, que fica com o foco e à vista com ele. Quem
+      // saiu de lá durante a espera recebe o aviso, com "Abrir" se o fim do quiz do material continua lá.
+      if (!e.cancelled) {
+        const now = latest.current;
+        const open = isOpen(now) && !now.virtual;
+        setExtra({ of: open ? now.result : material, error: e });
+        if (!open || !now.done || now.page !== 'Quizzes') {
+          toast('Não deu para escrever as questões novas' + (open ? '' : ' de "' + material.title + '"'), open && now.done
+            ? { label: 'Abrir', run: () => openPage('Quizzes', ['#questoes-novas', 'main h1']) }
+            : undefined);
+        }
+      }
       if (adrift('.quiz-done, .busy')) focusAfter.current = ['#questoes-novas', 'main h1', e.cancelled ? null : '#erro-questoes'];
     } finally {
       setBusy(null);
@@ -1507,6 +1532,9 @@ function App() {
   // Teto de chamadas por dia escolhido pelo grupo (lib.js, capReached): até a contagem recomeçar, os botões da IA ficam
   // desligados, com o motivo junto deles.
   const capped = !!API_BASE && capReached(health);
+  // O erro do pedido de questões novas só está na tela no fim do quiz do material do pedido: só ali ele já diz a frase
+  // e conta os segundos do limite por minuto.
+  const extraError = page === 'Quizzes' && done && extra?.of === result ? extra.error : null;
   // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
   // minuto nenhum sai, nem no teto do dia. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale
   // com "true".
@@ -1532,7 +1560,7 @@ function App() {
     // Quando o alerta de um pedido na tela já diz a frase, a região fixa não a repete. A frase que acabou de entrar nela
     // ("Material pronto", do pedido que gastou a última chamada) vai junto: trocada logo depois, não chegaria ao leitor
     // de tela.
-    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, extra?.error] : [])];
+    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, extraError] : [])];
     if (!alerts.some(e => rateAtCap(e)?.message?.endsWith(ERRORS.AI_BUDGET_REACHED))) {
       say([spoken.trim(), ERRORS.AI_BUDGET_REACHED].filter(Boolean).join(' '));
     }
@@ -1606,7 +1634,7 @@ function App() {
   // fim da espera.
   const pause = pauseNotice({
     until: pausedUntil, page, error, capped,
-    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error, extra?.error].some(e => e?.until === pausedUntil),
+    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error, extraError].some(e => e?.until === pausedUntil),
   });
   const problem = pause || error;
   // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o
