@@ -3893,8 +3893,10 @@ main[data-instant] > .view[data-motion-pop-id] {
         text-decoration-color: currentColor
     }
 
-    /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
-    .chip[aria-checked=true]:focus-visible {
+    /* O anel do chip marcado e o do trecho marcado ficam fora deles, sobre o Canvas: o ciano do foco sumia no tema
+       claro. */
+    .chip[aria-checked=true]:focus-visible,
+    .source-text mark:focus-visible {
         outline-color: CanvasText
     }
 

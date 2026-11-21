@@ -661,9 +661,16 @@ function App() {
       // Se o navegador recusar, ele abre sem id, e o "Salvar material" continua lá para tentar de novo.
       // O texto do clique vai junto (texto): é nele que a janela "Ver no texto" mostra o trecho de cada tópico.
       const material = { ...data, area, level, texto: input };
-      const twin = readList('saved').find(m =>
+      const stored = readList('saved');
+      const twin = stored.findIndex(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
-      setResult(twin || store(material) || material);
+      // O que já está lá fica com o texto deste clique: a demonstração só usa as 8 primeiras frases, e o resto do texto
+      // pode ter mudado. O material de antes do campo texto também o ganha.
+      if (twin >= 0 && stored[twin].texto !== input) {
+        stored[twin] = { ...stored[twin], texto: input };
+        if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
+      }
+      setResult(twin >= 0 ? stored[twin] : store(material) || material);
       made.current = { key };
       setEditorChat(false);
       // O quiz e o baralho recomeçam com outro material. O "Gerar de novo" da demonstração, com o mesmo texto, reabre o

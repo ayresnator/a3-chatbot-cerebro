@@ -802,9 +802,17 @@
         padding: var(--sp-4)
     }
 
-    /* A janela "Ver no texto" com menos respiro: a altura que sobra vai para o texto. */
+    /* A janela "Ver no texto" com menos respiro: a altura que sobra vai para o texto. Com o zoom de 400% ela não sobra,
+       e o texto encolhia até sumir: ele fica com 3 linhas à vista, e a janela rola inteira. O scroll-padding faz o Tab
+       rolar a janela até o anel do foco, com o respiro da borda. */
     .source-dialog .dialog-body {
         gap: var(--sp-3);
+        overflow-y: auto;
+        scroll-padding-block: var(--sp-4);
         padding: var(--sp-4) var(--sp-5)
+    }
+
+    .source-text {
+        min-height: calc(var(--lh-read) * 3em + var(--sp-3) * 2 + var(--hair) * 2)
     }
 }

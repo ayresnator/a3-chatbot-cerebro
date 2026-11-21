@@ -1083,6 +1083,20 @@ test('findSource: acha o trecho sem ligar para maiúsculas, acentos, espaços e 
   const [acute, tilde] = [0x301, 0x303].map(c => String.fromCodePoint(c));
   const loose = 'cafe' + acute + ' com pa' + tilde + 'o';
   assert.equal(markedPart('Tomei ' + loose + '.', 'CAFÉ COM PÃO'), loose);
+  // O trecho que acaba antes do acento solto ou do hífen invisível (o backend corta em 200 pontos de código): a marca
+  // leva os dois junto com a última letra.
+  assert.equal(markedPart('Tomei ' + loose + '.', 'Tomei cafe'), 'Tomei cafe' + acute);
+  assert.equal(markedPart('A fotos' + shy + 'síntese usa luz.', 'A fotos'), 'A fotos' + shy);
+});
+
+test('findSource e inText: ligaduras de texto copiado de PDF e o ß valem as letras comuns, como no casefold do backend', () => {
+  const text = 'A deﬁnição de eﬁciência mede o ﬂuxo de trabalho da equipe em um período.';
+  const source = 'A definição de eficiência mede o fluxo de trabalho';
+  assert.equal(inText(source, text), true);
+  assert.equal(markedPart(text, source), 'A deﬁnição de eﬁciência mede o ﬂuxo de trabalho');
+  assert.equal(markedPart('Die Straße ist lang.', 'STRASSE'), 'Straße');
+  assert.equal(inText('strasse', 'DIE STRAẞE'), true);
+  assert.equal(inText('A eﬁciência', 'A eficiência da equipe'), true);
 });
 
 test('findSource: aspas e ponto que o modelo pôs nas pontas não precisam estar no texto, como no backend', () => {

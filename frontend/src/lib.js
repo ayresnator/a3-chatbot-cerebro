@@ -120,8 +120,8 @@ export const AI_NOTE = 'Gerado por IA. Pode conter erros: confira com o seu mate
 // backend confere o trecho (main.py, plain e grounded). Os invisíveis também saem: o backend os tira do texto antes de
 // conferir (models.py, visible), e o exemplo guardado na tela pode tê-los.
 export function inText(source, text) {
-  const plain = t => fold(t ?? '').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim();
-  return !!plain(source) && plain(text).includes(plain(source));
+  const needle = comparable(source).form;
+  return !!needle && comparable(text).form.includes(needle);
 }
 
 // A forma de comparar do inText, montada letra a letra para guardar, de cada letra dela, onde começa e onde termina o
@@ -134,8 +134,9 @@ function comparable(text) {
   let gap = false;
   for (const ch of String(text ?? '')) {
     const end = at + ch.length;
-    // Invisível (Cf) e metade de emoji cortado (Cs) não contam; o espaço só vale entre duas letras.
-    const folded = /[\p{Cf}\p{Cs}]/u.test(ch) ? '' : /\s/.test(ch) ? ' ' : fold(ch);
+    // Invisível (Cf) e metade de emoji cortado (Cs) não contam; o espaço só vale entre duas letras. A volta pelas
+    // maiúsculas desfaz as ligaduras de texto copiado de PDF (ﬁ, ﬂ) e o ß, como o casefold do backend.
+    const folded = /[\p{Cf}\p{Cs}]/u.test(ch) ? '' : /\s/.test(ch) ? ' ' : fold(fold(ch).toLocaleUpperCase('pt-BR'));
     if (folded === ' ') {
       gap = form !== '';
     } else if (folded) {
