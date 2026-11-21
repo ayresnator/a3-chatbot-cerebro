@@ -35,11 +35,11 @@ NO_SOURCE = "Nesta resposta, deixe source vazio em todos os tópicos."
 # Instrução de /api/chat.
 # O modelo já respondeu "com base na nossa conversa anterior" quando o histórico só tinha a explicação dele mesmo,
 # dada segundos antes. Por isso a instrução proíbe citar conversa que não existiu.
-# A saudação da tela promete responder com base no texto do editor: a frase "Com content preenchido" manda usar
-# esse texto e avisar quando a resposta não está nele.
+# A saudação da tela diz o que vai em content: o texto do editor ou, com um material aberto, o título e o resumo
+# dele. A frase "Com content preenchido" manda usar esse texto e avisar quando a resposta não está nele.
 CHAT = ('Responda a dúvida com exemplos práticos e passos quando necessário. '
         'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta continua essa conversa. '
-        'content é o texto que o aluno colou no editor e pode vir vazio. '
+        'content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo de um material de estudo, e pode vir vazio. '
         'Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, diga isso em uma frase antes de completar com o que você sabe. '
         'Você só conhece o que está em history, em content e na pergunta: não cite conversa, aula ou estudo anterior '
         'e não afirme que o aluno já estudou, disse ou perguntou algo que não esteja ali. '

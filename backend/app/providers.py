@@ -6,7 +6,8 @@ import math
 import re
 import threading
 import time
-from datetime import date
+from contextvars import ContextVar
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from urllib.parse import urlencode
 from urllib.error import HTTPError
@@ -25,24 +26,53 @@ class NoRedirect(HTTPRedirectHandler):
 
 urlopen = build_opener(NoRedirect).open
 logger = logging.getLogger("cerebro.ai")
-# Chamadas HTTP feitas ao provedor no dia (data local), para o cabeçalho da tela. A conta fica só na memória:
-# zera quando o dia vira e quando o backend reinicia. A trava existe porque as rotas rodam em várias threads.
-calls = {"day": None, "count": 0}
+# A cota do Google vira à meia-noite do horário do Pacífico (4h ou 5h em Brasília), e a conta de chamadas vira junto.
+# shortcut: UTC-8 fixo; no horário de verão dos EUA a virada sai 1 h depois; trocar por ZoneInfo + tzdata se precisar exato.
+QUOTA_TZ = timezone(timedelta(hours=-8))
+# Chamadas HTTP feitas ao provedor no dia da cota, para o cabeçalho da tela, e o dia da cota em que veio o
+# AI_QUOTA_EXCEEDED (exhausted). Tudo fica só na memória: a conta zera quando o dia da cota vira e quando o backend
+# reinicia. A trava existe porque as rotas rodam em várias threads.
+calls = {"day": None, "count": 0, "exhausted": None}
 calls_lock = threading.Lock()
+
+def quota_day(now: datetime | None = None):
+    return (now or datetime.now(timezone.utc)).astimezone(QUOTA_TZ).date()
 
 def calls_today(add: int = 0) -> int:
     with calls_lock:
-        today = date.today()
+        today = quota_day()
         if calls["day"] != today:
             calls.update(day=today, count=0)
         calls["count"] += add
         return calls["count"]
+
+def quota_exhausted() -> bool:
+    # A marca do 429 de cota vale até um pedido passar (ai) ou até o dia da cota virar.
+    return calls["exhausted"] == quota_day()
 
 def fail(status: int, code: str, message: str, provider_status: str = "", retry_after: int | None = None):
     detail = {"code": code, "message": message, "provider_status": provider_status}
     if retry_after is not None:
         detail["retry_after"] = retry_after
     raise HTTPException(status_code=status, detail=detail)
+
+# Teto do pedido em andamento: prazo, chamadas que restam e se a tela ainda espera. Só o middleware de main.py abre
+# um; o app.check e o app.avalia chamam a IA fora das rotas, sem ele (o app.avalia tem o teto da rodada).
+budget: ContextVar[dict | None] = ContextVar("budget", default=None)
+
+def next_call_timeout() -> float:
+    # Roda antes de cada chamada HTTP: a que passaria do teto não sai, e a que sai espera no máximo o tempo que sobra.
+    left = budget.get()
+    if left is None:
+        return settings.timeout_seconds
+    if left["gone"]():
+        # Ninguém recebe esta resposta: a tela já desistiu (Cancelar ou tempo esgotado).
+        fail(499, "AI_CANCELLED", "O pedido foi cancelado na tela.")
+    remaining = left["deadline"] - time.monotonic()
+    if left["calls"] <= 0 or remaining < 1:
+        fail(504, "AI_TIMEOUT", "A IA demorou demais para responder. Tente novamente.")
+    left["calls"] -= 1
+    return min(settings.timeout_seconds, remaining)
 
 def provider_error(exc: HTTPError):
     status = ""
@@ -87,6 +117,8 @@ def provider_error(exc: HTTPError):
         if 0 < wait <= 90 and not daily:
             seconds = math.ceil(wait)
             fail(429, "AI_RATE_LIMITED", f"Limite de chamadas por minuto atingido. Tente de novo em {seconds} segundo{'s' if seconds > 1 else ''}.", status, retry_after=seconds)
+        # O /api/health passa a avisar a tela: o selo fica "Cota de hoje esgotada".
+        calls["exhausted"] = quota_day()
         fail(429, "AI_QUOTA_EXCEEDED", "A cota de chamadas da IA acabou ou o limite do projeto foi atingido. Confira os limites no provedor e tente mais tarde.", status)
     if exc.code in (401, 403) or reason.startswith("API_KEY_"):
         fail(502, "AI_AUTH_ERROR", "O provedor recusou a credencial ou suas permissões. Gere uma chave válida, confira as restrições da Gemini API e reinicie o backend.", reason or status)
@@ -104,10 +136,12 @@ def request_json(request: Request) -> dict:
     # um erro futuro aqui dentro: sem eles, um ramo que deixasse de lançar chamaria o provedor sem parar.
     overloaded, timed_out = 0, False
     for _ in range(4):
+        # O teto do pedido vem antes da conta do dia: a chamada recusada não sai e não conta.
+        timeout = next_call_timeout()
         # Toda chamada entra na conta do dia, também as repetidas e as que terminam em erro.
         calls_today(1)
         try:
-            with urlopen(request, timeout=settings.timeout_seconds) as response:
+            with urlopen(request, timeout=timeout) as response:
                 result = json.load(response)
             if not isinstance(result, dict):
                 raise ValueError("Expected JSON object")
@@ -236,6 +270,9 @@ def ai(payload: dict, instruction: str, schema: dict | None = None, retry: bool 
         }
         headers = {"Content-Type": "application/json", "Authorization": "Bearer " + settings.api_key}
     result = request_json(Request(endpoint, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"))
+    # O provedor aceitou o pedido: a cota voltou. O catálogo de modelos fica de fora: ele passar não diz que a cota de
+    # geração voltou.
+    calls["exhausted"] = None
     try:
         if settings.provider == "gemini":
             candidates = result.get("candidates", [])

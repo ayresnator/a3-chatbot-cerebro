@@ -17,6 +17,13 @@ export default defineConfig({
         changeOrigin: true,
         timeout: 120000,
         proxyTimeout: 120000,
+        // Cancelar na tela fecha a ligação com o backend, e ele não faz a chamada seguinte à IA. Sozinho, o http-proxy
+        // do Vite 6 só desiste no evento 'aborted', que o Node não emite depois que o corpo do pedido foi lido.
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, _req, res) => {
+            res.on('close', () => { if (!res.writableEnded) proxyReq.destroy(); });
+          });
+        },
       },
     },
   },
