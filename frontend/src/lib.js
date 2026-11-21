@@ -9,7 +9,7 @@ export const LEVEL_NOTES = {
   Avançado: 'Com os termos técnicos da área',
 };
 // Limite do texto do editor, o mesmo do backend.
-const MAX_INPUT = 20000;
+export const MAX_INPUT = 20000;
 // Perguntas de partida de cada área: aparecem como sugestão no chat antes da primeira resposta, sem chamar a IA.
 export const STARTERS = {
   Tecnologia: ['O que são hardware e software?', 'Como a internet funciona?'],
@@ -566,10 +566,16 @@ export function errorText(detail, status) {
   };
 }
 
-// Soma o trecho ditado ao texto do editor e corta no limite, sem deixar meio emoji no fim:
-// sem o corte o ditado passava de 20.000 caracteres e o backend recusava o texto.
+// Corta o texto no limite do editor, sem deixar meio emoji no fim: o backend recusa texto maior. Conta como o contador
+// do editor e o rascunho (length), e não por caractere inteiro como cut, abaixo: um emoji vale 2.
+export function capText(text) {
+  return text.slice(0, MAX_INPUT).replace(/[\uD800-\uDBFF]$/, '');
+}
+
+// Soma o trecho ditado ao texto do editor e corta no limite (capText): sem o corte o ditado passava de 20.000
+// caracteres e o backend recusava o texto.
 export function dictate(text, spoken) {
-  return (text + ' ' + spoken).trim().slice(0, MAX_INPUT).replace(/[\uD800-\uDBFF]$/, '');
+  return capText((text + ' ' + spoken).trim());
 }
 
 // Motivo da falha do ditado (o campo error do evento do navegador) em frase para o aluno.

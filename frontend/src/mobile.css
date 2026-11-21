@@ -408,11 +408,18 @@
         padding: var(--sp-1) var(--sp-2)
     }
 
+    /* As quatro ferramentas dividem a linha em partes iguais, com o ícone sobre a palavra, como os itens da barra de
+       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. */
     .tool {
-        padding: 0 var(--sp-2)
+        flex: 1 1 0;
+        flex-direction: column;
+        gap: 0;
+        min-width: 0;
+        padding: 0;
+        font-size: var(--fs-1)
     }
 
-    /* "Falar" e "Exemplo" na tela; "Falar conteúdo" e "Usar um exemplo" continuam no nome do botão. Na caixa do
+    /* "Falar", "Arquivo" e "Exemplo" na tela; o nome inteiro de cada um continua no nome do botão. Na caixa do
        Dúvidas, "Enviar" e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O
        custo do "Perguntar ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
     .tool .full,
@@ -493,8 +500,8 @@
         white-space: nowrap
     }
 
-    /* Duas linhas: as três ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo, na largura da caixa e com o
-       botão primeiro. */
+    /* Duas linhas: as quatro ferramentas em cima; "Perguntar ao Cérebro" e o contador embaixo, na largura da caixa e
+       com o botão primeiro. */
     .editor-send {
         flex: 1 1 100%
     }
@@ -700,13 +707,6 @@
         min-width: var(--control-h-tool);
         padding: 0 var(--sp-0);
         font-size: var(--fs-0)
-    }
-
-    /* As três ferramentas do editor cabem numa linha (com "Desfazer" também): em 320 px "Limpar" descia para a linha
-       de "Perguntar" e empurrava o contador para uma terceira linha. */
-    .tool {
-        gap: var(--sp-1);
-        padding: 0 var(--sp-1)
     }
 
     /* "Perguntar" na tela, o nome inteiro no botão: com "Perguntar ao Cérebro" e o contador na mesma linha, em 320 px

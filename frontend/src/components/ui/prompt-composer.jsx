@@ -10,8 +10,8 @@ import { AREAS, LEVELS, LEVEL_NOTES, askKey, rove, typeDelay } from '../../lib.j
 // em chips, o nível num menu e o "Perguntar ao Cérebro" que pulsa quando há o que enviar. Do original ficaram de fora o
 // registro de construção e a prévia (uma simulação: aqui a espera e o resultado são de verdade e ficam na página do
 // material), os anexos (o backend só recebe texto), os ícones de pixel e as frases que se escrevem e se apagam sem fim
-// (WCAG 2.2.2). O texto, a área, o nível e quem pergunta continuam no App; as ferramentas do editor (ditado, exemplo,
-// limpar) chegam prontas, como filhos.
+// (WCAG 2.2.2). O texto, a área, o nível e quem pergunta continuam no App; as ferramentas do editor (ditado, arquivo,
+// exemplo, limpar) chegam prontas, como filhos, e o arquivo solto sobre a caixa vai para o App (onFile).
 
 // Mouse ou caneta: no toque não há ponteiro parado sobre a caixa para o brilho seguir.
 const FINE = window.matchMedia('(pointer: fine)').matches;
@@ -202,9 +202,15 @@ function LevelMenu({ value, onChange }) {
   );
 }
 
-export function PromptComposer({ value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, children }) {
+export function PromptComposer({
+  value, onChange, onSend, area, onArea, level, onLevel, waiting, cost, onFile, children,
+}) {
   const field = useRef(null);
   const [focused, setFocused] = useState(false);
+  // Um arquivo arrastado sobre a caixa: ela mostra onde soltar, e o arquivo solto vai para onFile, como o do "Abrir
+  // arquivo" (App.jsx, openFile). Só arquivo: o texto arrastado continua indo para o campo, como sempre.
+  const [drop, setDrop] = useState(false);
+  const carriesFile = e => e.dataTransfer.types.includes('Files');
   const ready = !waiting && !!value.trim();
   // Lido quando o botão liga ou desliga: o botão que liga pelo teclado (o texto digitado) não pulsa (styles.css).
   const quiet = useMemo(byKeyboard, [ready]);
@@ -225,7 +231,23 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
   }
 
   return (
-    <div className="editor" onPointerMove={FINE ? sheen : undefined}>
+    <div
+      className="editor"
+      data-drop={drop || undefined}
+      onPointerMove={FINE ? sheen : undefined}
+      onDragOver={e => {
+        if (!carriesFile(e)) return;
+        e.preventDefault();
+        setDrop(true);
+      }}
+      onDragLeave={e => !e.currentTarget.contains(e.relatedTarget) && setDrop(false)}
+      onDrop={e => {
+        if (!carriesFile(e)) return;
+        e.preventDefault();
+        setDrop(false);
+        onFile(e.dataTransfer.files[0]);
+      }}
+    >
       <div className="editor-field">
         <textarea
           ref={field}
@@ -249,6 +271,7 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}
         {!value && !focused && examples && <Typed key={area} lines={examples.openers(area)} />}
+        {drop && <span className="drop-note" aria-hidden="true">Solte para abrir o arquivo</span>}
       </div>
       <div className="editor-bar">
         <Chips label="Área de conhecimento" options={AREAS} value={area} onChange={onArea} />

@@ -6,7 +6,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  chatSubject,
+  chatSubject, capText,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
@@ -1504,6 +1504,14 @@ test('dictate: soma o trecho ditado ao texto do editor e corta em 20.000 caracte
   assert.equal(dictate('Texto', 'ditado agora'), 'Texto ditado agora');
   assert.equal(dictate('a'.repeat(19990), 'b'.repeat(50)), 'a'.repeat(19990) + ' ' + 'b'.repeat(9));
   assert.equal(dictate('a'.repeat(20000), 'mais'), 'a'.repeat(20000));
+});
+
+test('capText: corta em 20.000, contados como o contador do editor, sem deixar meio emoji no fim', () => {
+  assert.equal(capText('curto'), 'curto');
+  assert.equal(capText('a'.repeat(20000)), 'a'.repeat(20000));
+  assert.equal(capText('a'.repeat(20005)), 'a'.repeat(20000));
+  assert.equal(capText('a'.repeat(19998) + '😀'), 'a'.repeat(19998) + '😀', 'o emoji que termina em 20.000 fica');
+  assert.equal(capText('a'.repeat(19999) + '😀'), 'a'.repeat(19999), 'o emoji cortado ao meio sai inteiro');
 });
 
 test('dictate: o corte não deixa meio emoji no fim', () => {
