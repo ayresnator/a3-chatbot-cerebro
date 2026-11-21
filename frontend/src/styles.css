@@ -3683,7 +3683,8 @@ main[data-instant] > .view[data-motion-pop-id] {
         transition: none
     }
 
-    button:active:not(:disabled) {
+    /* O mesmo seletor da pressão (Controles, acima): com um mais fraco ela vencia, e o botão ainda encolhia. */
+    button:active:not(:disabled, [aria-disabled=true]):not(:focus-visible) {
         scale: none
     }
 
