@@ -559,8 +559,19 @@
         font-size: var(--fs-4)
     }
 
-    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas e o "Salvar material" embaixo:
-       174 px em 390 px com um título comum. O esqueleto guarda essa altura para o material não empurrar as abas. */
+    /* "Compartilhar" e "Salvo" numa linha só até 320 px: com o espaço de sempre, ali eles ficavam um embaixo do outro, e
+       o cabeçalho crescia 56 px. */
+    .result-header > .result-actions {
+        gap: var(--sp-2)
+    }
+
+    .result-actions button {
+        padding: 0 var(--sp-3)
+    }
+
+    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas e o "Compartilhar" e o "Salvo"
+       embaixo: 174 px em 390 px com um título comum. O esqueleto guarda essa altura para o material não empurrar as
+       abas. */
     .material-wait .result-header {
         min-height: 10.875rem
     }
@@ -687,6 +698,11 @@
     .library-item .open {
         order: 3;
         flex: 1
+    }
+
+    /* O "Compartilhar" desce com o "Abrir": em cima, ao lado do título, fica só o "Excluir". */
+    .library-item .share {
+        order: 3
     }
 
     .chart {

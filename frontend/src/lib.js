@@ -192,6 +192,13 @@ export function originNote(summary) {
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
 }
 
+// O aviso da folha impressa (Folha.jsx): o mesmo da tela. O papel pode ir para quem não viu o app, e o aviso do
+// material sem nenhum trecho não fala da IA: ele ganha "Gerado por IA." na frente.
+export function printNote(summary) {
+  const note = originNote(summary);
+  return summary.some(s => s.ia || s.pronto || s.source?.trim()) ? note : 'Gerado por IA. ' + note;
+}
+
 // De onde veio o texto do material, na mesma ordem do aviso: 'ia' (algum trecho do exemplo escrito pela IA), 'pronto'
 // (de um exemplo pronto) ou '' (do aluno). A janela "Ver no texto" põe isso no título, e o texto levado de volta ao
 // editor continua valendo como exemplo (App.jsx, textToEditor).
@@ -345,6 +352,13 @@ export function expectedText(q) {
   if (q.type !== 'short') return q.options[q.answer] ?? String(q.answer);
   const forms = String(q.answer).split('|').map(form => form.trim()).filter(Boolean);
   return forms.length ? forms.join(' ou ') : String(q.answer);
+}
+
+// Linha do gabarito da folha impressa (Folha.jsx): a letra da opção certa, como na tela do quiz, e o texto dela; na
+// resposta curta, só as formas aceitas.
+export function answerLine(q) {
+  const lettered = q.type !== 'short' && Number.isInteger(q.answer) && q.options[q.answer] !== undefined;
+  return (lettered ? String.fromCharCode(65 + q.answer) + ') ' : '') + expectedText(q);
 }
 
 // Título de um trecho na demonstração: a primeira oração inteira, até a quebra de linha, a pontuação (, ; : travessão)
@@ -1096,6 +1110,41 @@ export function mergeBackup(atual, novo) {
   const cartoes = byKey(atual.cartoes, novo.cartoes, (e, old) => time(e) > time(old));
   // O que entra fica no topo da biblioteca, como o material recém-salvo.
   return { saved: [...fresh, ...atual.saved], events, erros, cartoes };
+}
+
+// "Arquivo para um colega" (App.jsx, Compartilhar): só este material, no formato do backup, que o Importar do colega já
+// lê (readBackup e mergeBackup). O texto colado (texto) fica de fora, e as listas do aluno (desempenho, caderno de erros,
+// caixas dos cartões e perfil) nem entram. As marcas semIA, ia e pronto vão junto: o aviso da IA segue o material.
+// Material sem data (o que o navegador não conseguiu salvar) leva a de agora: é pela data que o Importar o reconhece e
+// não o duplica.
+export function shareFile(material, now) {
+  const { texto, ...rest } = material;
+  return { versao: 1, saved: [{ ...rest, date: isDate(material.date) ? material.date : now.toISOString() }] };
+}
+
+// Os cartões em texto, um por linha, com a frente e o verso separados por tabulação, como o Anki e o Quizlet importam.
+// A tabulação e a quebra de linha de dentro de um lado viram espaço: partiriam o cartão. side escreve cada lado.
+const flat = text => String(text).replace(/\s*[\t\r\n]+\s*/g, ' ').trim();
+export function cardLines(cards, side = flat) {
+  return cards.map(c => side(c.question) + '\t' + side(c.answer)).join('\n');
+}
+
+// O .txt do Anki: o cabeçalho que ele lê e as linhas de cardLines. No Anki a linha que começa com # é comentário, e o
+// lado que começa com aspas as perde: esse lado vai entre aspas, com as de dentro dobradas. O Quizlet lê as aspas como
+// texto, e as linhas dele ficam como estão.
+export function ankiFile(cards) {
+  const side = text => {
+    const s = flat(text);
+    return /^["#]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return '#separator:tab\n#html:false\n' + cardLines(cards, side) + '\n';
+}
+
+// Nome do arquivo de um material: o do app e o título sem acento, sem símbolo e com hífens, como o do backup
+// (cerebro-backup-AAAA-MM-DD.json). end é o fim do nome, com a extensão.
+export function fileName(title, end) {
+  const slug = fold(title).replace(/[^a-z0-9]+/g, '-').slice(0, 60).replace(/^-|-$/g, '');
+  return 'cerebro-' + (slug || 'material') + end;
 }
 
 // Contagens numa frase: "2 materiais, 1 resposta e 3 questões do caderno de erros", cada palavra no singular ou no

@@ -81,6 +81,7 @@ O estudante pode:
 - Escolher quantos tópicos aparecem (por padrão, todos), com a contagem "Mostrando N de M tópicos" e o botão "Ver os outros N tópicos" quando algum fica escondido;
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
+- Compartilhar o material: um arquivo para um colega, os cartões para o Anki ou o Quizlet e uma folha para imprimir (veja a seção 8);
 - Acessar os flashcards relacionados;
 - Pedir outra explicação de um tópico, no botão "Não entendi, me explique", sem sair da página;
 - Ver o trecho de um tópico dentro do texto inteiro, no botão "Ver no texto";
@@ -195,11 +196,21 @@ O estudante pode:
 - Filtrar materiais por área;
 - Abrir conteúdos salvos;
 - Excluir materiais, com a opção de desfazer;
+- Compartilhar um material, pelo botão de cada item ou pelo "Compartilhar" do cabeçalho do material;
 - Fazer um simulado com questões de vários materiais, com a correção só no fim;
 - Exportar a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões e o perfil para um arquivo. Cada material vai com o texto de onde saiu: antes de passar o arquivo adiante, lembre que ele leva o que foi colado no editor;
 - Importar esse arquivo em outro navegador ou computador, sem duplicar o que já existe. O perfil do arquivo só entra se o navegador ainda não tiver um, e o aviso diz o que ficou de fora por estar incompleto. Backup antigo, sem as caixas dos cartões, continua valendo.
 
 Todo material gerado vai para a biblioteca assim que chega, sem esperar o "Salvar material"; na demonstração, gerar de novo com o mesmo texto não cria cópia. Com o app aberto em duas abas, o que uma grava (biblioteca, desempenho, caderno de erros, caixas dos cartões, perfil) aparece na outra sem recarregar.
+
+O "Compartilhar" abre uma janela com quatro saídas. Nenhuma chama a IA ou o backend, e nenhuma grava nada no navegador:
+
+- "Arquivo para um colega": um `.json` só com aquele material, no formato do backup. Ele leva o material como aparece na tela, com os trechos de cada tópico, mas não o texto inteiro de onde o material saiu, o desempenho, o caderno de erros, as caixas dos cartões nem o perfil. O colega o abre pelo Importar da Biblioteca ("1 material importado"), e importar de novo não duplica. Onde o navegador compartilha o arquivo, abre a folha de compartilhar do sistema; nos outros, o arquivo é baixado. O Chrome e o Edge não compartilham arquivo `.json`, e neles o arquivo também é baixado;
+- "Cartões para o Anki (.txt)": um arquivo com um cartão por linha, a frente e o verso separados por tabulação, depois das linhas `#separator:tab` e `#html:false`, que o Anki lê na importação (Arquivo > Importar);
+- "Copiar cartões para o Quizlet": as mesmas linhas, sem as do cabeçalho, para colar na importação do Quizlet;
+- "Imprimir ou salvar em PDF": uma folha com o resumo e os trechos de cada tópico, os cartões em tiras para recortar e dobrar (a pergunta fica na frente, e a resposta, atrás), o quiz com as opções em letras e linhas para a resposta curta e, numa página à parte, o gabarito com a explicação. Só a folha sai na impressão, em papel branco com letra preta; a tela continua escura.
+
+O aviso da IA vai junto: o material leva a própria marca, e no navegador do colega ele aparece como aqui. A folha impressa também traz o aviso.
 
 O simulado usa os materiais que estão na lista, depois da busca e do filtro de área. O estudante escolhe 10, 20 ou 30 questões, e a linha diz quantas entram e de quantos materiais ("20 questões de 4 materiais"); se a lista tem menos questões que o pedido, entram todas. O sorteio pega uma questão de cada material antes de repetir algum e depois embaralha a ordem; as alternativas ficam como estão no material. Durante o simulado a tela não corrige: depois de cada resposta só aparece "Próxima questão", e cada questão diz de que material veio. O fim mostra o aproveitamento, o acerto por material e as questões erradas com a resposta certa e a explicação. "Refazer as que errei" volta com a correção na hora, e "Voltar à Biblioteca" fecha o simulado e devolve o material que estava aberto, como ir para outra página no meio dele. Cada resposta conta no desempenho e no caderno de erros com o material de onde veio. O simulado não chama a IA, funciona na demonstração e não fica guardado: recarregar a página no meio dele também o fecha.
 
@@ -267,6 +278,7 @@ a3-chatbot-cerebro/
 │   │   ├── Biblioteca.jsx
 │   │   ├── Desempenho.jsx
 │   │   ├── Perfil.jsx
+│   │   ├── Folha.jsx
 │   │   ├── ui.jsx
 │   │   ├── icons.jsx
 │   │   ├── marks.jsx
@@ -315,6 +327,7 @@ a3-chatbot-cerebro/
 | `backend/tests/` | Testes com chamadas simuladas |
 | `frontend/src/App.jsx` | Interface React: tela principal e estado do app |
 | `frontend/src/Biblioteca.jsx`, `Desempenho.jsx` e `Perfil.jsx` | Páginas Biblioteca e Desempenho e formulário do perfil, carregados à parte |
+| `frontend/src/Folha.jsx` | Folha de impressão do material (resumo, cartões para recortar, quiz e gabarito), carregada à parte no "Imprimir ou salvar em PDF" |
 | `frontend/src/ui.jsx`, `icons.jsx` e `marks.jsx` | Peças de tela usadas por mais de uma página, ícones e marcas de correção |
 | `frontend/src/components/ui/chat-composer.jsx` | Caixa de pergunta da página Dúvidas: campo, atalhos com "/", área, nível e envio |
 | `frontend/src/anim.js` | Regras das animações, feitas com o Motion |

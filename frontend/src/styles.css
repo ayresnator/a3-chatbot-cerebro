@@ -1766,6 +1766,15 @@ main:focus {
     overflow-wrap: anywhere
 }
 
+/* "Compartilhar" e "Salvar material", juntos. Sem a base de 20rem do título: o grupo desce inteiro quando não cabe ao
+   lado dele, e os dois botões só se separam quando não cabem na mesma linha. */
+.result-header > .result-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    gap: var(--sp-3)
+}
+
 .meta {
     margin-top: var(--sp-1);
     color: var(--ink-2);
@@ -4003,6 +4012,184 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .source-dialog .dialog-body > button:last-child {
     align-self: flex-start
+}
+
+/* Janela "Compartilhar" (App.jsx, openShare): o título e o nome do material como os da janela "Ver no texto" e as
+   quatro saídas, uma por linha, cada uma com o nome e, embaixo, a frase do que faz. */
+.share-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.share-dialog p {
+    color: var(--ink-2);
+    overflow-wrap: anywhere
+}
+
+.share-list {
+    display: grid;
+    gap: var(--sp-2);
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+/* Superfície larga, como o item do menu: encolhe menos sob o dedo. */
+.share-option {
+    --press: .98;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-2);
+    text-align: start
+}
+
+.share-option > span {
+    display: grid;
+    gap: var(--sp-1)
+}
+
+.share-option small {
+    color: var(--ink-2);
+    font-weight: 500;
+    line-height: var(--lh-ui)
+}
+
+/* Folha de impressão do material (Folha.jsx): nunca na tela. Na impressão ela é a página inteira, o resto do app sai, e
+   o papel fica branco, com letra preta e as medidas em pontos. A tela continua escura. */
+.folha {
+    display: none
+}
+
+@media print {
+    @page folha {
+        margin: 15mm
+    }
+
+    html:has(.folha),
+    html:has(.folha) body {
+        background: #fff
+    }
+
+    html:has(.folha) body::before {
+        display: none
+    }
+
+    .app:has(> .folha) {
+        display: block;
+        max-width: none;
+        min-height: 0;
+        padding: 0
+    }
+
+    .app:has(> .folha) > :not(.folha) {
+        display: none !important
+    }
+
+    .folha {
+        page: folha;
+        display: block;
+        color: #000;
+        font-size: 11pt;
+        line-height: 1.4
+    }
+
+    .folha h1 {
+        font-size: 18pt
+    }
+
+    .folha h2 {
+        margin: 18pt 0 8pt;
+        font-size: 14pt;
+        break-after: avoid
+    }
+
+    .folha h3 {
+        font-size: 11pt;
+        break-after: avoid
+    }
+
+    .folha header p {
+        margin-top: 4pt;
+        font-size: 9.5pt
+    }
+
+    .folha ol,
+    .folha ul {
+        margin: 0;
+        padding-left: 18pt
+    }
+
+    .folha section > ol > li + li {
+        margin-top: 10pt
+    }
+
+    .folha li > * + * {
+        margin-top: 3pt
+    }
+
+    .folha section > ol > li,
+    .folha-cartoes > li {
+        break-inside: avoid
+    }
+
+    /* O trecho do texto com o fio à esquerda, como na tela; a etiqueta da IA em itálico, sem a cor. */
+    .folha-trecho {
+        padding-left: 6pt;
+        border-left: 1pt solid #000;
+        font-size: 9.5pt
+    }
+
+    .folha-etiqueta {
+        font-size: 9.5pt;
+        font-style: italic
+    }
+
+    /* Cada cartão é uma tira: a pergunta à esquerda e a resposta à direita. O tracejado é o corte, e um cartão divide o
+       dele com o vizinho; o pontilhado do meio é a dobra. */
+    .folha .folha-cartoes {
+        margin-top: 8pt;
+        padding: 0;
+        list-style: none
+    }
+
+    .folha .folha-cartoes > li {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 3cm;
+        margin-top: -1pt;
+        border: 1pt dashed #000
+    }
+
+    .folha .folha-cartoes p {
+        margin: 0;
+        padding: 8pt 10pt
+    }
+
+    .folha-cartoes p + p {
+        border-left: 1pt dotted #000
+    }
+
+    .folha section > ol > li > ul {
+        padding-left: 0;
+        list-style: none
+    }
+
+    /* As linhas da resposta curta. */
+    .folha-linhas span {
+        display: block;
+        height: 20pt;
+        border-bottom: .75pt solid #000
+    }
+
+    .folha-gabarito {
+        break-before: page
+    }
+
+    .folha-gabarito h2 {
+        margin-top: 0
+    }
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
