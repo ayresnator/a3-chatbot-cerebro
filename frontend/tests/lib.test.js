@@ -6,7 +6,7 @@ import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  chatSubject, readWriteFirst,
+  chatSubject, readWriteFirst, spokenCard, CARD_REMINDER,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
@@ -1195,6 +1195,18 @@ test('readWriteFirst: vale a escolha gravada; sem ela, o campo vem ligado no com
   } finally {
     demoStorage(false);
   }
+});
+
+test('spokenCard: a face nova do cartão e, com o que o aluno escreveu, o lembrete junto da resposta', () => {
+  const card = { question: 'O que é um algoritmo?', answer: 'Uma sequência de passos.' };
+  assert.equal(spokenCard(card, false, true), 'Pergunta: O que é um algoritmo?');
+  assert.equal(spokenCard(card, true, false), 'Resposta: Uma sequência de passos.');
+  assert.equal(spokenCard(card, true, true), 'Resposta: Uma sequência de passos. ' + CARD_REMINDER);
+  assert.equal(CARD_REMINDER, 'Conte como acerto só se você disse o essencial.');
+  // Sem ponto no fim, a resposta ganha um antes do lembrete; com outro sinal, fica como está.
+  assert.equal(spokenCard({ ...card, answer: 'Passos em ordem ' }, true, true),
+    'Resposta: Passos em ordem. ' + CARD_REMINDER);
+  assert.equal(spokenCard({ ...card, answer: 'Sim!' }, true, true), 'Resposta: Sim! ' + CARD_REMINDER);
 });
 
 const NO_DRAFT = {

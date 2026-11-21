@@ -24,7 +24,7 @@ import {
   matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
-  originNote, readWriteFirst,
+  originNote, readWriteFirst, spokenCard, CARD_REMINDER,
 } from './lib.js';
 
 const CONFIG = window.CEREBRO_CONFIG || {};
@@ -412,21 +412,22 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show, whole] = focusAfter.current;
+    const [selector, fallback, show, whole, lead] = focusAfter.current;
     focusAfter.current = null;
     // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova.
     const last = s => s && [...document.querySelectorAll(s)].pop();
-    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
-    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
-    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
-    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
-    // acima da faixa.
-    (last(selector) || last(fallback))?.focus({ preventScroll: !!show });
-    if (!show) return;
+    // Com show (ou whole), o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado
+    // as marcas da caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela
+    // (no celular a raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco
+    // e conta uma vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e
+    // ✗ e a nota acima da faixa. Sem caber, o lead (o cartão virado), quando há, leva o foco e sobe para o topo.
     const box = last(whole);
     const fits = box && fitsAbove(box.offsetHeight, innerHeight,
       getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
-    (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
+    const top = box && !fits && last(lead);
+    (top || last(selector) || last(fallback))?.focus({ preventScroll: !!(show || box) });
+    if (top) top.scrollIntoView({ block: 'start' });
+    else (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -814,15 +815,20 @@ function App() {
     toast(backupNote(before, after, backup.fora, profile?.name));
   }
 
-  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". Quem já viu a resposta não reescreve a sua: o
-  // campo fica só para leitura até o próximo cartão.
-  function turnCard() {
+  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta" (from, onde o foco fica). Quem já viu a resposta
+  // não reescreve a sua: o campo fica só para leitura até o próximo cartão.
+  function turnCard(from = '.flashcard') {
     setFlip(!flip);
     setLocked(true);
     // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a face nova (flip ainda é o de
     // antes do clique).
-    say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
+    say(spokenCard(card, !flip, write && typed.trim() !== ''));
     cardMotion.current = 'perspective(900px) rotateX(-10deg)';
+    // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às vezes para fora da janela ou para trás
+    // da barra de baixo. Se o bloco do cartão cabe na janela, a página rola até ele inteiro, e o foco fica onde estava.
+    // Senão (a janela baixa: o celular deitado, o zoom de 200%), a resposta e o "Você escreveu" têm a vez: o cartão
+    // sobe para o topo e leva o foco, e o campo e os botões ficam a um Tab, que o scroll-padding traz acima da barra.
+    if (!flip) focusAfter.current = [from, null, null, '.card-block', '.flashcard'];
   }
 
   // O cartão seguinte, ou o mesmo recomeçado, abre na pergunta e com o campo "Sua resposta" vazio e editável.
@@ -1861,80 +1867,82 @@ function App() {
                               </div>
                               <Meter value={session.pos} max={session.queue.length} label="Cartões avaliados" />
                               <DeckMarks session={session} fresh />
-                              <button
-                                type="button"
-                                className={'flashcard' + (flip ? ' flipped' : '')}
-                                onClick={turnCard}
-                              >
-                                <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
-                                {/* A dica serve ao mouse, ao toque e ao teclado. */}
-                                <span className="face-hint">
-                                  <Icon name="refazer" />
-                                  {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
-                                </span>
-                              </button>
-                              {/* Escrever antes de ver a resposta deixa a autoavaliação mais honesta. Virado o
-                                  cartão, o texto inteiro do aluno vem logo abaixo da resposta, com o lembrete: no
-                                  campo de uma linha a resposta longa ficava cortada. */}
-                              {wrote && (
-                                <div className="card-wrote">
-                                  <p>Você escreveu: {typed}</p>
-                                  <p id="lembrete-cartao" className="hint">
-                                    Conte como acerto só se você disse o essencial.
-                                  </p>
-                                </div>
-                              )}
-                              {/* O campo fica fora do cartão (botão não leva controle dentro) e vem logo depois dele
-                                  no Tab. autoComplete off: o navegador não guarda o que o aluno escreve. */}
-                              {write && (
-                                <form
-                                  className="card-form"
-                                  onSubmit={e => {
-                                    e.preventDefault();
-                                    // O Enter vira o cartão para a resposta, como o clique; virado, não volta.
-                                    if (flip) return;
-                                    turnCard();
-                                    // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às
-                                    // vezes para fora da janela ou para trás da barra de baixo: o foco fica no
-                                    // campo, e a página rola até os botões, logo abaixo dele.
-                                    focusAfter.current = ['#resposta-cartao', null, '.verdicts'];
-                                  }}
-                                >
-                                  <label htmlFor="resposta-cartao">Sua resposta (opcional)</label>
-                                  <input
-                                    id="resposta-cartao"
-                                    value={typed}
-                                    onChange={e => setTyped(e.target.value)}
-                                    readOnly={locked}
-                                    placeholder={locked && !typed ? 'Escreva no próximo cartão' : undefined}
-                                    maxLength={500}
-                                    autoComplete="off"
-                                    aria-describedby={wrote ? 'lembrete-cartao' : undefined}
-                                  />
-                                </form>
-                              )}
-                              <div className="row center verdicts">
-                                <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
-                                  <Icon name="fechar" />
-                                  Errei
-                                </button>
+                              {/* O bloco que a página mostra inteiro ao virar o cartão, se cabe (turnCard). */}
+                              <div className="card-block">
                                 <button
                                   type="button"
-                                  disabled={session.pos + 1 >= session.queue.length}
-                                  onClick={() => {
-                                    setDeck(deckLater(session));
-                                    freshCard();
-                                    cardMotion.current = 'translateX(12px)';
-                                    toast('Cartão movido para o final do baralho');
-                                  }}
+                                  className={'flashcard' + (flip ? ' flipped' : '')}
+                                  onClick={() => turnCard()}
                                 >
-                                  <Icon name="refazer" />
-                                  Revisar depois
+                                  <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
+                                  {/* A dica serve ao mouse, ao toque e ao teclado. */}
+                                  <span className="face-hint">
+                                    <Icon name="refazer" />
+                                    {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
+                                  </span>
                                 </button>
-                                <button type="button" className="primary" disabled={!flip} onClick={() => cardNext(true)}>
-                                  <Icon name="check" />
-                                  Acertei
-                                </button>
+                                {/* Escrever antes de ver a resposta deixa a autoavaliação mais honesta. Virado o
+                                    cartão, o texto inteiro do aluno vem logo abaixo da resposta, com o lembrete: no
+                                    campo de uma linha a resposta longa ficava cortada. */}
+                                {wrote && (
+                                  <div className="card-wrote">
+                                    <p>Você escreveu: {typed}</p>
+                                    <p id="lembrete-cartao" className="hint">{CARD_REMINDER}</p>
+                                  </div>
+                                )}
+                                {/* O campo fica fora do cartão (botão não leva controle dentro) e vem logo depois dele
+                                    no Tab. autoComplete off: o navegador não guarda o que o aluno escreve. */}
+                                {write && (
+                                  <form
+                                    className="card-form"
+                                    onSubmit={e => {
+                                      e.preventDefault();
+                                      // O Enter vira o cartão para a resposta, como o clique (o foco e a rolagem
+                                      // depois: turnCard); virado, não volta.
+                                      if (!flip) turnCard('#resposta-cartao');
+                                    }}
+                                  >
+                                    <label htmlFor="resposta-cartao">Sua resposta (opcional)</label>
+                                    <input
+                                      id="resposta-cartao"
+                                      value={typed}
+                                      onChange={e => setTyped(e.target.value)}
+                                      readOnly={locked}
+                                      placeholder={locked && !typed ? 'Escreva no próximo cartão' : undefined}
+                                      maxLength={500}
+                                      autoComplete="off"
+                                      aria-describedby={wrote ? 'lembrete-cartao' : undefined}
+                                    />
+                                  </form>
+                                )}
+                                <div className="row center verdicts">
+                                  <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
+                                    <Icon name="fechar" />
+                                    Errei
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={session.pos + 1 >= session.queue.length}
+                                    onClick={() => {
+                                      setDeck(deckLater(session));
+                                      freshCard();
+                                      cardMotion.current = 'translateX(12px)';
+                                      toast('Cartão movido para o final do baralho');
+                                    }}
+                                  >
+                                    <Icon name="refazer" />
+                                    Revisar depois
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="primary"
+                                    disabled={!flip}
+                                    onClick={() => cardNext(true)}
+                                  >
+                                    <Icon name="check" />
+                                    Acertei
+                                  </button>
+                                </div>
                               </div>
                               {/* Embaixo dos botões, fora do caminho do Tab entre o cartão, o campo e a avaliação. A
                                   escolha fica no navegador (lib.js, readWriteFirst). */}

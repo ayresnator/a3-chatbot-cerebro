@@ -636,6 +636,17 @@ export function deckSummary(deck) {
     (missed === 0 ? 'nenhum voltou' : missed === 1 ? '1 voltou' : missed + ' voltaram') + ' por erro.';
 }
 
+// Lembrete embaixo do "Você escreveu", com o cartão virado.
+export const CARD_REMINDER = 'Conte como acerto só se você disse o essencial.';
+
+// O que a região fixa diz ao virar o cartão (toAnswer: para a resposta). Com o que o aluno escreveu na tela (wrote), a
+// resposta vem com o lembrete: o foco não passa por ele. A resposta sem ponto final ganha um, para a pausa antes dele.
+export function spokenCard(card, toAnswer, wrote) {
+  if (!toAnswer) return 'Pergunta: ' + card.question;
+  const text = 'Resposta: ' + card.answer.trim();
+  return wrote ? text + (/[.!?…]$/.test(text) ? ' ' : '. ') + CARD_REMINDER : text;
+}
+
 // Caderno de erros: as questões erradas de todos os materiais, para refazer. Cada erro é { key, item, title, area,
 // date }: a questão inteira, o material e a área de onde veio e quando o aluno a errou por último.
 // As funções recebem a lista como está gravada no navegador: item que a tela ignora fica onde está.

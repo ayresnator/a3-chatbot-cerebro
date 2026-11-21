@@ -774,7 +774,8 @@
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
    As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
    abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só), os botões de gerar sobem;
-   com o cartão mais baixo, ele e os três botões cabem juntos acima da barra. */
+   com o cartão mais baixo, ele e os três botões cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e
+   ao virar o cartão quem tem a vez é a resposta (App.jsx, turnCard). */
 @media (max-height: 30rem) {
     .lead {
         display: none
