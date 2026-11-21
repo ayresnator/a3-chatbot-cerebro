@@ -225,8 +225,8 @@ function App() {
   // Material de verdade que está aberto: durante o quiz do caderno de erros é o que ficou guardado.
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
-  // clique. O texto do editor, a área e o nível vão junto: na volta da IA, addExample() confere se o aluno mexeu neles
-  // durante a espera.
+  // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
+  // confere se o aluno mexeu neles durante a espera.
   const latest = useRef({});
   latest.current = { page, result: opened, input, area, level };
   const noticeTimer = useRef(null);
@@ -1046,17 +1046,6 @@ function App() {
         if (!at || at === document.body || at.closest('.busy')) focusAfter.current = ['#usar-exemplo'];
         setBusy(null);
       }
-      // O aluno mexeu durante a espera no que o exemplo usa: o que ele fez vale mais. O exemplo apagaria o texto no
-      // meio da digitação (o Desfazer do editor some na primeira tecla) ou longe da vista (some também na troca de
-      // página), e o exemplo da área ou do nível do clique ficaria com outra área ou outro nível na tela.
-      const now = latest.current;
-      const changed = now.input !== input ? 'o texto do editor mudou'
-        : now.area !== area || now.level !== level ? 'a área ou o nível mudou'
-        : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
-      if (changed) {
-        toast('O exemplo não entrou: ' + changed + ' durante a espera');
-        return;
-      }
     }
     // Os exemplos prontos ficam à parte (exemplos.js), fora do JavaScript da abertura; a caixa do editor já os trouxe.
     // O arquivo pode não vir (a rede caiu depois da abertura, ou saiu uma versão nova com a aba aberta): o aviso diz o
@@ -1064,6 +1053,18 @@ function App() {
     const examples = written ? null : await import('./exemplos.js').catch(() => null);
     if (!written && !examples) {
       toast('Não foi possível carregar os exemplos. Recarregue a página.');
+      return;
+    }
+    // O aluno mexeu durante a espera no que o exemplo usa: o que ele fez vale mais. O exemplo apagaria o texto no meio
+    // da digitação (o Desfazer do editor some na primeira tecla) ou longe da vista (some também na troca de página), e
+    // o exemplo da área ou do nível do clique ficaria com outra área ou outro nível na tela. A conferência fica depois
+    // das duas esperas, a da IA e a do arquivo dos exemplos: numa rede lenta o arquivo também demora.
+    const now = latest.current;
+    const changed = now.input !== input ? 'o texto do editor mudou'
+      : now.area !== area || now.level !== level ? 'a área ou o nível mudou'
+      : input.trim() && now.page !== 'Estudar' ? 'você saiu do Estudar' : '';
+    if (changed) {
+      toast('O exemplo não entrou: ' + changed + ' durante a espera');
       return;
     }
     const example = written || examples.pickExample(area, { topic: exampleTopic.current, text: input });
