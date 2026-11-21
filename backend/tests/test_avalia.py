@@ -424,14 +424,16 @@ class AvaliaTests(unittest.TestCase):
             results = self.run_quietly(avalia.plan(), 0)
         self.assertEqual(mock_ai.call_count, 5)
         self.assertEqual([result["error"] for result in results], [""] * 4 + ["AI_QUOTA_EXCEEDED"] + ["NOT_RUN"] * 19)
-        # Nenhum caso passou: a tabela e o arquivo saem, e o programa avisa com a saída 1.
-        out = io.StringIO()
-        with tempfile.TemporaryDirectory() as folder, patch("app.avalia.settings", CONFIG), contextlib.redirect_stdout(out), \
-                patch("app.main.ai", side_effect=HTTPException(429, {"code": "AI_QUOTA_EXCEEDED"})) as mock_ai:
-            self.assertEqual(avalia.main(["--rodar", "--pausa", "0"], folder=Path(folder)), 1)
-            self.assertEqual(len(list(Path(folder).iterdir())), 1)
-        self.assertEqual(mock_ai.call_count, 1)
-        self.assertIn("| Erros | AI_QUOTA_EXCEEDED (1), NOT_RUN (23) |", out.getvalue())
+        # Nenhum caso passou: a tabela e o arquivo saem, e o programa avisa com a saída 1. O teto do dia do grupo
+        # (AI_DAILY_LIMIT) também para a rodada: depois dele nenhuma chamada sai.
+        for code in ("AI_QUOTA_EXCEEDED", "AI_BUDGET_REACHED"):
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as folder, patch("app.avalia.settings", CONFIG), contextlib.redirect_stdout(out), \
+                    patch("app.main.ai", side_effect=HTTPException(429, {"code": code})) as mock_ai:
+                self.assertEqual(avalia.main(["--rodar", "--pausa", "0"], folder=Path(folder)), 1)
+                self.assertEqual(len(list(Path(folder).iterdir())), 1)
+            self.assertEqual(mock_ai.call_count, 1, code)
+            self.assertIn(f"| Erros | {code} (1), NOT_RUN (23) |", out.getvalue())
 
     def test_the_per_minute_limit_waits_and_repeats_the_case_once(self):
         limited = HTTPException(429, {"code": "AI_RATE_LIMITED", "retry_after": 2})
