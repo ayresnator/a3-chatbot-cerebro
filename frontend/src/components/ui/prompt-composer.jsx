@@ -3,7 +3,7 @@ import { useReducedMotion } from 'motion/react';
 import { Icon } from '../../icons.jsx';
 import { useFit } from '../../ui.jsx';
 import { byKeyboard } from '../../anim.js';
-import { AREAS, LEVELS, LEVEL_NOTES, askKey, openers, rove, typeDelay } from '../../lib.js';
+import { AREAS, LEVELS, LEVEL_NOTES, askKey, rove, typeDelay } from '../../lib.js';
 
 // Caixa do editor da tela Estudar (#61), o Prompt Composer do 21st.dev adaptado ao Cérebro: o cartão de vidro com o
 // brilho que segue o ponteiro, a frase de exemplo que se escreve no campo vazio, o campo que cresce com o texto, a área
@@ -208,6 +208,12 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
   const ready = !waiting && !!value.trim();
   // Lido quando o botão liga ou desliga: o botão que liga pelo teclado (o texto digitado) não pulsa (styles.css).
   const quiet = useMemo(byKeyboard, [ready]);
+  // As frases de exemplo saem dos exemplos prontos (exemplos.js), que ficaram fora do JavaScript da abertura: a caixa os
+  // busca quando monta. Até eles chegarem o campo vazio fica sem frase, e ela só começa a se escrever depois de 0,9 s.
+  const [examples, setExamples] = useState(null);
+  useEffect(() => {
+    import('../../exemplos.js').then(setExamples, () => {});
+  }, []);
   useFit(field, value);
 
   // O brilho do vidro segue o ponteiro: a posição vai direto para o CSS da caixa (--mx e --my), sem redesenhar nada.
@@ -242,7 +248,7 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
         />
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}
-        {!value && !focused && <Typed key={area} lines={openers(area)} />}
+        {!value && !focused && examples && <Typed key={area} lines={examples.openers(area)} />}
       </div>
       <div className="editor-bar">
         <Chips label="Área de conhecimento" options={AREAS} value={area} onChange={onArea} />

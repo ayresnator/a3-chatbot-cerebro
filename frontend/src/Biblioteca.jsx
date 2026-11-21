@@ -9,12 +9,13 @@ import { AREAS, plural } from './lib.js';
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave). backup é a linha do pé (ui.jsx,
 // BackupNote).
 export default function Biblioteca({
-  rise, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, backup, onExport, onImport, onOpen,
+  fade, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, backup, onExport, onImport, onOpen,
   onRemove, onStart,
 }) {
   const picker = useRef(null);
+  // Com a lista de áreas na barra, o painel só esmaece (anim.js, fade).
   return (
-    <m.section className="panel" variants={rise}>
+    <m.section className="panel" variants={fade}>
       <div className="toolbar">
         <label className="search">
           <Icon name="buscar" />

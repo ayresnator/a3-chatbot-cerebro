@@ -8,8 +8,8 @@ import { AREAS, spokenDay, areaLine, plural } from './lib.js';
 // o navegador fica livre. Os números e o estado continuam no App; aqui só o desenho. backup é a linha do pé (ui.jsx,
 // BackupNote).
 export default function Desempenho({
-  rise, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, openWeak, hasMaterial,
-  onStart, mistakes, redoMistakes, events, backup, onExport,
+  rise, fade, streakDays, quizzes, cards, percent, chartArea, setChartArea, days, busiest, weakest, openWeak,
+  hasMaterial, onStart, mistakes, redoMistakes, events, backup, onExport,
 }) {
   // Questões do ponto fraco no caderno de erros: as que o "Refazer os erros de" abre.
   const own = weakest ? mistakes.filter(e => e.title === weakest.name).length : 0;
@@ -30,7 +30,8 @@ export default function Desempenho({
           label={'autoavaliação nos cartões · ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
         />
       </m.div>
-      <m.section className="panel" variants={rise}>
+      {/* Com a lista "Área do gráfico" dentro, o painel só esmaece (anim.js, fade). */}
+      <m.section className="panel" variants={fade}>
         <div className="panel-head">
           <h2>Respostas e acertos nos últimos 7 dias</h2>
           <label className="inline-field">
