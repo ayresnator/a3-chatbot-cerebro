@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Waves, useWavesAllowed,
+  PerfilSkeleton, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, validMaterial, sameMaterial, validEvent, fold, demo,
@@ -151,9 +151,16 @@ function App() {
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
   // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
-  // (WCAG 2.2.2) e fica gravado no navegador; sem nada gravado, elas andam.
+  // (WCAG 2.2.2) e fica gravado no navegador; sem nada gravado, elas andam. Com movimento reduzido no sistema
+  // (wavesStill, lido ao vivo) elas ficam paradas e o botão some.
   const wavesAllowed = useWavesAllowed();
+  const wavesStill = useWavesStill();
   const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
+  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido, e aí o botão
+  // some (não teria o que ligar); null enquanto não houve aviso, e o botão fica.
+  const [wavesActive, setWavesActive] = useState(null);
+  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
+  const [fundoUnsaved, setFundoUnsaved] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
@@ -1159,7 +1166,7 @@ function App() {
       >
         Pular para o conteúdo
       </a>
-      <Waves on={wavesAllowed} animate={fundo && !calm} />
+      <Waves on={wavesAllowed} animate={fundo && !wavesStill} onActive={setWavesActive} />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
@@ -2211,21 +2218,28 @@ function App() {
               <Suspense fallback={<PerfilSkeleton />}>
                 <Perfil name={name} setName={setName} area={area} onSave={saveProfile} />
               </Suspense>
-              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem. Vale na
-                  hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
-              {wavesAllowed && !calm && (
-                <button
-                  type="button"
-                  className="chip"
-                  aria-pressed={fundo}
-                  onClick={() => {
-                    setFundo(!fundo);
-                    persist('fundo', !fundo);
-                  }}
-                >
-                  {fundo && <Icon name="check" />}
-                  Fundo animado
-                </button>
+              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
+                  WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
+              {wavesAllowed && !wavesStill && wavesActive !== false && (
+                <>
+                  <button
+                    type="button"
+                    className="chip"
+                    aria-pressed={fundo}
+                    onClick={() => {
+                      setFundo(!fundo);
+                      setFundoUnsaved(!persist('fundo', !fundo));
+                    }}
+                  >
+                    {fundo && <Icon name="check" />}
+                    Fundo animado
+                  </button>
+                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta janela, na parte inerte da página, e
+                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
+                  <p role="status">
+                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
+                  </p>
+                </>
               )}
             </div>
           </Modal>

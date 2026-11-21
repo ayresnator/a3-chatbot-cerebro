@@ -3397,6 +3397,12 @@ main[data-instant] > .view[data-motion-pop-id] {
     align-self: flex-start
 }
 
+/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a janela abre, para o leitor de
+   tela ler o texto quando ele entra. Vazio, não ocupa lugar: a margem devolve o espaço entre os blocos (.dialog-body). */
+.profile-dialog [role=status]:empty {
+    margin-top: calc(var(--sp-4) * -1)
+}
+
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
    rótulo fica na altura da linha dele e o botão com a margem dele: a janela não muda quando o formulário chega. */
 .profile-form {

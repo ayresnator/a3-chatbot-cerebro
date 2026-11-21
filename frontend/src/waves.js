@@ -10,16 +10,21 @@ export const MAX_DPR = 2;
 // absorve a oscilação da hora de cada quadro: a 60 Hz sai um quadro sim, um não, sem cair para 20 por segundo.
 export const FRAME_MS = 1000 / 30;
 const FRAME_SLACK_MS = 2;
+// Depois de um quadro desenhado, o pedido do próximo espera este tempo num temporizador: pedir um quadro a cada quadro
+// da tela acordava a thread principal 240 vezes por segundo numa tela de 240 Hz para desenhar 30. Os 4 ms a menos dão
+// tempo de o pedido sair antes do quadro da tela em que as ondas desenham de novo.
+export const FRAME_WAIT_MS = FRAME_MS - FRAME_SLACK_MS - 4;
 // Um quadro anda no máximo 100 ms do tempo das ondas: uma trava da página não vira um salto delas.
 export const MAX_STEP_MS = 100;
 // Depois de uma hora o tempo volta a zero quando a aba reaparece: em float, um número grande perde precisão.
 export const RESTART_S = 3600;
-// Folga das faixas para dentro do palco, em cima e embaixo (px CSS): a página rola entre um quadro e outro, e a borda
-// que entra na tela tem de mostrar ondas já desenhadas, não o buraco do quadro anterior.
-export const SLACK_Y = 160;
-// O contexto não sai antes de 1,5 s da abertura da página: até lá a GPU ainda cuida dos primeiros quadros, e o
-// getContext esperava por ela de 0,1 a 0,7 s na thread principal (Chromium com GPU de verdade, sem cache); depois, ~3 ms.
+// O contexto não sai antes de 1,5 s da abertura da página, nem de 1 s depois de pedido (o JS do app pode chegar tarde):
+// até lá a GPU ainda cuida dos primeiros quadros, e o getContext esperava por ela de 0,1 a 0,7 s na thread principal
+// (Chromium com GPU de verdade, sem cache); depois, ~3 ms.
 const SETTLE_MS = 1500;
+// Canvas que já têm contexto: neles o getContext só devolve o que existe, sem esperar a GPU, e o começo novo (a troca
+// do "Fundo animado") não espera.
+const warm = new WeakSet();
 
 export const UNIFORMS = {
   // Cores do mais escuro ao mais claro: #031C26, #1B6CA8, #5AD2F4 e #EAF9FF. O shader tem 8 vagas; só 4 são usadas.
@@ -57,15 +62,20 @@ export function tick(seconds, last, now) {
 
 // Retângulos do scissor (x, y, largura e altura em pixels do aparelho, com y de baixo para cima, como no WebGL) que
 // cobrem o canvas fora do palco. stage é o retângulo do palco em px CSS (getBoundingClientRect), radius o raio das
-// quinas e scale os pixels do aparelho por px CSS. O buraco perde o raio dos lados, para as quinas redondas ficarem com
-// ondas, e a folga da rolagem em cima e embaixo. Palco pequeno demais para ter buraco: o canvas inteiro.
-export function bands(stage, radius, width, height, scale) {
+// quinas, scale os pixels do aparelho por px CSS, scroll a rolagem da página e end a rolagem no fim dela (px CSS).
+// O buraco só cobre o que o palco cobre em qualquer ponto da rolagem: do topo dele com a rolagem em zero ao pé dele no
+// fim da rolagem. Assim a página pode rolar quanto for entre dois quadros (a troca de página volta ao topo num salto)
+// sem mostrar canvas sem desenho. O buraco perde o raio em volta: dos lados, para as quinas redondas ficarem com ondas;
+// em cima e embaixo, porque a rolagem tem fração de px e o fim dela vem arredondado. Palco pequeno demais para ter
+// buraco: o canvas inteiro.
+export function bands(stage, radius, width, height, scale, scroll = 0, end = 0) {
   const fit = (v, max) => Math.min(max, Math.max(0, v));
-  const dy = Math.max(radius, SLACK_Y);
+  // A rolagem elástica passa de zero e do fim: lá vale o retângulo de agora.
+  const y = fit(scroll, end);
   const left = fit(Math.ceil((stage.left + radius) * scale), width);
   const right = fit(Math.floor((stage.right - radius) * scale), width);
-  const top = fit(Math.ceil((stage.top + dy) * scale), height);
-  const bottom = fit(Math.floor((stage.bottom - dy) * scale), height);
+  const top = fit(Math.ceil((stage.top + y + radius) * scale), height);
+  const bottom = fit(Math.floor((stage.bottom + y - end - radius) * scale), height);
   if (right <= left || bottom <= top) return [[0, 0, width, height]];
   return [
     [0, 0, left, height],
@@ -353,12 +363,13 @@ function compile(gl, type, source) {
 }
 
 // Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando. O trabalho
-// começa quando a página fica livre (requestIdleCallback; sem ele, na hora), não antes de SETTLE_MS da abertura. Só
-// roda com WebGL na GPU: com failIfMajorPerformanceCaveat, o renderizador por software não dá contexto, e fica o fundo
-// de CSS. Com KHR_parallel_shader_compile o driver compila e liga o shader fora da thread principal, e cada quadro só
-// pergunta se acabou; sem ela, a ligação trava a página até acabar, como antes.
+// começa quando a página fica livre (requestIdleCallback; sem ele, na hora); a primeira vez num canvas, não antes de
+// SETTLE_MS da abertura nem de 1 s depois da chamada. Só roda com WebGL na GPU: com failIfMajorPerformanceCaveat, o
+// renderizador por software não dá contexto, e fica o fundo de CSS. Com KHR_parallel_shader_compile o driver compila e
+// liga o shader fora da thread principal, e cada quadro só pergunta se acabou; sem ela, a ligação trava a página até
+// acabar, como antes.
 // onActive(true) sai junto com o primeiro quadro, também quando o contexto volta; onActive(false), quando falta WebGL,
-// o shader é recusado ou o contexto se perde.
+// o shader é recusado ou o contexto se perde (ou já chega perdido).
 // animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands).
 // animate falso (movimento reduzido ou "Fundo animado" desligado): um quadro parado da tela inteira, redesenhado quando o
 // tamanho ou a densidade de pixels mudam.
@@ -373,15 +384,17 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   let seconds = 0;
   let last = null;
   let raf = 0;
+  let wait = 0;
   let poll = 0;
   let density = null;
 
   // u_resolution é sempre o canvas inteiro: o scissor só escolhe que pixels saem, e o desenho não muda.
   function paint(full) {
     const stage = full ? null : document.querySelector('main');
+    const root = document.documentElement;
     const parts = stage
       ? bands(stage.getBoundingClientRect(), parseFloat(getComputedStyle(stage).borderTopLeftRadius) || 0,
-        canvas.width, canvas.height, scale)
+        canvas.width, canvas.height, scale, window.scrollY, root.scrollHeight - root.clientHeight)
       : [[0, 0, canvas.width, canvas.height]];
     gl.uniform4f(scene, canvas.width, canvas.height, seconds * SPEED, UNIFORMS.colorCount);
     for (const part of parts) {
@@ -423,10 +436,11 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   }
 
   // Compila e liga sem perguntar o estado: a pergunta trava até o driver acabar. A extensão é pedida de novo a cada
-  // vez, porque a de um contexto perdido não vale no que volta. Contexto perdido agora (o canvas é o mesmo da vez
-  // anterior): o webglcontextrestored chama de novo.
+  // vez, porque a de um contexto perdido não vale no que volta. Contexto já perdido (o canvas é o mesmo da vez
+  // anterior, e ele se perdeu entre um stop() e este começo, sem ninguém ouvindo): fica o fundo de CSS, e o
+  // webglcontextrestored chama de novo se ele voltar.
   function link() {
-    if (gl.isContextLost()) return;
+    if (gl.isContextLost()) return onActive(false);
     ext = gl.getExtension('KHR_parallel_shader_compile');
     const vs = compile(gl, gl.VERTEX_SHADER, VERT);
     const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
@@ -457,23 +471,33 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     onActive(true);
   }
 
+  // Depois de um quadro desenhado, o pedido do próximo espera no temporizador; o quadro que chega cedo pede o seguinte
+  // direto. O laço está tocando enquanto raf ou wait têm valor, e nunca há dois.
   function frame(now) {
-    raf = requestAnimationFrame(frame);
     const next = tick(seconds, last, now);
-    if (next === null) return;
+    if (next === null) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
     seconds = next;
     last = now;
     paint(false);
+    raf = 0;
+    wait = setTimeout(() => {
+      wait = 0;
+      raf = requestAnimationFrame(frame);
+    }, FRAME_WAIT_MS);
   }
   // Ao voltar a tocar, a referência do relógio zera: o tempo parado não conta.
   function play() {
-    if (raf || !ready || document.hidden) return;
+    if (raf || wait || !ready || document.hidden) return;
     last = null;
     raf = requestAnimationFrame(frame);
   }
   function pause() {
     cancelAnimationFrame(raf);
-    raf = 0;
+    clearTimeout(wait);
+    raf = wait = 0;
   }
   // Mudar o tamanho do canvas apaga o que estava nele: redesenha na hora, sem esperar o próximo quadro do laço.
   function render() {
@@ -519,6 +543,7 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
       onActive(false);
       return;
     }
+    warm.add(canvas);
     window.addEventListener('resize', render);
     document.addEventListener('visibilitychange', onVisibility);
     canvas.addEventListener('webglcontextlost', onLost);
@@ -532,7 +557,7 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   const timer = setTimeout(() => {
     if ('requestIdleCallback' in window) idle = requestIdleCallback(begin, { timeout: 2000 });
     else begin();
-  }, Math.max(0, SETTLE_MS - performance.now()));
+  }, warm.has(canvas) ? 0 : Math.max(SETTLE_MS - performance.now(), 1000));
 
   return () => {
     clearTimeout(timer);

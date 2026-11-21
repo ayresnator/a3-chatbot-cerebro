@@ -1,8 +1,10 @@
-// Testes do fundo em ondas (src/waves.js): o tamanho do canvas, o relógio e o corte a 30 quadros por segundo, as faixas
-// do scissor em volta do palco e os valores da receita do Shader Builder. npm test
+// Testes do fundo em ondas (src/waves.js): o tamanho do canvas, o relógio e o corte a 30 quadros por segundo, a espera
+// do laço no temporizador, as faixas do scissor em volta do palco e os valores da receita do Shader Builder. npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canvasSize, tick, bands, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, MAX_STEP_MS, FRAG } from '../src/waves.js';
+import {
+  canvasSize, tick, bands, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, FRAME_WAIT_MS, MAX_STEP_MS, FRAG,
+} from '../src/waves.js';
 
 // Quantos quadros o laço desenha em 1 s numa tela de hz quadros por segundo; o primeiro, logo ao tocar, não conta.
 // jitter(i) desloca a hora do quadro i (ms). Devolve os desenhos e o tempo animado no fim.
@@ -50,34 +52,110 @@ test('tick: ao tocar o relógio não anda, e um quadro atrasado anda no máximo 
   assert.equal(tick(3, 1000, 1010), null);
 });
 
+// O laço de startWaves fora do navegador: depois de um quadro desenhado, o pedido do próximo sai FRAME_WAIT_MS depois
+// (o quadro roda 1 ms depois da hora dele, e o temporizador atrasa late ms) e roda no quadro seguinte da tela; o quadro
+// que chega cedo pede o seguinte direto. Devolve os desenhos em 1 s e quantas vezes o laço acordou a página.
+function loop(hz, late = 0) {
+  const at = n => 1000 + n * 1000 / hz;
+  let seconds = 0;
+  let last = null;
+  let drawn = -1;
+  let woke = 0;
+  for (let n = 0; n <= hz;) {
+    woke++;
+    const next = tick(seconds, last, at(n));
+    if (next === null) {
+      n++;
+      continue;
+    }
+    seconds = next;
+    last = at(n);
+    drawn++;
+    const asked = last + 1 + FRAME_WAIT_MS + late;
+    while (at(n) <= asked) n++;
+  }
+  return { drawn, woke };
+}
+
+test('laço: a espera no temporizador não tira nenhum quadro, e a página acorda no máximo duas vezes por quadro', () => {
+  for (const hz of [30, 60, 75, 90, 100, 120, 144, 165, 240]) {
+    const { drawn, woke } = loop(hz);
+    assert.equal(drawn, run(hz).drawn, hz + ' Hz');
+    assert.ok(woke <= 2 * (drawn + 1), hz + ' Hz: ' + woke);
+  }
+  // A 60 Hz o temporizador pode atrasar 4 ms sem perder o quadro.
+  assert.equal(loop(60, 4).drawn, 30);
+});
+
 test('bands: as faixas cobrem o canvas fora do palco, em pixels do aparelho e com y de baixo para cima', () => {
-  // 1920 × 1080 px CSS a 2×: o palco perde 32 px dos lados (o raio) e 160 px em cima e embaixo (a folga da rolagem).
+  // 1920 × 1080 px CSS a 2×, página que não rola: o buraco é o palco menos 32 px (o raio) em volta.
   const stage = { left: 288, right: 1632, top: 92, bottom: 1056 };
   const parts = bands(stage, 32, 3840, 2160, 2);
   assert.deepEqual(parts, [
     [0, 0, 640, 2160],
     [3200, 0, 640, 2160],
-    [640, 2160 - 504, 2560, 504],
-    [640, 0, 2560, 2160 - 1792],
+    [640, 2160 - 248, 2560, 248],
+    [640, 0, 2560, 2160 - 2048],
   ]);
   const area = parts.reduce((sum, [, , w, h]) => sum + w * h, 0);
-  assert.equal(area + (3200 - 640) * (1792 - 504), 3840 * 2160, 'faixas e buraco somam o canvas, sem sobra');
+  assert.equal(area + (3200 - 640) * (2048 - 248), 3840 * 2160, 'faixas e buraco somam o canvas, sem sobra');
 });
 
-test('bands: com o palco passando do alto e do pé da janela, ficam só as faixas dos lados', () => {
-  assert.deepEqual(bands({ left: 100, right: 900, top: -400, bottom: 2400 }, 32, 1000, 800, 1), [
-    [0, 0, 132, 800],
-    [868, 0, 132, 800],
+// Página de 1366 × 768 com 739 px de rolagem: o palco começa em 92 e acaba 24 px antes do pé da página (768 + 739 - 24).
+const END = 739;
+const scrolled = scroll => ({ left: 94, right: 1281, top: 92 - scroll, bottom: 1483 - scroll });
+
+test('bands: o buraco é o mesmo em qualquer ponto da rolagem', () => {
+  const parts = bands(scrolled(0), 32, 1351, 768, 1, 0, END);
+  assert.deepEqual(parts, [
+    [0, 0, 126, 768],
+    [1249, 0, 102, 768],
+    [126, 768 - 124, 1123, 124],
+    [126, 0, 1123, 24 + 32],
+  ]);
+  for (const scroll of [0.5, 300, 738.5, END]) {
+    assert.deepEqual(bands(scrolled(scroll), 32, 1351, 768, 1, scroll, END), parts, 'rolagem ' + scroll);
+  }
+});
+
+test('bands: desenhado num ponto da rolagem, o buraco fica dentro do palco em qualquer outro', () => {
+  for (const drawn of [0, 300, END]) {
+    const [, , top, foot] = bands(scrolled(drawn), 32, 1351, 768, 1, drawn, END);
+    // O buraco vai do pé da faixa de cima ao alto da faixa de baixo, em y de cima para baixo.
+    const hole = [top[3], 768 - foot[3]];
+    for (const now of [0, 1, 300, END]) {
+      const stage = scrolled(now);
+      assert.ok(hole[0] >= stage.top && hole[1] <= stage.bottom, `desenhado em ${drawn}, rolagem em ${now}`);
+    }
+  }
+});
+
+test('bands: na rolagem elástica, além do zero e do fim, vale o retângulo de agora', () => {
+  // 50 px além do topo: o palco desceu 50 px e a rolagem informada é negativa. O buraco desce junto.
+  assert.deepEqual(bands(scrolled(-50), 32, 1351, 768, 1, -50, END), [
+    [0, 0, 126, 768],
+    [1249, 0, 102, 768],
+    [126, 768 - 174, 1123, 174],
+    [126, 0, 1123, 6],
+  ]);
+  // 50 px além do fim: o palco subiu 50 px.
+  assert.deepEqual(bands(scrolled(END + 50), 32, 1351, 768, 1, END + 50, END), [
+    [0, 0, 126, 768],
+    [1249, 0, 102, 768],
+    [126, 768 - 74, 1123, 74],
+    [126, 0, 1123, 24 + 32 + 50],
   ]);
 });
 
 test('bands: palco pequeno demais para ter buraco desenha o canvas inteiro', () => {
   assert.deepEqual(bands({ left: 0, right: 50, top: 0, bottom: 900 }, 32, 100, 1000, 1), [[0, 0, 100, 1000]]);
-  assert.deepEqual(bands({ left: 0, right: 900, top: 100, bottom: 400 }, 32, 1000, 1000, 1), [[0, 0, 1000, 1000]]);
+  // A página rola mais do que o palco tem de altura: nenhum ponto fica coberto na rolagem inteira.
+  assert.deepEqual(bands({ left: 0, right: 900, top: 100, bottom: 400 }, 32, 1000, 1000, 1, 0, 300), [[0, 0, 1000, 1000]]);
 });
 
-test('bands: densidade fracionária dá pixels inteiros dentro do canvas', () => {
-  const parts = bands({ left: 100.4, right: 1180.6, top: 80.3, bottom: 990.7 }, 32, 1600, 1250, 1.25);
+test('bands: densidade e rolagem fracionárias dão pixels inteiros dentro do canvas', () => {
+  const parts = bands({ left: 100.4, right: 1180.6, top: 80.3 - 37.6, bottom: 1890.7 - 37.6 }, 32, 1600, 1250, 1.25, 37.6, 900.8);
+  assert.equal(parts.length, 4);
   assert.ok(parts.flat().every(Number.isInteger), JSON.stringify(parts));
   for (const [x, y, w, h] of parts) {
     assert.ok(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= 1600 && y + h <= 1250, JSON.stringify([x, y, w, h]));

@@ -262,8 +262,8 @@ export function PerfilSkeleton() {
 // Onde o fundo em ondas roda: a tela larga do computador, com mouse. Na tela estreita o texto fica direto sobre o fundo,
 // e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
 // forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
-const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)']
-  .map(query => window.matchMedia(query));
+const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
+  '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
 function watchWavesMedia(change) {
   WAVES_MEDIA.forEach(list => list.addEventListener('change', change));
   return () => WAVES_MEDIA.forEach(list => list.removeEventListener('change', change));
@@ -271,13 +271,19 @@ function watchWavesMedia(change) {
 export function useWavesAllowed() {
   return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches);
 }
+// Movimento reduzido no sistema, lido ao vivo: as ondas param, e voltam a andar, sem recarregar a página. O
+// useReducedMotion da Motion, que o resto do app usa, guarda o valor da abertura.
+export function useWavesStill() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[2].matches);
+}
 
 // Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
 // desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
 // quando entra. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco (styles.css), e as ondas
 // ficam só em volta deles: ele entra com o primeiro quadro e sai quando o contexto do WebGL se perde. Numa troca de
-// animate ele fica: o canvas guarda o último quadro até o do novo começo sair.
-export function Waves({ on, animate }) {
+// animate ele fica: o canvas guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
+// avisa: sem as ondas (false), o botão "Fundo animado" some.
+export function Waves({ on, animate, onActive }) {
   const canvas = useRef(null);
   useEffect(() => {
     const show = active => document.documentElement.toggleAttribute('data-waves', active);
@@ -285,11 +291,15 @@ export function Waves({ on, animate }) {
       show(false);
       return;
     }
+    const report = active => {
+      show(active);
+      onActive(active);
+    };
     let stop = null;
     let live = true;
     import('./waves.js').then(({ startWaves }) => {
-      if (live) stop = startWaves(canvas.current, { animate, onActive: show });
-    }, () => show(false));
+      if (live) stop = startWaves(canvas.current, { animate, onActive: report });
+    }, () => report(false));
     return () => {
       live = false;
       stop?.();
