@@ -566,6 +566,18 @@ export function errorText(detail, status) {
   };
 }
 
+// Contagem do limite por minuto no aviso de erro (App.jsx, Problem), ou null. Na espera (until: a hora em que os botões
+// da IA voltam), as páginas com esses botões explicam por que eles estão desligados: a contagem fica no lugar do erro
+// que não conta esta espera. Ela não aparece se a tela já conta (o próprio erro ou, no resumo e no quiz, a explicação
+// ou a revisão que falhou: counted), nem por cima do aviso do arquivo no Estudar (file, App.jsx, openFile): abrir um
+// arquivo não usa a IA, e é o que o aluno faz enquanto espera.
+export function pauseNotice({ until, page, error, counted = false }) {
+  if (!until || counted || error?.until === until || !['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page)) {
+    return null;
+  }
+  return error?.file && page === 'Estudar' ? null : { message: ERRORS.AI_RATE_LIMITED, until };
+}
+
 // Corta o texto no limite do editor, sem deixar meio emoji no fim: o backend recusa texto maior. Conta como o contador
 // do editor e o rascunho (length), e não por caractere inteiro como cut, abaixo: um emoji vale 2.
 export function capText(text) {

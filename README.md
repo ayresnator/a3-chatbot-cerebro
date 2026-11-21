@@ -49,7 +49,7 @@ O aluno pode inserir informações de diferentes maneiras:
 - Escrever um tema;
 - Fazer uma pergunta;
 - Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz;
-- Abrir um arquivo PDF, TXT ou MD de até 20 MB, pelo botão "Abrir arquivo" (no celular, "Arquivo") ou soltando o arquivo sobre o editor.
+- Abrir um arquivo PDF, TXT ou MD de até 20 MB, pelo botão "Arquivo" do editor ("Abrir arquivo" para o leitor de tela) ou soltando o arquivo sobre o editor.
 
 O arquivo é lido no próprio navegador e não sai do computador: só o texto que fica no editor vai para a IA, quando o estudante gera o material. O texto do arquivo toma o lugar do que estava no editor, com "Desfazer". O do PDF chega limpo: a palavra quebrada por hífen no fim da linha volta inteira, e saem o cabeçalho e o rodapé que se repetem nas páginas e as linhas que só têm o número da página. Se o PDF passar de 20.000 caracteres, o limite do editor, uma janela pede as páginas e conta os caracteres enquanto o estudante escolhe; um TXT ou MD maior entra cortado no limite, com aviso. Um TXT gravado no formato antigo do Bloco de Notas (Windows-1252) entra com os acentos certos. PDF digitalizado (só imagem) ou com senha não abre, e a tela diz o que fazer; arquivo do Word ou do PowerPoint também não: a tela pede para salvá-lo em PDF. O leitor de PDF (pdf.js) só é baixado no primeiro PDF aberto.
 

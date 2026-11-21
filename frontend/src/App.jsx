@@ -21,7 +21,7 @@ import {
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo, capText, MAX_INPUT,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, ERRORS, FAILS, dictate, dictationError,
+  matches, libraryCount, hints, hello, chatSubject, healthLabel, errorText, pauseNotice, FAILS, dictate, dictationError,
   localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   originNote,
@@ -243,6 +243,8 @@ function App() {
   const recognition = useRef(null);
   // O campo de arquivo, escondido, que o "Abrir arquivo" abre.
   const picker = useRef(null);
+  // As páginas escolhidas na janela de páginas, que entram no editor quando ela sai (takePages).
+  const pickDone = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
   // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
@@ -1111,10 +1113,11 @@ function App() {
       reader = await import('./arquivo.js');
       got = await reader.readFile(file);
     } catch (e) {
-      // A frase de cada arquivo que não abre vem do arquivo.js (code); sem ela, o próprio arquivo.js não chegou.
-      setError(e.code ? e : {
+      // A frase de cada arquivo que não abre vem do arquivo.js (code); sem ela, o próprio arquivo.js não chegou. file:
+      // o aviso fica à frente da contagem do limite por minuto (lib.js, pauseNotice).
+      setError(Object.assign(e.code ? e : {
         message: 'Não foi possível abrir arquivos agora. Recarregue a página e tente de novo.', tech: String(e),
-      });
+      }, { file: true }));
       return;
     } finally {
       setReading(false);
@@ -1159,12 +1162,15 @@ function App() {
   }
 
   // "Usar estas páginas" na escolha de páginas. Passou do limite, o botão fica desligado; com uma página só, ela entra
-  // cortada no limite, como o TXT longo.
+  // cortada no limite, como o TXT longo. O texto e o aviso entram quando a janela já saiu (pickDone, no onExitComplete
+  // dela): com ela aberta, a região do aviso fica inerte e o leitor de tela não o lia.
   function takePages() {
     const { name, from, to } = pick;
+    const text = capText(picked);
+    const note = 'Texto do arquivo: ' + name + ', ' + (from === to ? 'página ' + from : 'páginas ' + from + ' a ' + to) +
+      (over ? '. Entrou só o começo da página: o editor recebe até 20.000 caracteres' : '');
+    pickDone.current = () => putFile(text, note);
     setPick(null);
-    putFile(capText(picked), 'Texto do arquivo: ' + name + ', ' + (from === to ? 'página ' + from : 'páginas ' + from +
-      ' a ' + to) + (over ? '. Entrou só o começo da página: o editor recebe até 20.000 caracteres' : ''));
   }
 
   // Abas Resumo, Flashcards e Quiz: as setas, Home e End trocam de aba e levam o foco junto. O quiz e o baralho ficam
@@ -1317,12 +1323,13 @@ function App() {
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
   const still = byKeyboard() || window.scrollY > 80 || cut;
-  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados. Se a mensagem
-  // que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão fechou) ou não conta esta
-  // espera, o aviso de erro conta no lugar dela. No resumo e no quiz, a explicação ou a revisão que falhou já conta.
-  const pause = !!pausedUntil && ['Estudar', 'Dúvidas', 'Resumos', 'Quizzes'].includes(page) && error?.until !== pausedUntil
-    && !(MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil))
-    && { message: ERRORS.AI_RATE_LIMITED, until: pausedUntil };
+  // Na espera do limite por minuto, as páginas com botões da IA explicam por que eles estão desligados (lib.js,
+  // pauseNotice). Se a mensagem que conta os segundos saiu (outra página, a explicação do "Não entendi" ou a revisão
+  // fechou) ou não conta esta espera, o aviso de erro conta no lugar dela.
+  const pause = pauseNotice({
+    until: pausedUntil, page, error,
+    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil),
+  });
   const problem = pause || error;
   const errorBanner = (
     <AnimatePresence custom={byKeyboard()}>
@@ -1547,7 +1554,8 @@ function App() {
                         <span className="short" aria-hidden="true">{listening ? 'Parar' : 'Falar'}</span>
                       </button>
                       {/* PDF, TXT ou MD, lido aqui mesmo (openFile); soltar o arquivo sobre a caixa faz o mesmo. Na
-                          leitura, aria-disabled, como o exemplo na espera. */}
+                          leitura, aria-disabled, como o exemplo na espera. A palavra curta vale em toda largura: com
+                          "Abrir arquivo", no computador o contador e o "Perguntar ao Cérebro" desciam para outra linha. */}
                       <button
                         type="button"
                         id="abrir-arquivo"
@@ -1556,8 +1564,8 @@ function App() {
                         onClick={() => !reading && picker.current.click()}
                       >
                         <Icon name="arquivo" />
-                        <span className="full">{reading ? 'Lendo o arquivo…' : 'Abrir arquivo'}</span>
-                        <span className="short" aria-hidden="true">{reading ? 'Lendo…' : 'Arquivo'}</span>
+                        <span className="sr-only">{reading ? 'Lendo o arquivo…' : 'Abrir arquivo'}</span>
+                        <span aria-hidden="true">{reading ? 'Lendo…' : 'Arquivo'}</span>
                       </button>
                       <input
                         ref={picker}
@@ -1582,8 +1590,10 @@ function App() {
                       >
                         <Icon name="exemplo" />
                         <span className="full">Usar um exemplo</span>
-                        {/* O custo só aparece quando o clique chama a IA (addExample); sem ela o exemplo é pronto. */}
-                        {API_BASE && health?.ai_configured !== false && <small className="full">1 chamada de IA</small>}
+                        {/* O custo vai no nome quando o clique chama a IA (addExample); sem ela o exemplo é pronto. Fica
+                            fora da tela: com ele, as quatro ferramentas não cabiam na linha do contador e do "Perguntar
+                            ao Cérebro" no computador. */}
+                        {API_BASE && health?.ai_configured !== false && <small className="sr-only">1 chamada de IA</small>}
                         <span className="short" aria-hidden="true">Exemplo</span>
                       </button>
                       {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
@@ -2622,7 +2632,12 @@ function App() {
       {/* Escolha de páginas do PDF com mais texto que o editor recebe (openFile). As duas listas não deixam o
           intervalo ao contrário: a outra ponta acompanha. A contagem é lida a cada mudança: a região fica dentro da
           janela, porque com ela aberta o resto da página, o #anuncio também, fica inerte. */}
-      <AnimatePresence>
+      <AnimatePresence
+        onExitComplete={() => {
+          pickDone.current?.();
+          pickDone.current = null;
+        }}
+      >
         {pick && (
           <Modal
             key="paginas"

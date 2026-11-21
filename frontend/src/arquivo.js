@@ -107,12 +107,16 @@ export function pdfText(pages) {
 // Fim de linha com a palavra cortada por hífen (o comum ou o invisível, que só aparece na quebra).
 const BROKEN = /\p{L}[-\u00ad\u2010]$/u;
 
+// Começo de item com letra ou romano minúsculo, como as alternativas de uma questão: "a) glicose", "b. proteína",
+// "iv) fase escura".
+const ITEM = /^(\p{Ll}|[ivx]+)[).]\s/u;
+
 // Junta a linha ao texto. A que começa com minúscula continua a frase: com um espaço ou, depois da palavra cortada por
 // hífen, colada, sem o hífen ("fotos-" e "síntese" dão "fotossíntese"). As outras (título, item de lista, frase nova)
 // vão depois de sep: a quebra de linha, ou a linha em branco entre parágrafos e entre páginas.
 function join(text, line, sep) {
   if (!text) return line;
-  if (!/^\p{Ll}/u.test(line)) return text + sep + line;
+  if (!/^\p{Ll}/u.test(line) || ITEM.test(line)) return text + sep + line;
   return BROKEN.test(text) ? text.slice(0, -1) + line : text + ' ' + line;
 }
 
@@ -166,16 +170,32 @@ async function readPdf(bytes) {
     }
     return pages;
   } catch (e) {
-    // O worker que não carrega (servidor que não manda o .mjs como JavaScript, rede caída) não é defeito do PDF.
-    throw problem(e?.name === 'PasswordException' ? 'senha' : /worker/i.test(e?.message) ? 'leitor' : 'pdf', e);
+    throw pdfError(e);
   } finally {
     task.destroy();
   }
 }
 
-// Lê o arquivo escolhido ou solto no editor. Devolve { text, cut } (cut: o texto passou do limite do editor, e entrou
-// só o começo) ou, no PDF de mais de uma página com mais texto que o editor recebe, { pages }, para a escolha de
-// páginas. O que não abre sai como erro (problem).
+// Erro do pdf.js para o aluno. O worker que não carrega (servidor que não manda o .mjs como JavaScript, rede caída) não
+// é defeito do PDF.
+export function pdfError(e) {
+  return problem(e?.name === 'PasswordException' ? 'senha' : /worker/i.test(e?.message) ? 'leitor' : 'pdf', e);
+}
+
+// O texto que vai para o editor (cut: passou do limite do editor, e entrou só o começo).
+const fit = text => ({ text: capText(text), cut: text.length > MAX_INPUT });
+
+// O que o editor recebe do texto limpo das páginas do PDF (pdfText): o texto ou, no PDF de mais de uma página com mais
+// texto que o editor recebe, { pages }, para a escolha de páginas.
+export function fromPages(pages) {
+  // Digitalizado: só imagem, sem uma letra de texto em página nenhuma.
+  if (!pages.some(page => /\p{L}/u.test(page))) throw problem('imagem');
+  const text = pageSpan(pages, 1, pages.length);
+  return text.length > MAX_INPUT && pages.length > 1 ? { pages } : fit(text);
+}
+
+// Lê o arquivo escolhido ou solto no editor. Devolve { text, cut } ou, no PDF longo, { pages } (fromPages). O que não
+// abre sai como erro (problem).
 export async function readFile(file) {
   const kind = fileKind(file);
   if (kind !== 'pdf' && kind !== 'texto') throw problem(kind || 'tipo');
@@ -186,16 +206,8 @@ export async function readFile(file) {
   } catch (e) {
     throw problem('leitura', e);
   }
-  let text;
-  if (kind === 'texto') {
-    text = decodeText(bytes).trim();
-    if (!text) throw problem('vazio');
-  } else {
-    const pages = pdfText(await readPdf(bytes));
-    // Digitalizado: só imagem, sem uma letra de texto em página nenhuma.
-    if (!pages.some(page => /\p{L}/u.test(page))) throw problem('imagem');
-    text = pageSpan(pages, 1, pages.length);
-    if (text.length > MAX_INPUT && pages.length > 1) return { pages };
-  }
-  return { text: capText(text), cut: text.length > MAX_INPUT };
+  if (kind === 'pdf') return fromPages(pdfText(await readPdf(bytes)));
+  const text = decodeText(bytes).trim();
+  if (!text) throw problem('vazio');
+  return fit(text);
 }

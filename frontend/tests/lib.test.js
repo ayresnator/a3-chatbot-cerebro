@@ -7,7 +7,8 @@ import {
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
   areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
   chatSubject, capText,
-  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, ERRORS, FAILS, dictate,
+  validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, errorText, pauseNotice, ERRORS,
+  FAILS, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel,
@@ -1487,6 +1488,25 @@ test('errorText: detail em lista (formato antigo) ou ausente continua em portugu
 test('errorText: a espera vem do retry_after, em segundos inteiros; sem ele é zero', () => {
   const wait = retry_after => errorText({ code: 'AI_RATE_LIMITED', message: 'x', retry_after }, 429).wait;
   assert.deepEqual([wait(20), wait(1), wait(2.4), wait(undefined), wait(0), wait(-3), wait('logo')], [20, 1, 3, 0, 0, 0, 0]);
+});
+
+test('pauseNotice: na espera do limite por minuto a contagem toma o lugar do erro, menos o do arquivo no Estudar', () => {
+  const until = Date.now() + 40000;
+  const countdown = { message: ERRORS.AI_RATE_LIMITED, until };
+  assert.equal(pauseNotice({ until: 0, page: 'Estudar', error: null }), null);
+  assert.deepEqual(pauseNotice({ until, page: 'Estudar', error: null }), countdown);
+  // O erro que já conta esta espera fica; o que veio antes dela dá lugar à contagem.
+  assert.equal(pauseNotice({ until, page: 'Estudar', error: { message: ERRORS.AI_RATE_LIMITED, until } }), null);
+  assert.deepEqual(pauseNotice({ until, page: 'Estudar', error: { message: 'Escreva um tema.' } }), countdown);
+  // O PDF digitalizado aberto na espera: o aviso dele aparece na hora, no Estudar. No Dúvidas, onde o botão de enviar
+  // está desligado, vale a contagem.
+  const file = { message: 'Este PDF não tem texto, só imagem.', file: true };
+  assert.equal(pauseNotice({ until, page: 'Estudar', error: file }), null);
+  assert.deepEqual(pauseNotice({ until, page: 'Dúvidas', error: file }), countdown);
+  // Página sem botões da IA, ou o resumo com a explicação que falhou contando a espera: nada.
+  assert.equal(pauseNotice({ until, page: 'Biblioteca', error: null }), null);
+  assert.equal(pauseNotice({ until, page: 'Resumos', error: null, counted: true }), null);
+  assert.deepEqual(pauseNotice({ until, page: 'Quizzes', error: null }), countdown);
 });
 
 test('ERRORS e FAILS: nenhuma frase para o aluno fala de backend, Python, proxy, Vite, .env ou código entre colchetes', () => {

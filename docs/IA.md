@@ -15,7 +15,7 @@ O modelo é o Gemini, do Google, chamado pela rota `generateContent` da API. No 
 
 O resto do aplicativo não chama o modelo: correção de múltipla escolha e de verdadeiro ou falso, comparação da resposta curta, contas do desempenho, caderno de erros, biblioteca, exportar e importar. A demonstração (`?demo`) também não: ela só reorganiza as frases do texto.
 
-A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No celular, nos botões pequenos ("Perguntar ao Cérebro", "Enviar" e "Usar um exemplo"), o aviso fica só no nome do botão, lido pelo leitor de tela. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
+A tela faz um pedido por vez, e todo botão que chama a IA diz no próprio botão: "1 chamada de IA". No "Usar um exemplo", e no celular também no "Perguntar ao Cérebro" e no "Enviar", o aviso fica só no nome do botão, lido pelo leitor de tela: na tela ele não cabe ao lado das outras ferramentas. Na demonstração e com a IA não configurada ele não aparece: nada ali gasta chamada.
 
 ## O que o modelo recebe
 

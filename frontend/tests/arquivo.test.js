@@ -2,7 +2,9 @@
 // texto do PDF. O pdf.js fica de fora: as linhas de cada página entram aqui como o pdf.js as entrega.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fileKind, decodeText, pdfLines, pdfText, pageSpan, firstPages, FILE_ERRORS } from '../src/arquivo.js';
+import {
+  fileKind, decodeText, pdfLines, pdfText, pageSpan, firstPages, fromPages, pdfError, readFile, FILE_ERRORS,
+} from '../src/arquivo.js';
 
 // Pedaço de texto como o getTextContent do pdf.js entrega: o texto, a altura da linha na página (y, que cresce para
 // cima) e se a linha acaba nele.
@@ -74,6 +76,13 @@ test('pdfText: a linha com minúscula continua a frase; título, lista e frase n
   assert.equal(page, 'Fotossíntese\nA planta transforma a luz em açúcar.\nOs produtos são:\n• glicose\n• oxigênio');
 });
 
+test('pdfText: as alternativas com letra ou romano minúsculo ficam cada uma na linha dela', () => {
+  const [page] = pdfText([[
+    'Questão 1. Qual é o produto principal', 'da fotossíntese?', 'a) glicose', 'b) proteína', 'c. gordura', 'iv) amido',
+  ]]);
+  assert.equal(page, 'Questão 1. Qual é o produto principal da fotossíntese?\na) glicose\nb) proteína\nc. gordura\niv) amido');
+});
+
 test('pdfText: a separação de parágrafos vira linha em branco, uma só, e não separa a palavra cortada', () => {
   assert.deepEqual(pdfText([['', 'Um.', '', '', 'Dois.', '']]), ['Um.\n\nDois.']);
   assert.deepEqual(pdfText([['A fotos-', '', 'síntese.']]), ['A fotossíntese.']);
@@ -99,6 +108,20 @@ test('pdfText: o cabeçalho conta sem acento e sem maiúscula, e o rodapé no fi
     ['Outro cabeçalho', 'Texto quatro.', '- 4 -'],
   ]);
   assert.deepEqual(pages, ['Texto um.', 'Texto dois.', 'Texto três.', 'Outro cabeçalho\nTexto quatro.']);
+});
+
+test('pdfText: o cabeçalho que se repete em exatamente metade das páginas também sai', () => {
+  const pages = pdfText([
+    ['Colégio Central', 'Texto um.'], ['Colégio Central', 'Texto dois.'], ['Texto três.'], ['Texto quatro.'],
+  ]);
+  assert.deepEqual(pages, ['Texto um.', 'Texto dois.', 'Texto três.', 'Texto quatro.']);
+});
+
+test('pdfText: o cabeçalho de 3 linhas sai inteiro; a 4ª linha já é texto', () => {
+  const page = w => ['Apostila de Biologia', 'Turma A', 'Professora Ana', 'Texto ' + w + '.', 'Mais ' + w + '.',
+    'Outra ' + w + '.', 'Fim ' + w + '.'];
+  const pages = pdfText([page('um'), page('dois'), page('três')]);
+  assert.equal(pages[0], 'Texto um.\nMais um.\nOutra um.\nFim um.');
 });
 
 test('pdfText: com 2 páginas nada vira cabeçalho, mas a linha só com o número da página sai', () => {
@@ -134,6 +157,51 @@ test('firstPages: o maior começo do PDF que cabe nos 20.000 caracteres do edito
   assert.equal(pageSpan(pages, 1, 4).length, 16006);
   assert.equal(firstPages(['x'.repeat(25000), 'y']), 1);
   assert.equal(firstPages(['curto', 'também curto']), 2);
+  // 9.999 + a linha em branco + 9.999 dão 20.000 cravados: ainda cabe.
+  assert.equal(firstPages(['1'.repeat(9999), '2'.repeat(9999), '3']), 2);
+});
+
+test('fromPages: o PDF sem letra em página nenhuma é digitalizado e não abre', () => {
+  assert.throws(() => fromPages(['', ' 12 ', '']), { code: 'imagem', message: FILE_ERRORS.imagem });
+});
+
+test('fromPages: o PDF longo de mais de uma página vai para a escolha de páginas; o de uma página entra cortado', () => {
+  const pages = ['A'.repeat(10001), 'B'.repeat(10001)];
+  assert.deepEqual(fromPages(pages), { pages });
+  const one = fromPages(['A'.repeat(25000)]);
+  assert.equal(one.text.length, 20000);
+  assert.equal(one.cut, true);
+  assert.deepEqual(fromPages(['Página um.', 'Página dois.']), { text: 'Página um.\n\nPágina dois.', cut: false });
+});
+
+test('pdfError: senha, leitor que não carregou e PDF ilegível têm frases diferentes, com a causa nos detalhes', () => {
+  assert.equal(pdfError({ name: 'PasswordException', message: 'No password given' }).code, 'senha');
+  const worker = pdfError(Error('Setting up fake worker failed: "Failed to fetch dynamically imported module"'));
+  assert.equal(worker.code, 'leitor');
+  assert.match(worker.tech, /fake worker/);
+  assert.equal(pdfError({ name: 'InvalidPDFException', message: 'Invalid PDF structure.' }).code, 'pdf');
+});
+
+test('readFile: TXT e MD entram no editor; o maior que o editor recebe entra cortado, com cut', async () => {
+  assert.deepEqual(await readFile(new File(['  Plano de aula.\n'], 'aula.txt', { type: 'text/plain' })), {
+    text: 'Plano de aula.', cut: false,
+  });
+  assert.deepEqual(await readFile(new File(['x'.repeat(20000)], 'notas.md')), { text: 'x'.repeat(20000), cut: false });
+  const long = await readFile(new File(['x'.repeat(20001)], 'longo.txt'));
+  assert.equal(long.text.length, 20000);
+  assert.equal(long.cut, true);
+});
+
+test('readFile: tipo errado, Word, arquivo vazio e arquivo de mais de 20 MB não abrem', async () => {
+  await assert.rejects(readFile(new File(['x'], 'foto.jpg', { type: 'image/jpeg' })), { code: 'tipo' });
+  await assert.rejects(readFile(new File(['x'], 'aula.docx')), { code: 'office' });
+  await assert.rejects(readFile(new File([' \n\t '], 'vazio.txt')), { code: 'vazio', message: FILE_ERRORS.vazio });
+  // O tamanho conta antes da leitura: 20 MB cravados (como o Windows conta) abrem, 1 byte a mais não.
+  const sized = size => ({
+    name: 'aula.txt', type: 'text/plain', size, arrayBuffer: async () => new TextEncoder().encode('Aula.').buffer,
+  });
+  assert.deepEqual(await readFile(sized(20 * 1024 * 1024)), { text: 'Aula.', cut: false });
+  await assert.rejects(readFile(sized(20 * 1024 * 1024 + 1)), { code: 'grande' });
 });
 
 test('FILE_ERRORS: cada arquivo que não abre tem uma frase que diz o que fazer', () => {

@@ -211,6 +211,21 @@ export function PromptComposer({
   // arquivo" (App.jsx, openFile). Só arquivo: o texto arrastado continua indo para o campo, como sempre.
   const [drop, setDrop] = useState(false);
   const carriesFile = e => e.dataTransfer.types.includes('Files');
+  // O arquivo solto fora da caixa (no título, na dica, no botão de gerar) não abre aqui, e o navegador também não o
+  // abre na aba no lugar do Cérebro: o cursor mostra que ali não se solta. O que a caixa já tratou passa.
+  useEffect(() => {
+    const away = e => {
+      if (e.defaultPrevented || !carriesFile(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', away);
+    window.addEventListener('drop', away);
+    return () => {
+      window.removeEventListener('dragover', away);
+      window.removeEventListener('drop', away);
+    };
+  }, []);
   const ready = !waiting && !!value.trim();
   // Lido quando o botão liga ou desliga: o botão que liga pelo teclado (o texto digitado) não pulsa (styles.css).
   const quiet = useMemo(byKeyboard, [ready]);
@@ -283,8 +298,8 @@ export function PromptComposer({
         <span className="editor-send">
           <span className="counter">{value.length.toLocaleString('pt-BR')} / 20.000</span>
           <button type="button" className="ask" data-quiet={(ready && quiet) || undefined} disabled={!ready} onClick={onSend}>
-            {/* Em 550 px ou menos o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece (mobile.css); o nome
-                inteiro e o custo continuam no botão. */}
+            {/* Em 550 px ou menos e no celular deitado o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece
+                (mobile.css); o nome inteiro e o custo continuam no botão. */}
             <span className="full">Perguntar ao Cérebro</span>
             {cost && <small>1 chamada de IA</small>}
             <span className="short" aria-hidden="true">Perguntar</span>

@@ -419,9 +419,9 @@
         font-size: var(--fs-1)
     }
 
-    /* "Falar", "Arquivo" e "Exemplo" na tela; o nome inteiro de cada um continua no nome do botão. Na caixa do
-       Dúvidas, "Enviar" e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O
-       custo do "Perguntar ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
+    /* "Falar" e "Exemplo" na tela; o nome inteiro de cada um continua no nome do botão. Na caixa do Dúvidas, "Enviar"
+       e o custo ficam só no nome do botão e a seta sobra: a área e o nível cabem na mesma linha. O custo do "Perguntar
+       ao Cérebro" também fica só no nome: com ele, o botão quebrava o texto em duas linhas. */
     .tool .full,
     .ask small,
     .composer-bar .primary span,
@@ -773,8 +773,9 @@
 
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
    As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
-   abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só), os botões de gerar sobem;
-   com o cartão mais baixo, ele e os três botões cabem juntos acima da barra. */
+   abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
+   "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
+   cabem juntos acima da barra. */
 @media (max-height: 30rem) {
     .lead {
         display: none
@@ -784,7 +785,8 @@
         max-height: calc(var(--rule) * 5 + var(--pad) + var(--sp-2))
     }
 
-    .tool .full {
+    .tool .full,
+    .ask small {
         position: absolute;
         width: 1px;
         height: 1px;

@@ -1899,7 +1899,6 @@ main:focus {
 
 /* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
 .ai-ask small,
-.tool small,
 .ask small,
 .action small {
     color: var(--ink-2);
