@@ -2380,6 +2380,9 @@ test('studyPlan: o quiz do dia fica feito quando todas as questões do material 
   // A resposta de ontem e a de outro material não contam.
   assert.deepEqual(left([answered(Q_SHORT, true, { date: at(15) }), answered(Q_MULTIPLE, true, { title: 'Juros' })])[0][2],
     [Q_SHORT, Q_MULTIPLE]);
+  // A mesma questão duas vezes no material (com outras maiúsculas) conta uma vez, e uma resposta a tira do que falta.
+  const twice = exam('2026-11-19', { quiz: [Q_SHORT, { ...Q_SHORT, question: Q_SHORT.question.toUpperCase() }, Q_MULTIPLE] });
+  assert.deepEqual(plan([twice], { events: [answered(Q_SHORT)] }).map(r => [r.total, r.left]), [[2, [Q_MULTIPLE]]]);
 });
 
 test('studyPlan: os cartões do dia são os que a revisão espaçada pede hoje e os avaliados hoje', () => {
@@ -2407,14 +2410,49 @@ test('studyPlan: os cartões do dia são os que a revisão espaçada pede hoje e
 
 test('studyPlan: na véspera, a questão do caderno fica feita quando o aluno a acerta hoje, depois do último erro', () => {
   const eve = exam('2026-11-17');
+  // Ela estava no caderno (caderno na primeira resposta de hoje) e foi errada de novo às 9h.
   const today9h = mistake(Q_SHORT, 'Inflação', 16, 9);
+  const again = answered(Q_SHORT, false, { date: at(16, 9), caderno: true });
   const left = (events, own = today9h) => plan([eve], { mistakes: [own], events })[0].left.length;
-  assert.equal(left([answered(Q_SHORT, false, { date: at(16, 9) })]), 1, 'a resposta errada que a pôs no caderno');
-  assert.equal(left([answered(Q_SHORT, false, { date: at(16, 10) })]), 1, 'errar de novo não faz a tarefa');
-  assert.equal(left([answered(Q_SHORT, true, { date: at(16, 8) })]), 1, 'o acerto de antes do último erro');
-  assert.equal(left([answered(Q_SHORT, true, { date: at(16, 10), title: 'Juros' })]), 1, 'o acerto em outro material');
-  assert.equal(left([answered(Q_SHORT, true, { date: at(16, 10) })]), 0);
+  assert.equal(left([again]), 1, 'a resposta errada de hoje');
+  assert.equal(left([again, answered(Q_SHORT, false, { date: at(16, 10), caderno: true })]), 1, 'errar de novo não faz a tarefa');
+  assert.equal(left([answered(Q_SHORT, true, { date: at(16, 8), caderno: true }), again]), 1, 'o acerto de antes do último erro');
+  assert.equal(left([again, answered(Q_SHORT, true, { date: at(16, 10), title: 'Juros' })]), 1, 'o acerto em outro material');
+  assert.equal(left([again, answered(Q_SHORT, true, { date: at(16, 10), caderno: true })]), 0);
   assert.equal(left([answered(Q_SHORT)], mistake(Q_SHORT, 'Inflação', 14)), 0, 'o erro de outro dia, acertado hoje');
+});
+
+test('studyPlan: na véspera, a tarefa e a conta são as do caderno do começo do dia (ou da marcação) e não trocam', () => {
+  const eve = exam('2026-11-17');
+  const line = (mistakes, events) => planLine(plan([eve], { mistakes, events })[0]);
+  // A questão no último degrau, que volta hoje: acertada, ela sai do caderno, e a tarefa fica feita.
+  const last = { ...mistake(Q_SHORT, 'Inflação', 1), step: 2, due: '2026-11-16' };
+  const hit = answered(Q_SHORT, true, { caderno: true });
+  assert.deepEqual(clearMistake([last], last.key, today()), []);
+  assert.equal(line([last], []), 'Prova de "Inflação" amanhã. Hoje: refazer os erros (1).');
+  assert.equal(line([], [hit]), 'Prova de "Inflação" amanhã. Refazer os erros (1): feito hoje.');
+  const before = mistake(Q_MULTIPLE, 'Inflação', 15);
+  assert.equal(line([before, last], []), 'Prova de "Inflação" amanhã. Hoje: refazer os erros (2).');
+  assert.deepEqual(plan([eve], { mistakes: [before], events: [hit] }).map(r => [r.total, r.left]), [[2, [before]]]);
+  // Sem erro no começo do dia, o quiz. A questão errada nele entra no caderno (a primeira resposta de hoje veio sem
+  // caderno) e não troca a tarefa, nem quando o aluno a refaz.
+  const added = mistake(Q_SHORT, 'Inflação', 16);
+  const quiz = [answered(Q_SHORT, false), answered(Q_MULTIPLE), answered(Q_SHORT, true, { date: at(16, 13), caderno: true })];
+  assert.equal(line([added], quiz.slice(0, 1)), 'Prova de "Inflação" amanhã. Hoje: quiz (2).');
+  assert.equal(line([added], quiz), 'Prova de "Inflação" amanhã. Quiz (2): feito hoje.');
+  assert.equal(line([added], [answered(Q_SHORT, false, { caderno: 'sim' })]), 'Prova de "Inflação" amanhã. Hoje: quiz (2).',
+    'caderno só vale true');
+  // Com a data marcada hoje, a véspera conta de quando ela foi marcada: o erro de antes entra, o de depois não.
+  const marked = exam('2026-11-17', { provaMarcada: at(16, 13) });
+  const rows = (mistakes, events) => plan([marked], { mistakes, events }).map(r => [r.task, r.total, r.left.length]);
+  assert.deepEqual(rows([added], [answered(Q_SHORT, false)]), [['erros', 1, 1]], 'errou às 12h e marcou às 13h');
+  const later = { ...added, date: at(16, 14) };
+  assert.deepEqual(rows([later], [answered(Q_SHORT, false, { date: at(16, 14) })]), [['quiz', 2, 1]], 'errou às 14h');
+  const again = [answered(Q_SHORT, false), answered(Q_SHORT, false, { date: at(16, 14), caderno: true })];
+  assert.deepEqual(rows([later], again), [['erros', 1, 1]], 'errou às 12h e de novo às 14h');
+  assert.deepEqual(rows([], [hit]), [['quiz', 2, 1]], 'saiu do caderno às 12h, antes da marcação');
+  const bad = plan([exam('2026-11-17', { provaMarcada: 'ontem' })], { mistakes: [added], events: [answered(Q_SHORT, false)] });
+  assert.equal(bad[0].task, 'quiz', 'provaMarcada estragada vale o começo do dia');
 });
 
 test('planLine: a prova, quando é e a tarefa de hoje; a feita diz "feito hoje"; os cartões em dia', () => {
@@ -2630,6 +2668,11 @@ test('readBackup e mergeBackup: a data da prova vai com o material; estragada, o
   assert.deepEqual(got.fora, NONE, 'nenhum material fica de fora pela data');
   assert.deepEqual(mergeBackup(EMPTY, got).saved.map(provaOf), ['2026-11-22', '', '', '', '', '']);
   assert.equal(validMaterial({ ...dated, prova: 'amanhã' }), true, 'na biblioteca, a data estragada não tira o material');
+  // A hora em que a data foi marcada fica com ela, se for data; sem a data da prova, sai.
+  const marked = [at(16, 13), 'ontem', 13].map((provaMarcada, i) => ({ ...dated, id: 30 + i, title: 'P' + i, provaMarcada }));
+  const lost = { ...undated, id: 40, title: 'Sem prova', prova: '22/11', provaMarcada: at(16, 13) };
+  assert.deepEqual(readBackup(JSON.stringify({ ...BACKUP, saved: [...marked, lost] })).saved.map(m => m.provaMarcada),
+    [at(16, 13), undefined, undefined, undefined]);
 });
 
 test('readBackup: o arquivo de exemplo da janela "Ver no texto" traz um material com o texto e os trechos nele', () => {

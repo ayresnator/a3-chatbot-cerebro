@@ -605,8 +605,10 @@ function App() {
   // Outra aba pode ter gravado depois que esta abriu: a lista nova parte do que está no navegador, não da cópia
   // desta aba, que apagaria o que a outra gravou. Se o navegador recusar a gravação, o evento fica só nesta tela.
   // q é o enunciado da questão do quiz: com ele o desempenho conta só a primeira resposta de cada questão no dia.
-  function event(kind, ok, topic = area, q, title = result?.title) {
-    const entry = { kind, ok, area: topic, title, q, date: new Date().toISOString() };
+  // listed (caderno) diz que a questão estava no caderno de erros antes da resposta: é por ele que a véspera da prova
+  // sabe o que o caderno tinha no começo do dia (lib.js, studyPlan).
+  function event(kind, ok, topic = area, q, title = result?.title, listed = false) {
+    const entry = { kind, ok, area: topic, title, q, date: new Date().toISOString(), ...(listed && { caderno: true }) };
     const next = [...readList('events'), entry];
     setEvents(persist('events', next) ? next.filter(validEvent) : [...events, entry]);
   }
@@ -799,18 +801,27 @@ function App() {
 
   // "Data da prova" (ui.jsx, ExamDate): a data vai para o material na biblioteca, a partir da lista do navegador, como no
   // store(). O material que ainda não está lá é salvo com ela, e o aviso diz isso. Sem data, o campo prova sai.
+  // provaMarcada é a hora em que a data foi marcada: com ela marcada hoje, a véspera conta dali (lib.js, studyPlan).
+  // O rascunho é gravado junto: na saída da página (ExamDate grava no pagehide) não há outro desenho, e ele já tinha
+  // sido gravado sem a data.
   function setExam(day) {
     const stored = readList('saved');
     const at = result.id ? stored.findIndex(s => s?.id === result.id) : -1;
-    const { prova, ...rest } = at < 0 ? result : stored[at];
-    const material = day ? { ...rest, prova: day } : rest;
+    const { prova, provaMarcada, ...rest } = at < 0 ? result : stored[at];
+    const material = day ? { ...rest, prova: day, provaMarcada: new Date().toISOString() } : rest;
     const note = day ? 'Prova marcada para ' + day.slice(8) + '/' + day.slice(5, 7) + ': o plano do dia fica no Estudar.'
       : 'Data da prova apagada.';
+    const open = (opened, text) => {
+      setResult(opened);
+      toast(text);
+      if (draft.current) {
+        draft.current = { ...draft.current, result: opened };
+        saveDraft();
+      }
+    };
     if (at < 0 && day) {
       const entry = store(material);
-      if (!entry) return;
-      setResult(entry);
-      toast('Material salvo na biblioteca. ' + note);
+      if (entry) open(entry, 'Material salvo na biblioteca. ' + note);
       return;
     }
     if (at >= 0) {
@@ -818,8 +829,7 @@ function App() {
       if (!persist('saved', stored)) return;
       setSaved(stored.filter(validMaterial));
     }
-    setResult(material);
-    toast(note);
+    open(material, note);
   }
 
   // Material aberto que ainda não foi para a biblioteca é guardado antes de outro tomar o lugar: ele custou uma
@@ -931,13 +941,12 @@ function App() {
     const q = quizList[idx];
     const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
     const from = origin(q);
+    const key = mistakeKey(from.title, q.question);
     const now = new Date();
     setAnswer({ value, ok });
     setAnswers([...answers, { ...q, ok, given: value }]);
-    event('quiz', ok, from.area, fold(q.question), from.title);
-    notebook(list => (ok
-      ? clearMistake(list, mistakeKey(from.title, q.question), now)
-      : addMistake(list, q, from.title, from.area, now)));
+    event('quiz', ok, from.area, fold(q.question), from.title, mistakes.some(e => e.key === key));
+    notebook(list => (ok ? clearMistake(list, key, now) : addMistake(list, q, from.title, from.area, now)));
     // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
     if (blind) {
       say('Resposta registrada.');
@@ -2079,7 +2088,7 @@ function App() {
                               juntos: na tela estreita, os dois descem para baixo do título. */}
                           {!result.virtual && (
                             <div className="header-actions">
-                              <ExamDate key={result.title} value={provaOf(result)} today={today} onSave={setExam} />
+                              <ExamDate key={result.title} value={provaOf(result)} today={today} onSave={setExam} say={say} />
                               <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
                                 <Icon name={isSaved ? 'check' : 'salvar'} />
                                 {isSaved ? 'Salvo' : 'Salvar material'}

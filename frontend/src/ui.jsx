@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
@@ -92,13 +92,48 @@ export function StudyPlan({ rows, onOpen }) {
   );
 }
 
-// "Data da prova", no cabeçalho do material (#86). A data vale quando fica completa e dentro do prazo, de hoje a um
-// ano: digitar o ano passa por 0002 e 0202, que não valem e não são gravados. O que não vale fica só no campo, com a
-// nota. O campo vazio apaga a data; com só um pedaço dela em branco (badInput), nada muda. Na tela o rótulo é "Prova":
-// com ele, o campo e o "Salvar material" cabem numa linha em 390 px. O nome inteiro fica no campo.
-export function ExamDate({ value, today, onSave }) {
-  const [typed, setTyped] = useState(null);
-  const bad = typed !== null;
+// "Data da prova", no cabeçalho do material (#86). A data vale completa e dentro do prazo, de hoje a um ano, e o campo
+// vazio apaga a data. Ela é gravada 0,4 s depois da última mudança, como o rascunho (cada seta gravava a biblioteca
+// inteira e trocava o aviso), e na hora com o Enter, ao sair do campo ou ao sair da página. O que não vale (fora do
+// prazo ou só um pedaço da data, badInput) fica no campo, sem gravar; ao sair dele, ganha a nota, que o leitor de tela
+// ouve (say). Durante a digitação não: o ano passa por 0002 e 0202. Ao apagar as três partes, o Chrome só avisa a
+// primeira: o campo é lido também ao soltar o Backspace e o Delete. Na tela o rótulo é "Prova": com ele, o campo e o
+// "Salvar material" cabem numa linha em 390 px. O nome inteiro fica no campo.
+export function ExamDate({ value, today, onSave, say }) {
+  const [edit, setEdit] = useState(null);
+  const timer = useRef(0);
+  const pending = useRef(null);
+  useEffect(() => {
+    const flush = () => pending.current?.();
+    const hide = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', hide);
+      clearTimeout(timer.current);
+    };
+  }, []);
+  function read({ value: day, validity }, now) {
+    clearTimeout(timer.current);
+    pending.current = null;
+    if (!validity.valid) {
+      const note = validity.badInput ? 'Complete a data ou apague as três partes.'
+        : 'Escolha uma data entre hoje e daqui a um ano.';
+      setEdit({ day, note: now ? note : '' });
+      if (now) say(note);
+    } else if (day === value) setEdit(null);
+    else {
+      setEdit({ day });
+      pending.current = () => {
+        clearTimeout(timer.current);
+        pending.current = null;
+        onSave(day);
+      };
+      if (now) pending.current();
+      else timer.current = setTimeout(pending.current, 400);
+    }
+  }
   return (
     <div className="exam-date">
       <label className="inline-field">
@@ -108,18 +143,16 @@ export function ExamDate({ value, today, onSave }) {
           aria-label="Data da prova"
           min={today}
           max={addDays(today, 365)}
-          value={bad ? typed : value}
-          aria-invalid={bad || undefined}
-          aria-describedby={bad ? 'prova-nota' : undefined}
-          onChange={e => {
-            const { value: day, validity } = e.target;
-            if (!validity.valid) return setTyped(day);
-            setTyped(null);
-            if (day !== value) onSave(day);
-          }}
+          value={edit ? edit.day : value}
+          aria-invalid={!!edit?.note || undefined}
+          aria-describedby={edit?.note ? 'prova-nota' : undefined}
+          onChange={e => read(e.target)}
+          onKeyUp={e => (e.key === 'Backspace' || e.key === 'Delete') && read(e.target)}
+          onKeyDown={e => e.key === 'Enter' && read(e.target, true)}
+          onBlur={e => read(e.target, true)}
         />
       </label>
-      {bad && <p className="hint" id="prova-nota">Escolha uma data entre hoje e daqui a um ano.</p>}
+      {edit?.note && <p className="hint" id="prova-nota">{edit.note}</p>}
     </div>
   );
 }

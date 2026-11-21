@@ -1012,8 +1012,9 @@ const uniqueBy = (list, key) => {
 // - quiz: as questões do material; falta a que não teve resposta hoje.
 // - cartoes: os que a revisão espaçada pede hoje (vencidos ou ainda sem caixa) e os avaliados hoje. Avaliar leva o
 //   cartão para outro dia, então falta o que ela ainda pede. Nenhum pedido nem avaliado: os cartões estão em dia.
-// - erros: as questões do material no caderno; falta a que não foi acertada hoje depois do último erro (a resposta
-//   errada que a pôs lá também pode ser de hoje).
+// - erros: as questões do material no caderno no começo do dia (ou quando a data foi marcada); falta a que continua lá
+//   sem acerto hoje depois do último erro (ela pode ter sido errada de novo hoje). A que saiu hoje, pelo 3º acerto,
+//   está feita.
 // - prova: nada.
 // events, mistakes e boxes são as listas já conferidas (validEvent, validMistake, validCardReview).
 export function studyPlan(saved, { events, mistakes, boxes }, now) {
@@ -1026,8 +1027,20 @@ export function studyPlan(saved, { events, mistakes, boxes }, now) {
     .filter(({ m, days }) => days === soonest && !titles.has(m.title) && titles.add(m.title))
     .slice(0, 3)
     .map(({ m, days }) => {
-      const own = mistakes.filter(e => e.title === m.title);
-      const task = planTask(days, own.length > 0);
+      // A véspera segue o caderno do começo do dia ou, com a data marcada hoje, o da hora em que ela foi marcada
+      // (provaMarcada): o 3º acerto tira a questão de lá e o erro no quiz põe outra, e a linha não troca. Estavam lá a
+      // questão com o último erro de antes disso e a que tinha caderno (gravado pelo App em cada resposta) na primeira
+      // resposta depois: a errada de novo e a que saiu do caderno.
+      const since = Math.max(Date.parse(today + 'T00:00'), Date.parse(m.provaMarcada) || 0);
+      const was = new Map();
+      for (const e of todays) {
+        const after = e.kind === 'quiz' && e.title === m.title && Date.parse(e.date) >= since;
+        if (after && !was.has(e.q)) was.set(e.q, e.caderno === true);
+      }
+      const listed = mistakes.filter(e => e.title === m.title);
+      const own = listed.filter(e => Date.parse(e.date) < since || was.get(fold(e.item.question)));
+      const gone = [...was].filter(([q, yes]) => yes && !listed.some(e => fold(e.item.question) === q)).length;
+      const task = planTask(days, own.length + gone > 0);
       const seen = kind => new Set(todays.filter(e => e.kind === kind && e.title === m.title).map(e => e.q));
       if (task === 'quiz') {
         const answered = seen('quiz');
@@ -1048,7 +1061,7 @@ export function studyPlan(saved, { events, mistakes, boxes }, now) {
       if (task === 'erros') {
         const fixed = e => todays.some(ev => ev.kind === 'quiz' && ev.ok && ev.title === e.title &&
           ev.q === fold(e.item.question) && Date.parse(ev.date) > Date.parse(e.date));
-        return { material: m, days, task, total: own.length, left: own.filter(e => !fixed(e)) };
+        return { material: m, days, task, total: own.length + gone, left: own.filter(e => !fixed(e)) };
       }
       return { material: m, days, task, total: 0, left: [] };
     });
@@ -1106,7 +1119,7 @@ export function fixLastQuizEvent(events, title, q, until) {
 // também sai: é pela data que mergeBackup o reconhece. O perfil (user) só vale com nome de 1 a 50 caracteres, o
 // limite do formulário, e área da lista; senão é null. Dele só entram o nome e a área. Backup de antes da revisão
 // espaçada não tem cartoes (as caixas dos cartões): vale lista vazia. A data da prova estragada sai do material, que
-// entra sem ela (provaOf).
+// entra sem ela (provaOf); a hora em que ela foi marcada (provaMarcada) só fica com a data e sendo data.
 export function readBackup(text) {
   let data;
   try {
@@ -1117,7 +1130,8 @@ export function readBackup(text) {
   if (data?.versao !== 1) return null;
   const list = (value, ok) => (Array.isArray(value) ? value.filter(ok) : []);
   const saved = list(data.saved, m => validMaterial(m) && isDate(m.date))
-    .map(({ prova, ...m }) => (provaOf({ prova }) ? { ...m, prova } : m));
+    .map(({ prova, provaMarcada, ...m }) => (provaOf({ prova })
+      ? { ...m, prova, ...(isDate(provaMarcada) && { provaMarcada }) } : m));
   const events = list(data.events, validEvent);
   const erros = list(data.erros, validMistake);
   const cartoes = list(data.cartoes, validCardReview);
