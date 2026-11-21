@@ -46,7 +46,7 @@ As respostas geradas pela IA podem conter erros. Confira as informações com o 
 O aluno pode inserir informações de diferentes maneiras:
 
 - Colar um texto;
-- Digitar uma matéria;
+- Escrever um tema;
 - Fazer uma pergunta;
 - Utilizar o microfone, quando houver suporte do navegador ao reconhecimento de voz.
 
@@ -69,13 +69,13 @@ Essas configurações ajudam a IA a adaptar o conteúdo ao nível do estudante.
 
 O texto do editor, o material aberto e a conversa ficam guardados no navegador: recarregar a página ou fechar a aba não apaga o trabalho. Com o app aberto em duas abas, cada uma guarda o seu rascunho, e recarregar uma delas traz o texto dela; uma aba nova abre com o último rascunho gravado. O botão "Limpar" esvazia o editor e pode ser desfeito.
 
-### 2. Resumos
+### 2. Resumo
 
 Transformam conteúdos extensos em tópicos organizados, destacando os principais conceitos e informações.
 
 O estudante pode:
 
-- Selecionar a quantidade de tópicos, com a contagem "Mostrando N de M tópicos";
+- Escolher quantos tópicos aparecem (por padrão, todos), com a contagem "Mostrando N de M tópicos" e o botão "Ver os outros N tópicos" quando algum fica escondido;
 - Copiar o resumo inteiro;
 - Salvar o material na biblioteca;
 - Acessar os flashcards relacionados;
@@ -97,7 +97,7 @@ O cartão errado volta ao fim da fila até ser acertado. No fim, o estudante vê
 
 Trocar de aba (Resumo, Flashcards, Quiz) ou de página no meio do baralho ou do quiz não recomeça: o estudante volta ao mesmo cartão e à mesma questão. Para recomeçar no meio, há o botão "Recomeçar" ao lado de "Cartão X de Y" e de "Questão X de Y"; depois de "Refazer só os que errei" ou "Refazer as que errei", ele recomeça só o que o estudante errou. O baralho e o quiz também recomeçam ao gerar um material novo, ao abrir outro da biblioteca e ao sair do quiz do caderno de erros. Abrir uma parte do material pelos botões de "Abrir" do Estudar, ou abrir de novo na biblioteca o que já está aberto, não recomeça.
 
-### 4. Quizzes
+### 4. Quiz
 
 Oferecem atividades interativas para testar o conhecimento adquirido.
 
@@ -111,7 +111,7 @@ Após cada resposta aparecem a explicação e a opção certa, marcada também c
 
 As respostas curtas são corrigidas por comparação de texto. Maiúsculas, acentos e a pontuação no fim da resposta são ignorados, e a vírgula decimal vale como ponto. Uma questão pode aceitar mais de uma forma de resposta, como a sigla e o nome por extenso.
 
-Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido.
+Quando a comparação marca como errada uma resposta que o estudante considera certa, ele pode usar "Pedir revisão da IA". A IA julga o sentido da resposta. Se o veredito for "correta", o resultado da questão é corrigido. Com "parcial" ou "incorreta", a resposta continua como erro, e a questão fica no caderno de erros: parcial não vale ponto. A tela diz o efeito logo abaixo do comentário da IA.
 
 Com a IA ativa, as alternativas de múltipla escolha são embaralhadas pelo backend a cada material gerado.
 

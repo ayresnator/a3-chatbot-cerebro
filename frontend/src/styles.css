@@ -818,10 +818,6 @@ select {
     font-weight: 500
 }
 
-.profile .icon {
-    color: var(--ink-3)
-}
-
 .avatar {
     display: grid;
     place-items: center;
@@ -850,10 +846,6 @@ select {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap
-}
-
-.topbar .profile > .icon {
-    display: none
 }
 
 /* Sem caixa: a barra de cima, o dock e o palco são células do .app. */
@@ -2952,7 +2944,8 @@ main:focus {
     margin-left: auto
 }
 
-/* A escada de uma questão no caderno: ○ novo, ✗ errei, ↻ refazer, ✓ certo em outro dia. */
+/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ refazer em outro dia, ✓ certo em outro
+   dia: sai do caderno. */
 .ladder {
     display: flex;
     flex-wrap: wrap;

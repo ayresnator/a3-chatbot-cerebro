@@ -10,7 +10,7 @@ import { AREAS, plural } from './lib.js';
 // BackupNote).
 export default function Biblioteca({
   rise, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, backup, onExport, onImport, onOpen,
-  onRemove,
+  onRemove, onStart,
 }) {
   const picker = useRef(null);
   return (
@@ -81,17 +81,23 @@ export default function Biblioteca({
           ))}
         </ul>
       )}
-      {!shown.length && (
+      {/* Biblioteca vazia e busca sem resultado pedem coisas diferentes do aluno. */}
+      {!shown.length && (saved.length ? (
         <div className="empty">
           <h2>Nenhum material encontrado</h2>
-          {/* Biblioteca vazia e busca sem resultado pedem coisas diferentes do aluno. */}
-          <p>
-            {saved.length
-              ? 'Nada com essa busca ou essa área. Apague a busca ou escolha "Todas".'
-              : 'Os materiais que você gerar ficam guardados aqui, para estudar de novo depois.'}
-          </p>
+          <p>Nada com essa busca ou essa área. Apague a busca ou escolha "Todas".</p>
         </div>
-      )}
+      ) : (
+        <div className="empty">
+          <h2>Sua biblioteca está vazia</h2>
+          {/* O material gerado entra aqui sozinho, sem "Salvar" (App.jsx, generate): a frase não pede para salvar. */}
+          <p>
+            Os materiais que você gerar ficam guardados aqui, para estudar de novo depois. Se você tem um backup, use
+            Importar.
+          </p>
+          <button type="button" className="primary" onClick={onStart}>Gerar um material</button>
+        </div>
+      ))}
       {backup && <BackupNote status={backup} onExport={onExport} />}
     </m.section>
   );

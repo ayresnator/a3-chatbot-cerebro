@@ -238,7 +238,7 @@ export function PromptComposer({ value, onChange, onSend, area, onArea, level, o
             e.preventDefault();
             if (ready && !e.repeat) onSend();
           }}
-          placeholder="Cole seu texto, anotações ou digite uma matéria…"
+          placeholder="Cole seu texto, anotações ou escreva um tema…"
         />
         {/* Com o foco no campo vale a frase fixa dele (placeholder); sem o foco ela some (styles.css) e a frase de
             exemplo se escreve no lugar. A key sorteia outra frase quando a área troca. */}
