@@ -659,7 +659,8 @@
     }
 
     .feedback,
-    .pretest {
+    .pretest,
+    .own {
         padding: var(--sp-4)
     }
 

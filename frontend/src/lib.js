@@ -171,6 +171,31 @@ export function findSource(text, source) {
   return null;
 }
 
+// O texto do tópico com os trechos que faltaram na explicação do aluno (#82), em partes na ordem do texto, cada uma com
+// mark true ou false, para a tela desenhar <mark>. Cada trecho é achado pela regra do findSource, a do backend, que já
+// conferiu que ele está no texto; trecho que não está é ignorado. Trechos que se cruzam, ou que só têm espaço entre eles,
+// viram uma marca só.
+export function markPieces(text, pieces) {
+  const ranges = pieces.map(piece => findSource(text, piece)).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  const parts = [];
+  let at = 0;
+  for (const [start, end] of ranges) {
+    if (end <= at) continue;
+    const from = Math.max(start, at);
+    const gap = text.slice(at, from);
+    const last = parts[parts.length - 1];
+    if (last?.mark && !gap.trim()) {
+      last.text += gap + text.slice(from, end);
+    } else {
+      if (gap) parts.push({ text: gap, mark: false });
+      parts.push({ text: text.slice(from, end), mark: true });
+    }
+    at = end;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), mark: false });
+  return parts;
+}
+
 // O trecho de um exemplo do "Usar um exemplo" não é do aluno: o tópico com trecho no texto que a IA escreveu (ai) leva
 // a marca ia, e o com trecho no exemplo pronto (ready), a marca pronto. O App passa o último exemplo que pôs no editor.
 export function markExample(summary, ai, ready) {
@@ -1083,6 +1108,12 @@ export function whyTopic(concept) {
 // caracteres, gabarito com até 200. O gabarito vai como está no material, com as formas separadas por "|".
 export function gradeRequest(q, given, area, level) {
   return { question: cut(q.question, 500), expected: cut(q.answer, 200), answer: cut(given, 500), area, level };
+}
+
+// Corpo do pedido de "Pedir comentário da IA" (/api/explain), na explicação de um tópico com as próprias palavras (#82),
+// nos limites do backend: título do tópico com até 300 caracteres, texto com até 3.000 e a explicação com até 1.000.
+export function explainRequest(topic, answer, area, level) {
+  return { concept: cut(topic.concept, 300), content: cut(topic.text, 3000), answer: cut(answer, 1000), area, level };
 }
 
 // "Questões novas deste material" (/api/quiz): um material guarda até QUIZ_CAP questões.
