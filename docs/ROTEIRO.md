@@ -5,8 +5,8 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 ## Na véspera
 
 1. Rode o projeto do zero em um computador do grupo, seguindo o [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
-2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito) e salve os materiais.
-3. Na Biblioteca, clique em "Exportar". O arquivo `cerebro-backup-AAAA-MM-DD.json` é o plano B: leva a biblioteca, o desempenho e o caderno de erros para qualquer navegador.
+2. Gere dois ou três materiais com a IA, responda os quizzes (erre algumas questões de propósito), avalie os flashcards e salve os materiais.
+3. Na Biblioteca, clique em "Exportar". O arquivo `cerebro-backup-AAAA-MM-DD.json` é o plano B: leva a biblioteca, o desempenho, o caderno de erros e as caixas dos cartões para qualquer navegador.
 4. Copie o arquivo para o computador da apresentação e para um pen drive.
 5. Não rode a rodada de avaliação (`.\.venv\Scripts\python.exe -m app.avalia --rodar`) no dia da apresentação nem na véspera à noite: ela usa a mesma cota da chave.
 
@@ -15,7 +15,7 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 1. Abra os dois terminais (backend e frontend) e o endereço http://localhost:5173. Use sempre `localhost`: os dados ficam guardados por endereço.
 2. Confira o cabeçalho: tem de aparecer "IA ativa", o nome do modelo e as chamadas deste computador. "IA não configurada" é chave faltando no `.env`. "Cérebro desligado" é o terminal do Python parado. "Cota de hoje esgotada" é a cota do Google que acabou. O número conta só as chamadas deste computador: a cota é do projeto inteiro, e o saldo real fica no painel de uso do Google AI Studio. Com `AI_DAILY_LIMIT` no `.env`, o número aparece como "8 de 40 chamadas hoje", e "Teto do dia atingido" quer dizer que o teto do grupo chegou: os botões da IA ficam desligados até a virada do dia.
 3. Em um terceiro terminal, na pasta `backend`, rode `.\.venv\Scripts\python.exe -m app.check` uma vez. Ele faz uma chamada real e mostra se a chave e a cota respondem.
-4. Na Biblioteca, clique em "Importar" e escolha o arquivo da véspera. O Desempenho e o caderno de erros já aparecem com dados.
+4. Na Biblioteca, clique em "Importar" e escolha o arquivo da véspera. O Desempenho e o caderno de erros já aparecem com dados, e os cartões e as questões de ontem voltam hoje.
 5. Aumente o zoom do navegador para 125% (Ctrl e +) se for usar projetor. Se o menu da esquerda virar uma barra embaixo, a janela ficou estreita para esse zoom: diminua o zoom até o menu voltar.
 6. Deixe abertos em outras abas o [docs/IA.md](IA.md), o [VALIDACAO.md](VALIDACAO.md) na tabela da rodada de 17/11 e a página Actions do repositório no GitHub, com os testes passando.
 
@@ -28,19 +28,19 @@ Demonstração de 10 minutos em quatro blocos, um por integrante, mais as pergun
 
 ## Bloco 2: estudar com o material (3 minutos, 2 pedidos à IA)
 
-1. Flashcards: vire um cartão e clique em "Errei". Mostre que a fila cresceu: o cartão volta até ser acertado.
+1. Flashcards: vire um cartão e clique em "Errei". Mostre que a fila cresceu: o cartão volta até ser acertado. Com o arquivo da véspera importado, os cartões avaliados ontem voltam hoje: abra o link "N cartões para hoje", em "Seu progresso" no Estudar, e mostre a revisão do dia, com o material de cada cartão. Diga a regra: cada "Acertei" no dia marcado leva o cartão para uma caixa que volta mais tarde (1, 3, 7 e 16 dias), e "Errei" o traz de volta para amanhã.
 2. Quiz: erre a primeira questão de propósito. Mostre a opção certa marcada com "✓ certa", a sua com "✗ sua resposta" e a explicação.
 3. Clique em "Não entendi, me explique". A resposta aparece ali mesmo, sem trocar de página.
 4. Na questão de resposta curta, digite a resposta certa com um erro pequeno de digitação, como uma letra trocada. A comparação de texto marca como errada. Clique em "Pedir revisão da IA" e mostre o veredito. Não use a sigla, o plural ou um sinônimo: o modelo costuma pôr essas formas no gabarito, a tela aceita a resposta e o botão de revisão não aparece.
 5. Termine o quiz e mostre a lista das questões erradas.
-6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá. Diga a regra: a questão sai sozinha quando é acertada em outro dia. O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
+6. Abra o Caderno de erros, pelo link "Abrir o caderno de erros" do fim do quiz: as questões erradas estão lá, com "volta amanhã". Diga a regra: a questão volta no dia marcado (amanhã, depois em 3 e em 7 dias) e só sai depois de 3 acertos em dias diferentes, cada um no dia marcado; errar volta ao começo. As questões do arquivo da véspera aparecem "para hoje", no "Refazer os de hoje". O aluno também pode tirar no botão "Tirar do caderno", e a questão que a revisão da IA aceita sai na hora.
 
 ## Bloco 3: dúvidas e desempenho (2 minutos, 1 pedido à IA)
 
 1. Em Dúvidas, pergunte algo sobre o tema do exemplo que o texto não responde, como a origem do assunto ou quem o estudou primeiro. A instrução manda o Cérebro avisar quando a resposta não está no texto.
 2. Mostre as sugestões de perguntas, que mudam a cada resposta.
 3. Em Desempenho, explique o número de acerto: conta só a primeira resposta de cada questão no dia. Refazer a mesma questão não melhora o número. A autoavaliação dos flashcards fica separada e segue a mesma regra: conta a primeira avaliação de cada cartão no dia. No gráfico, a altura da barra é o número de respostas do dia.
-4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
+4. Mostre "Seu próximo passo", com o material de maior taxa de erro, e os botões "Refazer os de hoje", com as questões do caderno que voltam hoje, "Refazer os erros de ...", que abre só as questões desse material, e "Abrir ...", que abre o material no resumo.
 
 ## Bloco 4: como a IA é controlada (3 minutos, sem pedidos à IA)
 
@@ -63,7 +63,7 @@ Abra o [docs/IA.md](IA.md) e passe pelos pontos:
 | "A cota de hoje da IA acabou" (`AI_QUOTA_EXCEEDED`, e o cabeçalho fica "Cota de hoje esgotada") ou falta de internet | Abra um material importado na Biblioteca. Resumo, flashcards, quiz, caderno de erros e desempenho funcionam sem IA. |
 | "As chamadas de IA de hoje chegaram ao teto escolhido pelo grupo" (`AI_BUDGET_REACHED`, e o cabeçalho fica "Teto do dia atingido") | Abra um material importado na Biblioteca, como no caso da cota. Para liberar a IA, aumente ou esvazie o `AI_DAILY_LIMIT` no `.env`, reinicie o backend e recarregue a página: no teto nenhum pedido sai, e a aba aberta continuaria com os botões da IA desligados. |
 | "Cérebro desligado" no cabeçalho | Olhe o terminal do Python. Se ele caiu, suba de novo com o comando do guia e recarregue a página: o cabeçalho só confere o backend quando a página abre, quando a aba volta a aparecer e no fim de cada pedido à IA. |
-| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho e o caderno de erros dela são à parte: o material importado não está lá. Diga que é a demonstração. |
+| Nada da IA responde | Abra http://localhost:5173/?demo. A demonstração monta resumo, flashcards e quiz a partir das frases do texto, sem IA. No resumo, o trecho de cada tópico é a própria frase: "No texto de exemplo" depois do "Usar um exemplo", "No seu texto" com um texto colado. Ela não mostra o que depende da IA: as respostas da página Dúvidas (lá vem um aviso fixo), os chips de sugestão do chat e os botões "Não entendi, me explique" e "Pedir revisão da IA". A biblioteca, o desempenho, o caderno de erros e as caixas dos cartões dela são à parte: o material importado não está lá. Diga que é a demonstração. |
 | A tela ficou estranha | Recarregue a página. O texto do editor, o material aberto e a conversa voltam. |
 
 A mensagem de erro mostra uma frase simples; o código entre parênteses na tabela fica embaixo dela, em "Detalhes técnicos". Os outros códigos de erro estão explicados na seção "Diagnóstico" do [INICIAR-NO-VSCODE.md](../INICIAR-NO-VSCODE.md).
@@ -80,6 +80,6 @@ A mensagem de erro mostra uma frase simples; o código entre parênteses na tabe
 
 **Como sabem que funciona?** Pelos testes automáticos com o provedor simulado, pela rodada de avaliação com chamadas reais e pela conferência manual de materiais gerados. Os números estão em [VALIDACAO.md](VALIDACAO.md).
 
-**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho e caderno de erros ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
+**Quais dados vocês guardam?** Nenhum no servidor. Biblioteca, desempenho, caderno de erros e caixas dos cartões ficam no navegador do aluno. O que vai para o Google é o texto do editor, as perguntas, o título e o resumo do material aberto nas perguntas sobre ele e as respostas enviadas para revisão.
 
 **O que falta?** Login de verdade, sincronização entre aparelhos e checagem de fatos do conteúdo gerado.

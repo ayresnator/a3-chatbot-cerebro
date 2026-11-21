@@ -1845,6 +1845,11 @@ main:focus {
     font-size: var(--fs-2)
 }
 
+/* "Ver no texto", embaixo do trecho: a palavra alinhada ao texto dele, depois do fio. */
+.source-link {
+    margin: calc(var(--sp-2) * -1) 0 0 calc(var(--sp-3) + var(--hair) - var(--sp-2))
+}
+
 /* Etiqueta do tópico que não saiu do texto do aluno. */
 .ai-tag {
     display: inline-flex;
@@ -1922,6 +1927,11 @@ main:focus {
     color: var(--ink-2);
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums
+}
+
+/* A frase do "Acertei" na revisão do dia: sem as abas, é ela que separa o cabeçalho do baralho, como as abas fazem. */
+.material .day-note {
+    margin: var(--sp-3) 0 var(--sp-5)
 }
 
 /* "Recomeçar" fica colado ao "Questão X de Y" (ou "Cartão X de Y"); a etiqueta do tipo continua na ponta. A margem
@@ -2232,6 +2242,11 @@ main:focus {
 .pen--errei .pen-note,
 .pen--refazer .pen-note {
     color: var(--pen-text)
+}
+
+/* A nota ao lado do ○ (a questão do caderno que espera o dia marcado) é texto: o cinza secundário, e não o dos ícones. */
+.pen--novo .pen-note {
+    color: var(--ink-2)
 }
 
 /* ---------- Dúvidas ---------- */
@@ -3103,17 +3118,32 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
+/* A regra (e, sem questão para hoje, quando volta a próxima) ocupa a linha inteira: a escada e os botões vêm
+   embaixo dela, qualquer que seja o tamanho dos textos. */
+.erros-rule {
+    flex-basis: 100%
+}
+
 .erros-head .hint {
-    flex-basis: 100%;
     margin: 0
 }
 
-.erros-head .primary {
+.erros-next {
+    margin: var(--sp-2) 0 0;
+    font-weight: 650
+}
+
+/* "Refazer os de hoje" e "Treinar todas" ficam juntos, na ponta direita: com os quatro passos, a escada enche a
+   linha dela, e os botões vão para a de baixo. */
+.erros-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
     margin-left: auto
 }
 
-/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei, ↻ refazer em outro dia, ✓ certo em outro
-   dia: sai do caderno. */
+/* O caminho de uma questão no caderno, com a seta entre os passos: ✗ errei: volta amanhã, ↻ para hoje, ○ acertei:
+   volta em 3 e 7 dias, ✓ 3 acertos: sai do caderno. */
 .ladder {
     display: flex;
     flex-wrap: wrap;
@@ -3147,10 +3177,11 @@ main:focus {
     list-style: none
 }
 
-/* Cada questão: a marca e a nota à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno" embaixo. */
+/* Cada questão: a marca, quando ela volta e os acertos à esquerda, o enunciado, "Ver resposta" e "Tirar do caderno"
+   embaixo. */
 .mistakes li {
     display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+    grid-template-columns: 8.75rem minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--sp-2) var(--sp-4);
     padding: var(--sp-4) 0;
@@ -3158,8 +3189,19 @@ main:focus {
     line-height: var(--lh-read)
 }
 
-.mistakes li > .pen {
-    grid-row: span 2
+.mistakes li > .mistake-when {
+    grid-row: span 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1)
+}
+
+/* Os acertos ficam embaixo da nota, alinhados ao texto dela. */
+.mistake-when small {
+    padding-left: calc(var(--mark) + var(--sp-1));
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    line-height: var(--lh-ui)
 }
 
 .mistakes li strong {
@@ -3213,6 +3255,11 @@ main:focus {
     grid-row: 1;
     min-height: var(--control-h-inline);
     white-space: nowrap
+}
+
+/* "Tirar", a palavra curta, só em 380 px ou menos (mobile.css). */
+.mistakes .drop .short {
+    display: none
 }
 
 /* "Desfazer" que fica na lista depois de uma exclusão. */
@@ -3646,6 +3693,56 @@ main[data-instant] > .view[data-motion-pop-id] {
     margin-top: var(--sp-2)
 }
 
+/* Janela "Ver no texto": na medida de leitura e, no máximo, na altura da janela do navegador. Só o texto rola; o título,
+   a nota e o botão ficam à vista. */
+.source-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    width: min(calc(var(--measure) + var(--sp-6) * 2), calc(100vw - 2rem))
+}
+
+.source-dialog .dialog-body {
+    min-height: 0
+}
+
+.source-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.source-dialog p {
+    color: var(--ink-2)
+}
+
+/* O texto como foi enviado, com as quebras de linha e os espaços dele. */
+.source-text {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--sp-3) var(--sp-4);
+    border: var(--hair) solid var(--line);
+    border-radius: var(--r-2);
+    background: var(--field);
+    line-height: var(--lh-read);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere
+}
+
+/* O trecho do tópico: fundo ciano fraco e sublinhado, que continua dizendo "é aqui" sem a cor. */
+.source-text mark {
+    border-radius: var(--r-0);
+    background: var(--accent-off);
+    color: var(--ink-hi);
+    text-decoration: underline var(--underline) var(--accent);
+    text-underline-offset: var(--underline-gap);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone
+}
+
+.source-dialog .dialog-body > button:last-child {
+    align-self: flex-start
+}
+
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o
    rótulo fica na altura da linha dele e o botão com a margem dele: a janela não muda quando o formulário chega. */
 .profile-form {
@@ -3841,8 +3938,18 @@ main[data-instant] > .view[data-motion-pop-id] {
         color: HighlightText
     }
 
-    /* O anel do chip marcado fica fora dele, sobre o Canvas: o ciano do foco sumia no tema claro. */
-    .chip[aria-checked=true]:focus-visible {
+    /* O trecho marcado da janela "Ver no texto", com o sublinhado na cor do texto. */
+    .source-text mark {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+        text-decoration-color: currentColor
+    }
+
+    /* O anel do chip marcado e o do trecho marcado ficam fora deles, sobre o Canvas: o ciano do foco sumia no tema
+       claro. */
+    .chip[aria-checked=true]:focus-visible,
+    .source-text mark:focus-visible {
         outline-color: CanvasText
     }
 
