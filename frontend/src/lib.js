@@ -56,12 +56,14 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
 
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
 // não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
-// nela. O App liga a demonstração antes da primeira leitura.
+// nela. O App liga a demonstração antes da primeira leitura. O "Fundo animado" (fundo) fica de fora: não é dado do
+// estudante, é uma preferência do aparelho, como o movimento reduzido do sistema, e quem parou as ondas no app com IA
+// não as vê andando de novo na demonstração.
 let prefix = 'cerebro-';
 export function demoStorage(on) {
   prefix = on ? 'cerebro-demo-' : 'cerebro-';
 }
-export const storageKey = k => prefix + k;
+export const storageKey = k => (k === 'fundo' ? 'cerebro-' : prefix) + k;
 
 // session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
 // que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
