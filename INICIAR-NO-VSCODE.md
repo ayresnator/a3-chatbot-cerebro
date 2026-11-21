@@ -113,6 +113,7 @@ Com o frontend rodando, abra http://localhost:5173/?demo. A demonstração organ
 - AI_NO_COMPATIBLE_MODEL: com AI_MODEL=auto (ou vazio, que no Gemini vale auto), a listagem não trouxe nenhum Gemini Flash estável. Veja "Modelo não encontrado (404)" e ponha em AI_MODEL um nome da listagem.
 - INVALID_INPUT: o pedido foi recusado antes de chegar à IA (texto vazio, longo demais ou campo inválido). A mensagem diz o que corrigir.
 - Erro de proxy sem JSON: confira o terminal do Python e a porta 8000.
+- App com outra letra (a fonte do sistema no lugar da Manrope), ou o aviso `didn't resolve at build time` com `@fontsource-variable` no `npm run build`: falta o pacote da fonte, que entrou no projeto depois da sua instalação. Depois de atualizar o projeto, rode `npm ci` de novo na pasta frontend.
 - content.js com chrome-extension://: teste sem extensões; não desative CSP.
 
 ## Testes
