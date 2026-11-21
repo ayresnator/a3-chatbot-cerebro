@@ -363,12 +363,13 @@ function compile(gl, type, source) {
   return shader;
 }
 
-// Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando. A primeira
-// vez num canvas, o trabalho começa quando a página fica livre (requestIdleCallback; sem ele, na hora marcada), não
-// antes de SETTLE_MS da abertura nem de 1 s depois da chamada; no canvas que já tem contexto (warm), começa na própria
-// chamada. Só roda com WebGL na GPU: com failIfMajorPerformanceCaveat, o renderizador por software não dá contexto, e
-// fica o fundo de CSS. Com KHR_parallel_shader_compile o driver compila e liga o shader fora da thread principal, e
-// cada quadro só pergunta se acabou; sem ela, a ligação trava a página até acabar, como antes.
+// Liga o fundo ao canvas e devolve a função que o desliga, que também cancela o que ainda está esperando (só o shader
+// que ainda está ligando espera a ligação acabar para ser apagado). A primeira vez num canvas, o trabalho começa quando
+// a página fica livre (requestIdleCallback; sem ele, na hora marcada), não antes de SETTLE_MS da abertura nem de 1 s
+// depois da chamada; no canvas que já tem contexto (warm), começa na própria chamada. Só roda com WebGL na GPU: com
+// failIfMajorPerformanceCaveat, o renderizador por software não dá contexto, e fica o fundo de CSS. Com
+// KHR_parallel_shader_compile o driver compila e liga o shader fora da thread principal, e cada quadro só pergunta se
+// acabou; sem ela, a ligação trava a página até acabar, como antes.
 // onActive(true) sai junto com o primeiro quadro, também quando o contexto volta; onActive(false), quando falta WebGL,
 // o shader é recusado ou o contexto se perde (ou já chega perdido).
 // animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands).
@@ -387,6 +388,7 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   let raf = 0;
   let wait = 0;
   let poll = 0;
+  let stopped = false;
   let density = null;
 
   // u_resolution é sempre o canvas inteiro: o scissor só escolhe que pixels saem, e o desenho não muda.
@@ -455,11 +457,16 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   }
 
   // Com a extensão, só lê LINK_STATUS quando COMPLETION_STATUS_KHR diz que a ligação acabou (=== false: um erro, que
-  // devolve null, cai na leitura direta em vez de esperar para sempre).
+  // devolve null, cai na leitura direta em vez de esperar para sempre). poll tem valor enquanto a ligação está em
+  // andamento. Desligado no meio dela (stopped), o fundo só apaga o programa aqui, com a ligação acabada.
   function check() {
     poll = 0;
     if (ext && gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR) === false) {
       poll = requestAnimationFrame(check);
+      return;
+    }
+    if (stopped) {
+      gl.deleteProgram(program);
       return;
     }
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
@@ -565,9 +572,9 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   }
 
   return () => {
+    stopped = true;
     clearTimeout(timer);
     if (idle) cancelIdleCallback(idle);
-    cancelAnimationFrame(poll);
     pause();
     window.removeEventListener('resize', render);
     document.removeEventListener('visibilitychange', onVisibility);
@@ -577,7 +584,10 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     canvas.removeEventListener('webglcontextrestored', link);
     if (!gl.isContextLost()) {
       gl.deleteBuffer(buffer);
-      gl.deleteProgram(program);
+      // O programa que ainda está ligando fica para o check(): apagado antes, a consulta de conclusão que o Chromium
+      // abriu para ele continua perguntando por um programa que não existe, e o console enche de avisos do ANGLE
+      // ("glGetProgramiv: Program object expected").
+      if (!poll) gl.deleteProgram(program);
     }
   };
 }

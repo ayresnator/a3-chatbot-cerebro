@@ -200,37 +200,72 @@ test('o shader declara cada uniform que startWaves preenche', () => {
   }
 });
 
-test('startWaves: a primeira vez num canvas espera a folga da página; no que já tem contexto, começa na chamada', t => {
-  // O mínimo que o começo toca fora do navegador: ouvintes que não fazem nada e um contexto que já chega perdido, com
-  // que o link() para no aviso sem chamar o WebGL.
+// O mínimo que o começo de startWaves toca fora do navegador: ouvintes que não fazem nada, a folga da página (idle) e
+// os pedidos de quadro (frames), que ficam guardados para o teste rodar quando quiser. O temporizador é o do teste.
+function fakeBrowser(t) {
   const quiet = { addEventListener() {}, removeEventListener() {} };
-  let idle = null;
+  const env = { quiet, idle: null, frames: [] };
   const fake = {
     window: { ...quiet, devicePixelRatio: 1, matchMedia: () => quiet, requestIdleCallback: true },
     document: quiet,
-    requestIdleCallback: begin => (idle = begin),
+    requestIdleCallback: begin => (env.idle = begin),
     cancelIdleCallback() {},
+    requestAnimationFrame: frame => env.frames.push(frame),
     cancelAnimationFrame() {},
   };
   Object.assign(globalThis, fake);
   t.after(() => Object.keys(fake).forEach(name => delete globalThis[name]));
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  return env;
+}
+
+test('startWaves: a primeira vez num canvas espera a folga da página; no que já tem contexto, começa na chamada', t => {
+  const env = fakeBrowser(t);
+  // O contexto já chega perdido: o link() para no aviso sem chamar o WebGL.
   let contexts = 0;
   const reports = [];
-  const canvas = { ...quiet, getContext: () => (contexts++, { isContextLost: () => true }) };
+  const canvas = { ...env.quiet, getContext: () => (contexts++, { isContextLost: () => true }) };
   const options = { onActive: active => reports.push(active) };
 
   const stop = startWaves(canvas, options);
   t.mock.timers.tick(999);
-  assert.equal(idle, null, 'antes de 1 s, nem o pedido da folga sai');
+  assert.equal(env.idle, null, 'antes de 1 s, nem o pedido da folga sai');
   t.mock.timers.tick(1500);
   assert.equal(contexts, 0, 'o contexto espera a página ficar livre');
-  idle();
+  env.idle();
   assert.deepEqual([contexts, reports], [1, [false]]);
   stop();
 
-  idle = null;
+  env.idle = null;
   startWaves(canvas, options)();
-  assert.equal(idle, null, 'o começo novo não passa pelo requestIdleCallback');
+  assert.equal(env.idle, null, 'o começo novo não passa pelo requestIdleCallback');
   assert.deepEqual([contexts, reports], [2, [false, false]]);
+});
+
+test('startWaves: desligado com o shader ainda ligando, só apaga o programa quando a ligação acaba', t => {
+  const env = fakeBrowser(t);
+  // Um WebGL que aceita tudo, com a extensão KHR_parallel_shader_compile: a ligação acaba quando o teste diz (linked).
+  const COMPLETION_STATUS_KHR = 0x91B1;
+  let linked = false;
+  const deleted = [];
+  const gl = new Proxy({
+    isContextLost: () => false,
+    getExtension: () => ({ COMPLETION_STATUS_KHR }),
+    createProgram: () => 'programa',
+    getProgramParameter: (program, name) => (name === COMPLETION_STATUS_KHR ? linked : true),
+    deleteProgram: program => deleted.push(program),
+  }, { get: (real, name) => real[name] ?? (() => null) });
+  const reports = [];
+  const stop = startWaves({ ...env.quiet, getContext: () => gl }, { onActive: active => reports.push(active) });
+  t.mock.timers.tick(1500);
+  env.idle();
+  assert.equal(env.frames.length, 1, 'com a ligação em andamento, um quadro fica pedido para perguntar de novo');
+
+  stop();
+  assert.deepEqual(deleted, [], 'no meio da ligação o programa fica');
+  env.frames.shift()();
+  assert.deepEqual(deleted, [], 'e continua enquanto ela não acaba');
+  linked = true;
+  env.frames.shift()();
+  assert.deepEqual([deleted, reports, env.frames.length], [['programa'], [], 0], 'ligado, sai sem desenhar nem avisar');
 });
