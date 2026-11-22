@@ -155,7 +155,7 @@
 
     /* Tipos: Manrope em tudo, até nas notas da caneta. */
     --font-ui: 'Manrope Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    /* --fs-0 só nos nomes da barra de baixo em telefone de 360 a 380 px. */
+    /* --fs-0 só nos nomes da barra de baixo em telefone de 360 a 380 px e no gráfico do Desempenho abaixo de 360 px. */
     --fs-0: .75rem;
     --fs-1: .8125rem;
     --fs-2: .875rem;
@@ -702,12 +702,13 @@ select {
 
 /* "Pular para o conteúdo" (App.jsx): fora da vista até receber o foco, no primeiro Tab da página; com ele, aparece na
    altura da barra de cima, por cima dela, em fundo sólido. Fixo: fora do grid do .app e à vista em qualquer rolagem. Do
-   lado, a margem do .app, fora do entalhe do iPhone deitado (viewport-fit=cover, index.html). */
+   lado, a margem do .app, fora do entalhe do iPhone deitado (viewport-fit=cover, index.html). Uma camada acima da faixa
+   de espera: no celular os dois ficam no mesmo lugar, e a faixa, que vem depois no HTML, cobriria o link. */
 .skip-link {
     position: fixed;
     top: calc(var(--top-y) + (var(--top-h) - var(--control-h)) / 2);
     left: max(var(--gutter), env(safe-area-inset-left, 0px));
-    z-index: 100;
+    z-index: calc(var(--z-top) + 1);
     display: flex;
     align-items: center;
     min-height: var(--control-h);
@@ -1186,6 +1187,23 @@ select {
             clip-path: inset(50%);
             white-space: nowrap
         }
+    }
+}
+
+/* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 920 px, e com a letra a 200%, o nome
+   virava "P…". Sem os 13 rem do orbe, do nome, da lupa e dos vãos, o nome sai da vista e continua no botão para o
+   leitor de tela; ficam o orbe e a lupa. O !important vence o recorte da animação da frase, que continua valendo depois
+   que ela termina. */
+.ask-pill {
+    container-type: inline-size
+}
+
+@container (max-width: 13rem) {
+    .ask-pill-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        clip-path: inset(50%) !important
     }
 }
 
@@ -1749,10 +1767,12 @@ main:focus {
     gap: var(--sp-2)
 }
 
-/* Sem lugar na linha, o custo desce para uma linha dele, embaixo do nome. */
+/* Sem lugar na linha, o custo desce para uma linha dele, embaixo do nome, e o botão cresce com ela: 12 px da borda de
+   fora ao texto, em cima e embaixo. Com uma linha, e com o ícone de 20 px, ele continua com 44 px. */
 .action {
     flex-wrap: wrap;
-    row-gap: var(--sp-0)
+    row-gap: var(--sp-0);
+    padding-block: calc(var(--sp-3) - var(--hair))
 }
 
 .action[data-tab]:not(:disabled) .icon {
@@ -3964,6 +3984,10 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
+/* min-width: 0 pesa com a letra aumentada (a do navegador ou o texto do celular) e, com a letra padrão, quando a barra
+   de rolagem clássica tira 15 px da página (janelas de 320 a 333 e de 360 a 365 px): a coluna encolhe abaixo da data e
+   o gráfico fica na caixa, com os rótulos vizinhos uns por cima dos outros (sem ele o gráfico saía da caixa). Com a
+   letra padrão quem põe as 7 colunas na caixa abaixo de 360 px é o vão de 2 px com a letra de 12 px (mobile.css). */
 .chart > div {
     display: flex;
     flex: 1;
@@ -3971,6 +3995,7 @@ main:focus {
     align-items: center;
     justify-content: flex-end;
     gap: var(--sp-2);
+    min-width: 0;
     max-width: 5rem;
     color: var(--ink-2);
     font-size: var(--fs-2);
@@ -4775,6 +4800,35 @@ main[data-instant] > .view[data-motion-pop-id] {
     .quiz-tools .sk-check {
         margin-block: calc((var(--control-h) - .75rem) / 2)
     }
+
+    /* Tablet deitado e notebook com toque, no layout do computador: os chips da área e o "Nível" do Estudar, a caixa do
+       Dúvidas (as listas, o "Enviar", os atalhos e a lista deles) e as sugestões, que até 850 px já têm os 44 px
+       (mobile.css). "Detalhes técnicos" do erro também, em qualquer largura. */
+    .chip,
+    .level-button,
+    .suggestions button,
+    .shortcuts,
+    .composer-bar select,
+    .composer-bar .primary,
+    .composer-bar .link,
+    .error summary {
+        min-height: var(--control-h)
+    }
+
+    .shortcuts {
+        width: var(--control-h)
+    }
+
+    .palette [role=option] {
+        display: flex;
+        align-items: center;
+        min-height: var(--control-h)
+    }
+
+    /* O texto no meio dos 44 px; no navegador que ainda não alinha o conteúdo de um bloco, ele fica no topo deles. */
+    .error summary {
+        align-content: center
+    }
 }
 
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
@@ -4888,6 +4942,22 @@ main[data-instant] > .view[data-motion-pop-id] {
 
     .chat-title {
         color: CanvasText
+    }
+
+    /* O fundo translúcido do esqueleto da espera, do trilho do fio de progresso e do trilho do fio da espera some sobre
+       o Canvas: eles ganham um contorno na cor do texto. O ponto do estado da IA também, e fica cheio; enquanto o app
+       confere a IA, vazado, como fora daqui. */
+    .sk,
+    .sk-bar,
+    .meter,
+    .wait-bar,
+    .status-dot {
+        outline: var(--hair) solid CanvasText
+    }
+
+    .ai-status:not([data-tone=""]) .status-dot {
+        forced-color-adjust: none;
+        background: CanvasText
     }
 
     /* O item marcado da lista de atalhos, o chip da área escolhida, o nível escolhido no menu e o "Lembrei" ou "Não

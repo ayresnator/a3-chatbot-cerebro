@@ -959,6 +959,17 @@
         flex-direction: column;
         align-items: flex-start
     }
+
+    /* Desempenho: as 7 colunas do gráfico dividem 254 px em 320 px de tela. Com o vão de 2 px cada uma tem 34,6 px, e a
+       data ("21/11") só cabe nela com a letra de 12 px (34,4 px; com 13 px, 37,3). */
+    .chart {
+        gap: var(--sp-0)
+    }
+
+    .chart > div,
+    .chart small {
+        font-size: var(--fs-0)
+    }
 }
 
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
