@@ -1479,6 +1479,11 @@ class ApiTests(unittest.TestCase):
                       "diga isso em uma frase antes de completar com o que você sabe. "
                       "Esse aviso vale uma vez: se uma resposta sua em history já avisou, ou se a conversa em history "
                       "já trata de outro assunto, não repita o aviso e responda direto. ", chat)
+        # Com a conversa de outro assunto no histórico, o modelo disse ao aluno que o assunto era outro (#155).
+        self.assertIn("O aluno decide o assunto: se a pergunta tratar de outro assunto que o de history ou o de "
+                      "content, responda sobre o assunto da pergunta. "
+                      "Nunca diga ao aluno que a conversa é sobre outra coisa nem recuse a pergunta por ser de outro "
+                      "assunto. ", chat)
         generate = instruction("/api/generate", self.REQUEST, self.MATERIAL)
         self.assertEqual(generate, prompts.SYSTEM + "\n" + prompts.GENERATE)
         self.assertIn("answer é índice inteiro começando em zero para multiple e boolean.", generate)

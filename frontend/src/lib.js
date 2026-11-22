@@ -358,6 +358,7 @@ export function readDraft() {
   const chat = Array.isArray(d.chat)
     ? d.chat.filter(m => (m?.role === 'user' || m?.role === 'assistant') && isText(m.text))
     : [];
+  // A marca do assunto (key) volta como foi gravada: a que não é texto não é de assunto nenhum (chatHistory).
   // Pergunta que ficou sem resposta (F5 no meio do pedido) sai, como a que falha: iria sem resposta no histórico.
   while (chat.length && chat[chat.length - 1].role === 'user') chat.pop();
   const texts = list => Array.isArray(list) && list.every(isText);
@@ -841,10 +842,11 @@ export function examLine(list, size = list.length) {
 
 // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (o texto do assunto ou a área) até a primeira
 // resposta; depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
-// input é o texto do assunto (chatSubject): o do editor ou o do material aberto. As da IA só valem enquanto esse texto e
-// a área são os da resposta: se o aluno muda de assunto, voltam as fixas.
-export function hints({ chat, input, area, tips }) {
-  if (!chat.some(m => m.role === 'assistant')) {
+// input é o texto do assunto (chatSubject): o do editor ou o do material aberto. key é a marca do assunto (chatSubject):
+// as da IA só valem com a marca da resposta, e se o aluno muda de assunto, voltam as fixas. Só conta resposta do assunto
+// atual, como em chatHistory: com a conversa de outro assunto na tela, voltam as de partida.
+export function hints({ chat, input, area, tips, key }) {
+  if (!chat.some(m => m.role === 'assistant' && m.key === key)) {
     return [
       'Me introduza ao assunto',
       ...(input.trim()
@@ -852,9 +854,21 @@ export function hints({ chat, input, area, tips }) {
         : STARTERS[area]),
     ];
   }
-  return tips.key === JSON.stringify([input, area]) && tips.list.length
+  return tips.key === key && tips.list.length
     ? tips.list
     : ['Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar'];
+}
+
+// Histórico do pedido ao chat: as 6 últimas mensagens do assunto atual, cada uma com até 4.000 caracteres (o limite do
+// backend). key é a marca do assunto (chatSubject), a mesma das sugestões, gravada em cada mensagem (App.jsx, ask).
+// A conversa feita sobre outro material ou outro texto do editor fica na tela, mas não vai: com ela no histórico, o
+// modelo dizia ao aluno que o assunto da conversa era outro (#155). Mensagem sem marca, de rascunho gravado antes dela,
+// não vai em nenhum assunto. skip é o texto do editor, que já vai no pedido.
+export function chatHistory(chat, key, skip) {
+  return chat
+    .filter(m => m.key === key && m.text !== skip)
+    .slice(-6)
+    .map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') }));
 }
 
 // Atalhos da caixa do chat (components/ui/chat-composer.jsx): "/" no começo do texto, ainda sem espaço, abre a lista com
@@ -893,17 +907,26 @@ function summaryText(m) {
 // o resumo vão como content, com a área e o nível dele (material antigo sem eles usa os do editor).
 // made é a chave da última geração, [texto, área, nível] (App.jsx, generate): só o texto conta, porque a área e o
 // nível podem ter mudado depois. swap é o botão que troca a fonte, quando há outra para escolher.
+// key é a marca do assunto, gravada em cada mensagem e nas sugestões da IA (chatHistory, hints): o texto e a área, em
+// JSON. Do material vale o texto de onde ele saiu (texto), que é o do editor logo depois de gerar: reaberto da
+// Biblioteca, com o resumo em content, ele continua o mesmo assunto. Material sem esse texto usa o resumo.
 export function chatSubject({ material, made, editor, input, area, level }) {
   const fromEditor = made.startsWith('[' + JSON.stringify(input) + ',');
   if (!material || fromEditor || (editor && input.trim())) {
-    return { title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '' };
+    return {
+      title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '',
+      key: JSON.stringify([input, area]),
+    };
   }
+  const content = summaryText(material);
+  const own = AREAS.includes(material.area) ? material.area : area;
   return {
     title: material.title,
-    content: summaryText(material),
-    area: AREAS.includes(material.area) ? material.area : area,
+    content,
+    area: own,
     level: LEVELS.includes(material.level) ? material.level : level,
     swap: input.trim() ? 'Usar o texto do editor' : '',
+    key: JSON.stringify([material.texto?.trim() ? material.texto : content, own]),
   };
 }
 

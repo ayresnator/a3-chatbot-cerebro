@@ -57,6 +57,9 @@ avoid traz as perguntas que o material já tem: não repita nenhuma, nem com out
 # dele. A frase "Com content preenchido" manda usar esse texto e avisar quando a resposta não está nele. O aviso vale
 # uma vez: com um material aberto e a conversa sobre outro assunto, toda resposta abria com ele, e as anteriores, que
 # vão em history, ensinavam o modelo a repetir (#155).
+# Com a conversa sobre o dólar em history e o material de fotossíntese aberto, o modelo disse ao aluno que "o assunto
+# desta conversa" era o câmbio. A tela passou a mandar só o histórico do assunto atual, e a instrução diz que o aluno
+# decide o assunto (#155).
 CHAT = ('Responda a dúvida com exemplos práticos e passos quando necessário. '
         'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta continua essa conversa. '
         'content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo de um material de estudo, e pode vir vazio. '
@@ -74,6 +77,9 @@ CHAT = ('Responda a dúvida com exemplos práticos e passos quando necessário. 
         'se a pergunta não disser o assunto (por exemplo "me introduza ao assunto"), o assunto é o texto de content e, sem content, a área. '
         'Com history preenchido, quando a pergunta não disser o assunto (por exemplo "me dê um exemplo"), '
         'o assunto é o das mensagens de history, não o da área. '
+        'O aluno decide o assunto: se a pergunta tratar de outro assunto que o de history ou o de content, '
+        'responda sobre o assunto da pergunta. '
+        'Nunca diga ao aluno que a conversa é sobre outra coisa nem recuse a pergunta por ser de outro assunto. '
         'Em suggestions, escreva 3 perguntas diferentes, de até 80 caracteres cada, que o aluno poderia fazer em seguida sobre o assunto desta resposta. '
         'Escreva na voz do aluno (por exemplo "Como uso isso na prática?"), com acentuação correta, sem numeração e sem repetir a pergunta atual. '
         'As perguntas ficam só em suggestions: não as escreva nem as anuncie em answer. '
