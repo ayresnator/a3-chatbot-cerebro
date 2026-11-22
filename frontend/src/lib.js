@@ -61,6 +61,14 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
   return height <= viewport - Math.max(0, (parseFloat(reserve) || 0) - strip);
 }
 
+// A barra de baixo, com scroll px de conteúdo em client px de largura, rola de lado a ponto de cortar o nome do último
+// item ("Mais")? O item mede item px, com o nome, de name px, no meio, e a barra tem pad de respiro depois dele (o
+// padding calculado). Uma sobra menor só tira da vista o vazio em volta do nome, como de 381 a 389 px com a letra
+// padrão, e nada muda.
+export function nameCut(scroll, client, item, name, pad) {
+  return scroll - client > (item - name) / 2 + (parseFloat(pad) || 0);
+}
+
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
 // não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
 // nela. O App liga a demonstração antes da primeira leitura. O "Fundo animado" (fundo) fica de fora: não é dado do

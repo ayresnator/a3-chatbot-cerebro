@@ -20,7 +20,7 @@ import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo, capText, MAX_INPUT,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
-  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove, nameCut,
   validCardReview, scheduleCard, dueCards, dayCards,
   noticeTime, topicCount, chartLine,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
@@ -577,8 +577,11 @@ function App() {
     // e conta uma vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e
     // ✗ e a nota acima da faixa. Sem caber, o lead (o cartão virado), quando há, leva o foco e sobe para o topo.
     const box = last(whole);
+    // Só a faixa presa sai da reserva: na janela baixa ela rola com a página, e a raiz já não a desconta (mobile.css).
+    const strip = box?.querySelector('.next-row');
     const fits = box && fitsAbove(box.offsetHeight, innerHeight,
-      getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
+      getComputedStyle(document.documentElement).scrollPaddingBottom,
+      strip && getComputedStyle(strip).position === 'sticky' ? strip.offsetHeight : 0);
     const top = box && !fits && last(lead);
     (top || last(selector) || last(fallback))?.focus({ preventScroll: !!(show || box) });
     if (top) top.scrollIntoView({ block: 'start' });
@@ -2061,6 +2064,17 @@ function App() {
     };
     document.addEventListener('keydown', hide);
     return () => document.removeEventListener('keydown', hide);
+  }, []);
+  // Com o texto ampliado no aparelho os nomes da barra de baixo não cabem, e ela rola de lado. Quando a rolagem
+  // cortaria o nome do "Mais" (lib.js, nameCut), data-rola o prende na ponta, com fundo, e os outros itens passam por
+  // baixo dele (mobile.css). Preso, ele não muda nenhuma das medidas da conta.
+  useEffect(() => {
+    const bar = document.querySelector('.tabbar');
+    const more = bar.lastElementChild;
+    const watch = new ResizeObserver(() => bar.toggleAttribute('data-rola', nameCut(bar.scrollWidth, bar.clientWidth,
+      more.offsetWidth, more.lastElementChild.offsetWidth, getComputedStyle(bar).paddingRight)));
+    [bar, ...bar.children].forEach(item => watch.observe(item));
+    return () => watch.disconnect();
   }, []);
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
