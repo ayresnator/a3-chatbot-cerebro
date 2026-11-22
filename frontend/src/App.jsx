@@ -884,8 +884,9 @@ function App() {
       const twin = stored.findIndex(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       // O que já está lá fica com o texto deste clique: a demonstração só usa as 8 primeiras frases, e o resto do texto
-      // pode ter mudado. O material de antes do campo texto também o ganha. O igual que veio de um colega perde a
-      // marca recebido: agora ele foi gerado aqui, do texto daqui.
+      // pode ter mudado. O material de antes do campo texto também o ganha. O igual que veio de um colega, com a mesma
+      // área e o mesmo nível, perde a marca recebido: agora ele foi gerado aqui, do texto daqui. Com outra área ou
+      // outro nível ele não é o gêmeo, e a Biblioteca fica com os dois.
       if (twin >= 0 && (stored[twin].texto !== input || stored[twin].recebido)) {
         const { recebido, ...mine } = stored[twin];
         stored[twin] = { ...mine, texto: input };
@@ -2744,8 +2745,9 @@ function App() {
                                       <p>{s.text}</p>
                                       {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                       {/* O trecho dentro do texto inteiro, numa janela que abre nele. Material de antes do
-                                          campo texto não guardou o texto e fica sem o botão. */}
-                                      {s.source?.trim() && result.texto?.trim() && (
+                                          campo texto não guardou o texto e fica sem o botão. O recebido de um colega
+                                          também: o texto de um arquivo mexido à mão não é o do aluno. */}
+                                      {s.source?.trim() && result.recebido !== true && result.texto?.trim() && (
                                         <button
                                           type="button"
                                           className="link source-link"

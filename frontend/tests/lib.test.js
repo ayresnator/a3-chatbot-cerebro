@@ -1926,6 +1926,27 @@ test('sourceLabel: o material gerado aqui diz "No seu texto"; o mesmo material, 
   assert.equal(sourceLabel(edited.summary[0], edited.recebido), 'No texto de quem gerou: "Uma frase que não está em texto nenhum."');
 });
 
+// O que só a tela e a folha fazem com a marca recebido, lido do código: o App.jsx e o Folha.jsx não rodam no Node.
+const [appCode, sheetCode] = ['App.jsx', 'Folha.jsx'].map(f => readFileSync(new URL('../src/' + f, import.meta.url), 'utf8'));
+
+test('marca recebido: toda chamada de sourceLabel, originNote e printNote, na tela e na folha, passa a marca', () => {
+  for (const code of [appCode, sheetCode]) {
+    const calls = [...code.matchAll(/\b(?:sourceLabel|originNote|printNote)\(([^)]*)\)/g)];
+    assert.ok(calls.length);
+    for (const [call, args] of calls) assert.match(args.split(',')[1] ?? '', /^\s*\w+\.recebido\s*$/, call);
+  }
+});
+
+test('generate: o gêmeo da biblioteca que veio de um colega perde a marca recebido e fica com o texto do clique', () => {
+  assert.match(appCode, /if \(twin >= 0 && \(stored\[twin\]\.texto !== input \|\| stored\[twin\]\.recebido\)\) \{\s*const \{ recebido, \.\.\.mine \} = stored\[twin\];\s*stored\[twin\] = \{ \.\.\.mine, texto: input \};/);
+});
+
+test('"Ver no texto": o botão não aparece no material recebido nem com o texto só de espaços, e só ele abre a janela', () => {
+  const [, when] = appCode.match(/\{([^{}\n]+) && \(\s*<button(?:(?!<\/button>)[\s\S])*>\s*Ver no texto\s*<\/button>/);
+  assert.equal(when, 's.source?.trim() && result.recebido !== true && result.texto?.trim()');
+  assert.equal(appCode.split('setPassage({').length - 1, 1);
+});
+
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
   const cards = [1, 2, 3].map(n => ({ question: 'Pergunta ' + n, answer: 'Resposta ' + n }));
   assert.deepEqual(pretestCards(cards), cards.slice(0, 2));
