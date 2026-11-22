@@ -757,6 +757,25 @@ select {
     backdrop-filter: var(--blur)
 }
 
+/* Janela mais baixa que o dock preso: as últimas seções ficavam fora da janela, e só apareciam no fim da página. A
+   conta é a dele (os oito itens de 2,75 rem e os 31 px dos vãos, do respiro e da borda) mais o 1,5 rem do topo, menos
+   1 px: até 406 px com a letra padrão, e cresce com a letra do navegador. O dock fica com a altura que sobra abaixo da
+   barra de cima e rola por dentro, sem barra de rolagem; o item cortado na borda mostra que há mais, e o Tab rola o
+   dock até o anel do foco. Só aqui: a rolagem corta as dicas, que saem para o lado, e o nome da seção fica no nome do
+   botão e no título da página. */
+@media (max-height: calc(23.5rem + 30px)) {
+    .rail {
+        max-height: calc(100dvh - var(--top-y) - var(--top-h) - var(--sp-4) - var(--sp-6) - var(--sp-5));
+        overflow: hidden auto;
+        scrollbar-width: none;
+        scroll-padding-block: var(--sp-2)
+    }
+
+    .rail .nav-item {
+        flex: none
+    }
+}
+
 /* A pílula ciano da seção aberta desliza até ela (--i, App.jsx), por transform. */
 .rail::before {
     content: '';
@@ -1147,8 +1166,9 @@ select {
 }
 
 /* No computador a barra de cima tem também o atalho e o botão "Fundo animado" (#144): até 50 rem o modelo já sai, e o
-   atalho não fica menor do que era sem o botão. */
-@media (min-width: 851px) {
+   atalho não fica menor do que era sem o botão. A largura é a em que o dock entra (mobile.css), em rem como lá: 851 px
+   com a letra padrão. */
+@media (min-width: 53.1875rem) {
     @container (max-width: 50rem) {
         .status-model {
             position: absolute;
@@ -1393,8 +1413,11 @@ main:focus {
     pointer-events: none
 }
 
+/* overflow: com o texto ampliado no aparelho a frase de exemplo (.typed) fica mais alta que o campo vazio, e o que
+   passa do campo é cortado em vez de cobrir a linha das áreas. */
 .editor-field {
-    position: relative
+    position: relative;
+    overflow: hidden
 }
 
 /* De 3 a 12 linhas (ui.jsx, useFit): o JS dá a altura do texto e estes limites seguram. --pad é o respiro de cima do
@@ -1943,7 +1966,7 @@ main:focus {
    o da Biblioteca, com o nome no leitor de tela: assim a data, ele e o "Salvo" somam 342 px, e o aviso da IA cabe numa
    linha ao lado deles num cabeçalho de 737 px ou mais. Mais estreito, o esqueleto guarda a altura do aviso em duas
    linhas (abaixo, .material-wait). */
-@media (min-width: 551px) and (max-width: 1179px) {
+@media (min-width: 34.4375rem) and (max-width: 73.6875rem) {
     .result-header > .header-actions {
         gap: var(--sp-2)
     }
@@ -2117,7 +2140,7 @@ main:focus {
     text-align: left
 }
 
-/* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
+/* O custo do clique, escrito no próprio botão: "1 pedido à IA". */
 .ai-ask small,
 .ask small,
 .action small {
@@ -4187,16 +4210,18 @@ main:focus {
     white-space: nowrap
 }
 
-/* Na tela de toque o aviso flutua às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
-   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
-   está saindo ([data-motion-pop-id]). Com mouse o corpo inteiro continua recebendo: o mouse em cima segura o aviso. */
-@media (hover: none) {
-    .toast {
-        pointer-events: none
+/* No celular e na tela de toque o aviso fica no alto, sobre a barra de cima, como a faixa de espera, e logo abaixo dela
+   quando há uma. Embaixo ele ficava por cima dos botões do cartão ("Errei", "Revisar depois" e "Acertei") enquanto
+   durava, e o corpo dele, que recebe o dedo (o dedo parado segura o aviso: App.jsx), tirava o toque deles. A região
+   continua indo até onde o aviso ficava (bottom): com a altura dela fixa, o aviso que sai fica no lugar (App.jsx,
+   anchorY). A largura é a da barra de baixo (mobile.css), em rem como lá: 850 px com a letra padrão. */
+@media (max-width: 53.125rem), (hover: none) {
+    .toast-region {
+        top: var(--top-y)
     }
 
-    .toast:not([data-motion-pop-id]) button {
-        pointer-events: auto
+    .app:has(> .busy) .toast-region {
+        top: calc(var(--top-y) + var(--top-h) + var(--sp-2))
     }
 }
 

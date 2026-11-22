@@ -246,7 +246,7 @@ export function ChatComposer({
           {swap && <button type="button" className="link" onClick={onSwap}>{swap}</button>}
           <button type="submit" className="primary" disabled={waiting || !value.trim()} aria-describedby={reason}>
             <span>Enviar</span>
-            {cost && <small>1 chamada de IA</small>}
+            {cost && <small>1 pedido à IA</small>}
             <Icon name="seta" />
           </button>
         </div>
