@@ -359,7 +359,7 @@ a3-chatbot-cerebro/
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
-| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js` e do service worker do modo estudo |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js`, do service worker do modo estudo e do layout com a letra maior (`letra.test.js`) |
 | `frontend/public/` | Arquivos públicos: o `config.js`, o favicon e, do modo estudo, o manifest e os ícones |
 | `frontend/sw-molde.js` | Molde do service worker do modo estudo: o build (`vite.config.js`) põe nele a lista de arquivos e grava o `sw.js` |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |

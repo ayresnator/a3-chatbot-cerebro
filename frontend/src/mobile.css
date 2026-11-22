@@ -118,9 +118,11 @@
        ponto de cortar o nome dele (o texto ampliado no aparelho, o espaçamento de texto do aluno), data-rola (App.jsx)
        o prende na ponta, sempre à vista, e os outros itens passam por baixo: por isso o fundo, que vale também no hover
        (no toque o hover fica preso), a sombra, que cobre o respiro da barra à direita dele, e a ponta esquerda, que
-       esmaece. Com o foco do teclado na barra ele volta ao lugar: ela rola até o item do foco, como antes, e ele não
-       cobre esse item. */
-    [data-rola]:not(:has(:focus-visible)) > [aria-haspopup=dialog] {
+       esmaece. Com o foco do teclado em outro item da barra ele volta ao lugar: ela rola até o item do foco, como antes,
+       e ele não cobre esse item. Com o foco nele, continua preso: o Esc fecha a folha e devolve o foco sem rolar a
+       barra, e solto ele ficaria fora da vista, com o anel. */
+    [data-rola]:not(:has(:focus-visible)) > [aria-haspopup=dialog],
+    [data-rola] > [aria-haspopup=dialog]:focus-visible {
         position: sticky;
         right: 0
     }
@@ -485,15 +487,14 @@
     }
 
     /* As quatro ferramentas dividem a linha em partes iguais, com o ícone sobre a palavra, como os itens da barra de
-       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. overflow-x: com o texto
-       ampliado no aparelho a palavra mais larga que a parte dela é cortada dos lados, em vez de encostar na vizinha
-       (só dos lados: embaixo a perna do "q" e do "p" passa da caixa do botão). */
+       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. Sem min-width: 0: a parte
+       não fica mais estreita que a palavra dela. Com a letra padrão toda palavra cabe na parte igual, até 320 px; com o
+       texto ampliado no aparelho a parte da palavra larga cresce e, sem lugar, a última ferramenta desce de linha, em
+       vez de as palavras se encostarem. */
     .tool {
         flex: 1 1 0;
         flex-direction: column;
         gap: 0;
-        min-width: 0;
-        overflow-x: clip;
         padding: 0;
         font-size: var(--fs-1)
     }

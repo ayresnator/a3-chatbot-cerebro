@@ -1,6 +1,7 @@
 // Testes do layout com a letra maior no navegador ou no aparelho (#141), sem navegador: as quebras de largura em rem
-// e as ondas na mesma quebra do dock, o dock que rola por dentro, o "Mais" preso na barra de baixo (lib.js, nameCut, e
-// mobile.css) e o corte do exemplo do editor e das ferramentas. As medidas na tela ficam na descrição do PR. npm test
+// e as ondas na mesma quebra do dock, o dock que rola por dentro, o "Mais" preso na barra de baixo (lib.js, nameCut,
+// App.jsx e mobile.css), o corte do exemplo do editor e a linha das ferramentas. As medidas na tela ficam na descrição
+// do PR. npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,7 +9,7 @@ import { nameCut } from '../src/lib.js';
 
 // Sem o retorno de carro: no Windows o git entrega os arquivos com CRLF.
 const read = file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8').replaceAll('\r', '');
-const [styles, mobile, ui] = ['styles.css', 'mobile.css', 'ui.jsx'].map(read);
+const [styles, mobile, ui, app] = ['styles.css', 'mobile.css', 'ui.jsx', 'App.jsx'].map(read);
 // As larguras das quebras de um arquivo, em px da letra padrão (16 px), na ordem em que aparecem.
 const widths = css => [...css.matchAll(/@media[^{]*\{/g)]
   .flatMap(([query]) => [...query.matchAll(/(?:min|max)-width: ([\d.]+)rem/g)].map(([, rem]) => rem * 16));
@@ -51,14 +52,22 @@ test('nameCut: a barra de baixo só prende o "Mais" quando a rolagem cortaria o 
   assert.equal(nameCut(0, 0, 0, 0, ''), false, 'no computador a barra não existe');
 });
 
-test('barra de baixo: "Mais" fica preso na ponta, menos com o foco do teclado nela, e o fundo dele vale também no hover', () => {
-  assert.match(mobile, /\[data-rola\]:not\(:has\(:focus-visible\)\) > \[aria-haspopup=dialog\] \{\s*position: sticky;\s*right: 0\s*\}/);
+test('barra de baixo: "Mais" fica preso na ponta, menos com o foco do teclado em outro item, e o fundo dele vale também no hover', () => {
+  // Com o foco no próprio "Mais" ele continua preso: o Esc da folha devolve o foco para ele sem rolar a barra.
+  assert.match(mobile, /\[data-rola\]:not\(:has\(:focus-visible\)\) > \[aria-haspopup=dialog\],\s*\[data-rola\] > \[aria-haspopup=dialog\]:focus-visible \{\s*position: sticky;\s*right: 0\s*\}/);
+  // Quem marca data-rola é o App, a cada mudança de tamanho da barra ou de um item dela.
+  assert.match(app, /new ResizeObserver\(\(\) => bar\.toggleAttribute\('data-rola', nameCut\(bar\.scrollWidth, bar\.clientWidth,/);
   // O fundo e o hover têm a mesma força: vale o que vem depois. O item aberto (ciano) fica de fora do fundo.
   const cover = mobile.indexOf('[data-rola] > [aria-haspopup=dialog]:not([data-current]) {');
   assert.ok(cover > mobile.indexOf('.tab-item:hover:not(:disabled) {'));
 });
 
-test('texto ampliado: o exemplo do editor é cortado no campo, e a palavra da ferramenta, dos lados', () => {
+test('texto ampliado: o exemplo do editor é cortado no campo, e a ferramenta sem lugar desce de linha, sem corte', () => {
   assert.match(styles, /\.editor-field \{\s*position: relative;\s*overflow: hidden\s*\}/);
-  assert.match(mobile, /\n    \.tool \{[^}]*overflow-x: clip;/);
+  // No celular a parte de cada ferramenta não fica mais estreita que a palavra dela, e a linha delas quebra.
+  const [tool] = mobile.match(/\n    \.tool \{[^}]*\}/);
+  assert.match(tool, /flex: 1 1 0;/);
+  assert.doesNotMatch(tool, /min-width|overflow/);
+  assert.match(styles, /\n\.editor-tools \{[^}]*flex-wrap: wrap;/);
+  assert.doesNotMatch(mobile, /\.editor-tools \{[^}]*flex-wrap/);
 });
