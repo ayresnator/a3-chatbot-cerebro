@@ -1765,23 +1765,39 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
   const nothing = 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
   assert.equal(AI_NOTE, 'Gerado por IA. Pode conter erros: confira com o seu material.');
-  assert.equal(originNote([own, none]), AI_NOTE);
-  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }]), nothing);
-  assert.equal(originNote([]), nothing);
-  assert.equal(originNote([own, { ...own, ia: true }, none]),
+  assert.equal(originNote([own, none], EXAMPLE), AI_NOTE);
+  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }], EXAMPLE), nothing);
+  assert.equal(originNote([], EXAMPLE), nothing);
+  assert.equal(originNote([own, { ...own, ia: true }, none], EXAMPLE),
     'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.');
   // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
-  assert.equal(originNote([own, { ...own, pronto: true }, none]),
+  assert.equal(originNote([own, { ...own, pronto: true }, none], EXAMPLE),
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('originNote: sem o texto do material no navegador, o aviso diz que os trechos não foram conferidos aqui', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
+  const away = 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+    'Confira em uma fonte confiável.';
+  // O recebido de um colega e o de antes do campo texto; texto em branco vale como sem texto.
+  for (const texto of [undefined, null, '', ' \n']) {
+    assert.equal(originNote([own, none], texto), away);
+    assert.equal(originNote([{ ...own, pronto: true }, none], texto), away, 'a marca pronto veio no arquivo');
+    // O exemplo da IA e o material sem trecho nenhum dizem o mesmo com ou sem o texto.
+    assert.equal(originNote([own, { ...own, ia: true }], texto), originNote([own, { ...own, ia: true }], EXAMPLE));
+    assert.equal(originNote([none], texto), originNote([none], EXAMPLE));
+  }
 });
 
 test('printNote: a folha impressa leva o aviso da tela; sem nenhum trecho, com "Gerado por IA." na frente', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: ' ' };
   for (const summary of [[own, none], [{ ...own, ia: true }], [{ ...own, pronto: true }, none]]) {
-    assert.equal(printNote(summary), originNote(summary));
+    // Com o texto do material e sem ele (o recebido de um colega).
+    for (const texto of [EXAMPLE, undefined]) assert.equal(printNote(summary, texto), originNote(summary, texto));
   }
-  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }]),
+  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }], EXAMPLE),
     'Gerado por IA. Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.');
 });
 
@@ -1827,9 +1843,32 @@ test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pro
 
 test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
   const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
-  assert.equal(sourceLabel(s), 'No seu texto: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+  const texto = EXAMPLES.Economia[0].text;
+  assert.equal(sourceLabel(s, texto), 'No seu texto: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, pronto: true }, texto), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+});
+
+test('sourceLabel: sem o texto do material no navegador, o trecho é do texto de quem gerou', () => {
+  const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
+  const away = 'No texto de quem gerou: "o índice oficial de inflação é o IPCA"';
+  for (const texto of [undefined, null, '', ' \n']) {
+    assert.equal(sourceLabel(s, texto), away);
+    // A marca pronto vem no arquivo, e sem o texto não há como conferi-la aqui.
+    assert.equal(sourceLabel({ ...s, pronto: true }, texto), away);
+    assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+  }
+});
+
+test('sourceLabel: o material gerado aqui diz "No seu texto"; o mesmo material, importado do arquivo para um colega, não', () => {
+  const made = { ...demo(EXAMPLE), id: 4, date: at(11), texto: EXAMPLE };
+  const [got] = readBackup(JSON.stringify(shareFile(made, today()))).saved;
+  const labels = m => m.summary.map(s => sourceLabel(s, m.texto).split(':')[0]);
+  assert.deepEqual([...new Set(labels(made))], ['No seu texto']);
+  assert.deepEqual([...new Set(labels(got))], ['No texto de quem gerou']);
+  // O trecho trocado à mão no arquivo entra com o mesmo rótulo: não aparece como conferido.
+  const edited = { ...got, summary: [{ ...got.summary[0], source: 'Uma frase que não está em texto nenhum.' }] };
+  assert.equal(sourceLabel(edited.summary[0], edited.texto), 'No texto de quem gerou: "Uma frase que não está em texto nenhum."');
 });
 
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
@@ -2232,7 +2271,14 @@ test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois mat
 });
 
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
-  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
+  'até 6, quando o Cérebro precisa tentar de novo.';
+
+test('healthLabel: a dica do selo diz o teto de chamadas de um pedido, o request_calls do backend', () => {
+  const config = readFileSync(new URL('../../backend/app/config.py', import.meta.url), 'utf8');
+  const [, calls] = config.match(/^\s*request_calls: int = (\d+)$/m);
+  assert.ok(QUOTA_NOTE.includes('mais de uma chamada, até ' + calls + ','));
+});
 
 test('healthLabel: conferindo, Cérebro desligado e IA não configurada', () => {
   assert.deepEqual(healthLabel(null), { text: 'Conferindo a IA…', tone: '' });

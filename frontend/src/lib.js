@@ -203,17 +203,25 @@ export function markExample(summary, ai, ready) {
     inText(s.source, ai) ? { ...s, ia: true } : inText(s.source, ready) ? { ...s, pronto: true } : s);
 }
 
-// O rótulo do trecho diz de que texto ele saiu.
-export function sourceLabel(s) {
-  const from = s.ia ? 'No exemplo escrito pela IA' : s.pronto ? 'No texto de exemplo' : 'No seu texto';
+// O rótulo do trecho diz de que texto ele saiu. "No seu texto" e "No texto de exemplo" só valem com o texto do material
+// neste navegador (texto): o material recebido de um colega (shareFile) e o de antes desse campo não o trazem, e o
+// trecho deles, que também pode ter sido trocado no arquivo, é do texto de quem gerou.
+export function sourceLabel(s, texto) {
+  const from = s.ia ? 'No exemplo escrito pela IA' : !texto?.trim() ? 'No texto de quem gerou'
+    : s.pronto ? 'No texto de exemplo' : 'No seu texto';
   return from + ': "' + s.source.trim() + '"';
 }
 
 // O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), de um
-// exemplo pronto (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um
-// tema, ou material de antes dos trechos).
-export function originNote(summary) {
+// texto que não está neste navegador (trecho sem o texto do material, como no sourceLabel), de um exemplo pronto
+// (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um tema, ou material
+// de antes dos trechos).
+export function originNote(summary, texto) {
   if (summary.some(s => s.ia)) return 'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.';
+  if (!texto?.trim() && summary.some(s => s.source?.trim())) {
+    return 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+      'Confira em uma fonte confiável.';
+  }
   if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
   if (summary.some(s => s.source?.trim())) return AI_NOTE;
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
@@ -221,8 +229,8 @@ export function originNote(summary) {
 
 // O aviso da folha impressa (Folha.jsx): o mesmo da tela. O papel pode ir para quem não viu o app, e o aviso do
 // material sem nenhum trecho não fala da IA: ele ganha "Gerado por IA." na frente.
-export function printNote(summary) {
-  const note = originNote(summary);
+export function printNote(summary, texto) {
+  const note = originNote(summary, texto);
   return summary.some(s => s.ia || s.pronto || s.source?.trim()) ? note : 'Gerado por IA. ' + note;
 }
 
@@ -864,7 +872,8 @@ export function chatSubject({ material, made, editor, input, area, level }) {
 
 // Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
-  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
+  'até 6, quando o Cérebro precisa tentar de novo.';
 
 // O teto de chamadas por dia que o grupo escolheu (AI_DAILY_LIMIT, no /api/health em daily_limit) chegou: os botões da
 // IA ficam desligados até a contagem recomeçar. Sem teto (null, ou backend antigo, sem o campo), nunca.

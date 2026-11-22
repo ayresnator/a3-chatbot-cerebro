@@ -310,7 +310,7 @@ export function PromptComposer({
             {/* Em 550 px ou menos e no celular deitado o custo sai da tela, e em 380 px ou menos só "Perguntar" aparece
                 (mobile.css); o nome inteiro e o custo continuam no botão. */}
             <span className="full">Perguntar ao Cérebro</span>
-            {cost && <small>1 chamada de IA</small>}
+            {cost && <small>1 pedido à IA</small>}
             <span className="short" aria-hidden="true">Perguntar</span>
             <Icon name="seta" />
           </button>
