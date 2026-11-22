@@ -22,6 +22,7 @@ import {
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
   validCardReview, scheduleCard, dueCards, dayCards,
+  noticeTime, topicCount, chartLine,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
@@ -676,12 +677,13 @@ function App() {
     }
   }
 
-  // Aviso com ação fica 10 segundos, para dar tempo de clicar, e não some enquanto o mouse ou o foco estão nele.
+  // O aviso fica o tempo de ler o texto dele, e o com ação, pelo menos 10 segundos, para dar tempo de clicar (lib.js,
+  // noticeTime); não some enquanto o mouse, o dedo ou o foco estão nele.
   // O temporizador do aviso anterior é cancelado: ele apagava o aviso novo antes da hora.
   function toast(text, action) {
     clearTimeout(noticeTimer.current);
     setNotice({ text, action });
-    noticeTimer.current = setTimeout(() => setNotice(null), action ? 10000 : 3200);
+    noticeTimer.current = setTimeout(() => setNotice(null), noticeTime(text, action));
   }
 
   // O leitor de tela lê o texto novo da região fixa. O mesmo texto outra vez (gerar de novo o mesmo material, a mesma
@@ -803,6 +805,8 @@ function App() {
       setResult(parked);
       restart();
     }
+    // O foco fica no menu, e só o título da janela muda: o leitor de tela ouve para onde o aluno foi.
+    if (next !== page) say('Página ' + (NAMES[next] || next) + '.');
     setPage(next);
     // O aviso de erro é da página em que o pedido falhou: não acompanha o aluno para as outras.
     setError(null);
@@ -1300,6 +1304,12 @@ function App() {
     say(examLine(examFrom, size));
   }
 
+  // A "Área do gráfico" do Desempenho mudou: as colunas trocam longe do foco, e o leitor de tela ouve o total da área.
+  function chooseChartArea(next) {
+    setChartArea(next);
+    say(chartLine(next, chartDays(events, next, new Date())));
+  }
+
   // "Revisão do dia": os cartões que voltam hoje, de todos os materiais, num baralho temporário, como o quiz do caderno:
   // no máximo 20 por vez, os mais atrasados primeiro. O material que estava aberto fica guardado e volta quando o aluno
   // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está. O plano
@@ -1357,6 +1367,9 @@ function App() {
     setBusy({ kind: 'why', label: 'Esperando a explicação…', orb: 'composing', since: Date.now() });
     // A espera nasce junto com a explicação e não seria lida.
     say('Esperando a explicação…');
+    // A explicação entra abaixo do botão e vem à vista (Why): na janela baixa o botão, que fica com o foco, saía pelo
+    // alto. A página rola até ele, como no addQuestions.
+    focusAfter.current = [null, null, back];
     try {
       const data = await callAI('/api/chat', {
         question: text, content, area: from.area, level: from.level, history: [],
@@ -1407,8 +1420,10 @@ function App() {
     let review = null;
     setOwn({ ...mine, error: null });
     setBusy({ kind: 'own', label: 'Esperando o comentário…', orb: 'solving', since: Date.now(), item: s });
-    // A espera nasce junto com o comentário e não seria lida.
+    // A espera nasce junto com o comentário e não seria lida. Ela entra acima do botão e o empurra para trás da barra
+    // de baixo: a página rola até ele, que fica com o foco.
     say('Esperando o comentário da IA…');
+    focusAfter.current = [null, null, '#proprio-ia'];
     try {
       const data = await callAI('/api/explain', explainRequest(s, mine.text, from.area, from.level));
       if (!Object.keys(OWN_VERDICT).includes(data?.verdict) || !Array.isArray(data.missing)) {
@@ -1470,6 +1485,9 @@ function App() {
     // Na tela ela é reconhecida pelo próprio objeto; no que está gravado, por ser anterior a este pedido.
     const asked = new Date().toISOString();
     setBusy({ kind: 'review', label: 'Esperando a revisão…', orb: 'solving', since: Date.now(), answer: mine });
+    // A espera entra acima do botão e, no celular, o empurra para trás do "Próxima questão" preso: a página rola até
+    // ele, que fica com o foco.
+    focusAfter.current = [null, null, '#pedir-revisao'];
     try {
       const data = await callAI('/api/grade', gradeRequest(q, mine.value, from.area, from.level));
       if (!['correta', 'parcial', 'incorreta'].includes(data?.verdict) || typeof data.feedback !== 'string') {
@@ -2154,7 +2172,7 @@ function App() {
             href="#"
             onClick={e => {
               e.preventDefault();
-              setPage('Estudar');
+              go('Estudar');
             }}
           >
             <BrandMark />
@@ -2583,16 +2601,20 @@ function App() {
                               <div className="row summary-tools">
                                 <label className="inline-field">
                                   Mostrar
-                                  <select value={size} onChange={e => setSize(e.target.value)}>
+                                  {/* A lista encolhe ou cresce longe do foco: o leitor de tela ouve a contagem ao lado. */}
+                                  <select
+                                    value={size}
+                                    onChange={e => {
+                                      setSize(e.target.value);
+                                      say(topicCount(e.target.value, summary.length));
+                                    }}
+                                  >
                                     <option value="todos">Todos os tópicos</option>
                                     <option value="6">Os 6 primeiros</option>
                                     <option value="3">Os 3 primeiros</option>
                                   </select>
                                 </label>
-                                <span className="topic-count">
-                                  {'Mostrando ' + topics.length + ' de ' + summary.length +
-                                    (summary.length === 1 ? ' tópico' : ' tópicos')}
-                                </span>
+                                <span className="topic-count">{topicCount(size, summary.length)}</span>
                                 {/* Ligar ou desligar começa outra rodada: todos os tópicos escondidos, sem marcas. */}
                                 <label className="inline-field check">
                                   <input
@@ -2683,13 +2705,16 @@ function App() {
                                   >
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
-                                      <h3 tabIndex={-1}>{s.concept}</h3>
+                                      {/* Os botões do tópico se repetem em todos: cada um leva o título dele na descrição, e na
+                                          lista de botões do leitor de tela dá para saber de qual tópico é. */}
+                                      <h3 id={'topico-' + i} tabIndex={-1}>{s.concept}</h3>
                                       {/* O botão fica no lugar e diz se o texto está à vista: o foco não se perde. */}
                                       {hide && (
                                         <button
                                           type="button"
                                           id={'mostrar-' + i}
                                           className="link reveal"
+                                          aria-describedby={'topico-' + i}
                                           aria-expanded={!!recall.shown[i]}
                                           onClick={() => setRecall({ ...recall, shown: { ...recall.shown, [i]: !recall.shown[i] } })}
                                         >
@@ -2705,6 +2730,7 @@ function App() {
                                         <button
                                           type="button"
                                           className="link source-link"
+                                          aria-describedby={'topico-' + i}
                                           aria-haspopup="dialog"
                                           onClick={() => {
                                             setPassage({
@@ -2731,6 +2757,7 @@ function App() {
                                             <button
                                               key={label}
                                               type="button"
+                                              aria-describedby={'topico-' + i}
                                               aria-pressed={recall.marks[i] === ok}
                                               onClick={() => markTopic(i, ok)}
                                             >
@@ -2749,6 +2776,7 @@ function App() {
                                           type="button"
                                           id={'minhas-' + i}
                                           className="own-toggle"
+                                          aria-describedby={'topico-' + i}
                                           aria-expanded={own?.item === s}
                                           onClick={() => toggleOwn(s, i)}
                                         >
@@ -2759,6 +2787,7 @@ function App() {
                                           <button
                                             type="button"
                                             id={'explicar-' + i}
+                                            aria-describedby={'topico-' + i}
                                             aria-disabled={waiting || undefined}
                                             onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #minhas-' + i + ', #explicar-' + i)}
                                           >
@@ -3778,7 +3807,7 @@ function App() {
                     cards={cards}
                     percent={percent}
                     chartArea={chartArea}
-                    setChartArea={setChartArea}
+                    setChartArea={chooseChartArea}
                     days={days}
                     busiest={busiest}
                     weakest={weakest}
@@ -3868,8 +3897,8 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
-        {/* Só o mouse e o foco do teclado seguram o aviso. O toque virava "mouse em cima" e prendia o aviso por cima dos
-            botões do cartão; na tela de toque o corpo dele deixa o toque passar (styles.css). */}
+        {/* O mouse em cima, o dedo parado e o foco do teclado seguram o aviso; quando saem, ele fica mais 4 s. São os
+            eventos de ponteiro: os de mouse, que o toque imita, não avisavam a saída do dedo, e o aviso ficava preso. */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
             <m.div
@@ -3879,8 +3908,8 @@ function App() {
               initial={appear()}
               animate="show"
               exit="exit"
-              onPointerEnter={e => e.pointerType === 'mouse' && holdNotice()}
-              onPointerLeave={e => e.pointerType === 'mouse' && releaseNotice()}
+              onPointerEnter={holdNotice}
+              onPointerLeave={releaseNotice}
               onFocus={holdNotice}
               onBlur={releaseNotice}
             >
@@ -4059,6 +4088,8 @@ function App() {
                   </p>
                 </>
               )}
+              {/* A dica do estado da IA (title) só aparece com o mouse em cima: aqui o teclado e o toque chegam a ela. */}
+              {status.note && <p className="hint">{status.note}</p>}
             </div>
           </Modal>
         )}

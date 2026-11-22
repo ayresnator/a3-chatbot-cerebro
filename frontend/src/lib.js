@@ -29,6 +29,13 @@ export function typeDelay(shown, random = Math.random) {
   return shown ? 26 + random() * 20 : 900;
 }
 
+// Quanto tempo um aviso fica na tela (App.jsx, toast), em ms: 2 s mais 0,4 s por palavra, e nunca menos de 4 s. Os
+// 3,2 s fixos não davam para ler a frase de 14 palavras (WCAG 2.2.1). O aviso com botão (action) não fica menos de
+// 10 s: é o tempo de chegar ao botão.
+export function noticeTime(text, action) {
+  return Math.max(action ? 10000 : 4000, 2000 + 400 * text.trim().split(/\s+/).length);
+}
+
 // Setas, Home e End num grupo de opções ou num menu: o índice aonde a tecla leva, dando a volta nas pontas; -1 quando
 // a tecla não anda.
 export function rove(key, at, count) {
@@ -574,6 +581,14 @@ export function spokenDay({ day, total, rate }) {
     (total ? total + (total === 1 ? ' resposta, ' : ' respostas, ') + rate + '% de acerto' : 'nenhuma resposta');
 }
 
+// O gráfico numa frase, que o leitor de tela ouve quando a lista "Área do gráfico" troca as colunas (App.jsx): a área
+// e as respostas dos 7 dias dela (days, de chartDays).
+export function chartLine(area, days) {
+  const total = days.reduce((sum, d) => sum + d.total, 0);
+  return (area === 'Todas' ? 'Todas as áreas' : area) + ': ' +
+    (total ? total + ' ' + plural(total, 'resposta', 'respostas') : 'nenhuma resposta') + ' nos últimos 7 dias';
+}
+
 // Houve estudo (quiz ou cartão) em cada um dos n últimos dias? Do mais antigo para hoje.
 export function lastDays(events, n, now) {
   const studied = new Set(events.map(e => localDay(e.date)));
@@ -739,6 +754,13 @@ export function matches(material, query, filter) {
 // Quantos materiais a busca e o filtro da Biblioteca deixaram, na frase que o leitor de tela ouve (App.jsx).
 export function libraryCount(n) {
   return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
+}
+
+// Quantos tópicos a lista "Mostrar" do Resumo deixa na tela: a frase ao lado dela, que o leitor de tela ouve na troca
+// (App.jsx). size é o valor da lista ("todos", "6" ou "3"), e total, os tópicos do material.
+export function topicCount(size, total) {
+  const shown = size === 'todos' ? total : Math.min(total, Number(size));
+  return 'Mostrando ' + shown + ' de ' + total + ' ' + plural(total, 'tópico', 'tópicos');
 }
 
 // Embaralha a lista no lugar (Fisher-Yates) e a devolve. random devolve de 0 a 1, como Math.random.

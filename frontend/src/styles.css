@@ -4157,16 +4157,18 @@ main:focus {
     white-space: nowrap
 }
 
-/* Na tela de toque o aviso flutua às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
-   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
-   está saindo ([data-motion-pop-id]). Com mouse o corpo inteiro continua recebendo: o mouse em cima segura o aviso. */
-@media (hover: none) {
-    .toast {
-        pointer-events: none
+/* No celular e na tela de toque o aviso fica no alto, sobre a barra de cima, como a faixa de espera, e logo abaixo dela
+   quando há uma. Embaixo ele ficava por cima dos botões do cartão ("Errei", "Revisar depois" e "Acertei") enquanto
+   durava, e o corpo dele, que recebe o dedo (o dedo parado segura o aviso: App.jsx), tirava o toque deles. A região
+   continua indo até onde o aviso ficava (bottom): com a altura dela fixa, o aviso que sai fica no lugar (App.jsx,
+   anchorY). */
+@media (max-width: 850px), (hover: none) {
+    .toast-region {
+        top: var(--top-y)
     }
 
-    .toast:not([data-motion-pop-id]) button {
-        pointer-events: auto
+    .app:has(> .busy) .toast-region {
+        top: calc(var(--top-y) + var(--top-h) + var(--sp-2))
     }
 }
 

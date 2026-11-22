@@ -9,6 +9,7 @@ import {
   chatSubject, capText, readWriteFirst, spokenCard, CARD_REMINDER,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
+  noticeTime, chartLine, topicCount,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   shareFile, cardLines, ankiFile, fileName, answerLine, printNote,
@@ -327,6 +328,14 @@ test('spokenDay: a coluna do gráfico por extenso, para o leitor de tela', () =>
   assert.equal(spokenDay({ day: '2026-11-16', total: 6, rate: 33 }), '16 de novembro: 6 respostas, 33% de acerto');
   assert.equal(spokenDay({ day: '2026-03-01', total: 1, rate: 100 }), '1 de março: 1 resposta, 100% de acerto');
   assert.equal(spokenDay({ day: '2026-11-15', total: 0, rate: 0 }), '15 de novembro: nenhuma resposta');
+});
+
+test('chartLine: a área do gráfico e as respostas dos 7 dias dela, para o leitor de tela', () => {
+  const events = [...SIX_ANSWERS, quizAt(14, 7, true, { area: 'Direito', title: 'Constituição' })];
+  assert.equal(chartLine('Todas', chartDays(events, 'Todas', today())), 'Todas as áreas: 7 respostas nos últimos 7 dias');
+  assert.equal(chartLine('Economia', chartDays(events, 'Economia', today())), 'Economia: 6 respostas nos últimos 7 dias');
+  assert.equal(chartLine('Direito', chartDays(events, 'Direito', today())), 'Direito: 1 resposta nos últimos 7 dias');
+  assert.equal(chartLine('Escolar', chartDays(events, 'Escolar', today())), 'Escolar: nenhuma resposta nos últimos 7 dias');
 });
 
 test('lastDays: do mais antigo para hoje, se houve estudo em cada dia', () => {
@@ -1111,6 +1120,19 @@ test('typeDelay: a frase mais longa das seis áreas se escreve letra a letra e t
   assert.ok(typeDelay(1, () => 0) >= 20, String(typeDelay(1, () => 0)));
 });
 
+test('noticeTime: o aviso fica o tempo de ler o texto, com o mínimo de 4 s e, com botão, de 10 s', () => {
+  // WCAG 2.2.1: a frase de 14 palavras do arquivo cortado ficava os mesmos 3,2 s do aviso de 2 palavras.
+  const cut = 'Texto do arquivo: longo.txt. Entrou só o começo: o editor recebe até 20.000 caracteres';
+  assert.equal(noticeTime(cut), 7600);
+  assert.equal(noticeTime('Cartão movido para o final do baralho'), 4800);
+  assert.equal(noticeTime('Material já salvo'), 4000, '3 palavras: o mínimo');
+  assert.equal(noticeTime('Pedido cancelado'), 4000);
+  assert.equal(noticeTime('  Ouvindo…  '), 4000, 'os espaços das pontas não contam');
+  // Com botão, o tempo de chegar a ele: nunca menos que os 10 s de antes, e mais quando o texto pede.
+  assert.equal(noticeTime('Questão tirada do caderno', { label: 'Desfazer' }), 10000);
+  assert.equal(noticeTime(cut + ' ' + cut, { label: 'Abrir' }), 13200);
+});
+
 test('rove: as setas andam um item e dão a volta nas pontas', () => {
   assert.equal(rove('ArrowRight', 0, 6), 1);
   assert.equal(rove('ArrowDown', 2, 6), 3);
@@ -1224,6 +1246,14 @@ test('libraryCount: o resultado da busca da Biblioteca, com nenhum, um e vários
   assert.equal(libraryCount(0), 'Nenhum material encontrado');
   assert.equal(libraryCount(1), '1 material encontrado');
   assert.equal(libraryCount(2), '2 materiais encontrados');
+});
+
+test('topicCount: a contagem da lista "Mostrar" do Resumo não passa dos tópicos do material', () => {
+  assert.equal(topicCount('todos', 8), 'Mostrando 8 de 8 tópicos');
+  assert.equal(topicCount('6', 8), 'Mostrando 6 de 8 tópicos');
+  assert.equal(topicCount('3', 8), 'Mostrando 3 de 8 tópicos');
+  assert.equal(topicCount('6', 4), 'Mostrando 4 de 4 tópicos');
+  assert.equal(topicCount('3', 1), 'Mostrando 1 de 1 tópico');
 });
 
 // Material do simulado com n questões de múltipla escolha, congelado: função que mexesse nele falharia aqui.
