@@ -1153,14 +1153,15 @@ test('askKey: tecla da composição de texto (acento, IME) e Ctrl com outra tecl
 });
 
 // O retorno do quiz depois de errar (uns 315 px, com a faixa de "Próxima questão" de 69 px dentro dele): inteiro no
-// computador e no celular em pé. No celular deitado e no zoom de 200% a raiz reserva 155 px (a barra de baixo, a faixa
-// presa e o respiro); sem a faixa, que já está no bloco, sobram 86 px de reserva, e ele não cabe.
+// computador e no celular em pé, onde a raiz reserva 155 px (a barra de baixo, a faixa presa e o respiro) e a faixa,
+// que já está no bloco, sai da reserva. No celular deitado e no zoom de 200% a faixa rola com a página (#140): a raiz
+// reserva só a barra e o respiro (78 px), o App não passa a faixa, e ele não cabe.
 test('fitsAbove: o bloco cabe na janela menos a reserva da raiz; "auto" (computador) não reserva nada', () => {
   assert.equal(fitsAbove(315, 768, 'auto', 69), true, 'computador, 1366 x 768');
   assert.equal(fitsAbove(315, 844, '155px', 69), true, 'celular em pé, 390 x 844');
-  assert.equal(fitsAbove(315, 390, '155px', 69), false, 'celular deitado, 844 x 390');
-  assert.equal(fitsAbove(315, 312, '155px', 69), false, 'zoom de 200%, 683 x 312');
-  assert.equal(fitsAbove(304, 390, '155px', 69), true, 'na medida exata, cabe');
+  assert.equal(fitsAbove(315, 390, '78px'), false, 'celular deitado, 844 x 390');
+  assert.equal(fitsAbove(315, 312, '78px'), false, 'zoom de 200%, 683 x 312');
+  assert.equal(fitsAbove(312, 390, '78px'), true, 'na medida exata, cabe');
   assert.equal(fitsAbove(315, 768, ''), true, 'sem valor, sem reserva');
 });
 
@@ -1171,6 +1172,23 @@ test('fitsAbove: a faixa dentro do bloco sai da reserva, e no computador não au
   assert.equal(fitsAbove(700, 844, '155px', 69), true, 'contada uma vez, cabe');
   assert.equal(fitsAbove(759, 844, '155px', 69), false, 'passou da barra e do respiro');
   assert.equal(fitsAbove(800, 768, 'auto', 69), false, 'computador, retorno mais alto que a janela');
+});
+
+// Janela baixa (#140): presas, as faixas do quiz e a barra de baixo deixavam uma fresta para a questão. Abaixo de 36rem
+// de altura as faixas ficam soltas (dentro do bloco de até 850 px, depois das regras que as prendem) e a reserva do
+// foco volta a ser só a da barra; abaixo de 30rem a barra fica numa linha só, com o item de 44 px, e a medida dela
+// (--tabbar-h) só muda até 850 px de largura, onde a barra existe.
+test('mobile.css: na janela baixa as faixas do quiz rolam com a página e a barra de baixo fica numa linha só', () => {
+  const css = readFileSync(new URL('../src/mobile.css', import.meta.url), 'utf8');
+  const low = css.indexOf('@media (max-height: 36rem) {');
+  assert.ok(low > css.indexOf('position: sticky', css.indexOf('.sure-row {')), 'depois das regras que as prendem');
+  assert.ok(low < css.indexOf('\n@media', css.indexOf('@media (max-width: 850px) {')), 'dentro do bloco de até 850 px');
+  const loose = css.slice(low, css.indexOf('.exam-next', low));
+  assert.match(loose, /^@media \(max-height: 36rem\) \{\s*\.next-row,\s*\.sure-row \{\s*position: static\s*\}/);
+  assert.match(loose, /html:has\(\.next-row\),\s*html:has\(\.sure-row\) \{\s*scroll-padding-bottom: calc\(var\(--tabbar-h\) \+ var\(--sp-4\)\)\s*\}\s*\}/);
+  const bar = css.slice(css.indexOf('@media (max-height: 30rem) {'));
+  assert.match(bar, /@media \(max-width: 850px\) \{\s*:root \{\s*--tabbar-h: calc\(var\(--control-h\) \+ var\(--hair\) \* 2 \+ var\(--sp-2\) \* 2 \+ env\(/);
+  assert.match(bar, /\.tabbar \{\s*padding-block: 0\s*\}\s*\.tab-item \{\s*height: var\(--control-h\)\s*\}\s*\.tab-item \.icon \{\s*display: none\s*\}/);
 });
 
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
