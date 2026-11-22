@@ -947,6 +947,12 @@
         display: none
     }
 
+    /* Cores forçadas: o contorno do item aberto vai por dentro do item. Sem o respiro, a barra cortava 2 px dele em
+       cima e 2 px embaixo. */
+    .tab-item {
+        outline-offset: calc(-1 * var(--ring))
+    }
+
     .lead {
         display: none
     }
