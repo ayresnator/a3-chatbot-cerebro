@@ -20,7 +20,7 @@ import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo, capText, MAX_INPUT,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
-  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove,
+  deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove, nameCut,
   validCardReview, scheduleCard, dueCards, dayCards,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
@@ -2043,6 +2043,17 @@ function App() {
     };
     document.addEventListener('keydown', hide);
     return () => document.removeEventListener('keydown', hide);
+  }, []);
+  // Com o texto ampliado no aparelho os nomes da barra de baixo não cabem, e ela rola de lado. Quando a rolagem
+  // cortaria o nome do "Mais" (lib.js, nameCut), data-rola o prende na ponta, com fundo, e os outros itens passam por
+  // baixo dele (mobile.css). Preso, ele não muda nenhuma das medidas da conta.
+  useEffect(() => {
+    const bar = document.querySelector('.tabbar');
+    const more = bar.lastElementChild;
+    const watch = new ResizeObserver(() => bar.toggleAttribute('data-rola', nameCut(bar.scrollWidth, bar.clientWidth,
+      more.offsetWidth, more.lastElementChild.offsetWidth, getComputedStyle(bar).paddingRight)));
+    [bar, ...bar.children].forEach(item => watch.observe(item));
+    return () => watch.disconnect();
   }, []);
   // A página que sai esmaece por cima da nova; sai sem movimento quando a troca veio do teclado, quando a página
   // estava rolada (a nova começa do topo e a antiga apareceria deslocada) ou quando o aluno passou direto por ela (cut).
