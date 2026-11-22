@@ -1477,8 +1477,9 @@ class ApiTests(unittest.TestCase):
                       "de um material de estudo, e pode vir vazio. "
                       "Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, "
                       "diga isso em uma frase antes de completar com o que você sabe. "
-                      "Esse aviso vale uma vez: se uma resposta sua em history já avisou, ou se a conversa em history "
-                      "já trata de outro assunto, não repita o aviso e responda direto. "
+                      "Esse aviso vale uma vez por conversa: antes de escrever, leia as suas respostas em history; se "
+                      "alguma delas já disse que o assunto não está em content, ou se as perguntas de history já são de "
+                      "outro assunto, não diga isso de novo nem cite content: comece direto pela resposta. "
                       "content pode ser o material aberto na tela, que o aluno não mandou nesta conversa: no aviso, "
                       "não diga que ele enviou o texto. ", chat)
         # Com a conversa de outro assunto no histórico, o modelo disse ao aluno que o assunto era outro (#155).
