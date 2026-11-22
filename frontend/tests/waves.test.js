@@ -413,4 +413,6 @@ test('onde as ondas rodam a reserva da barra de rolagem sai, e o centro e a larg
   assert.match(css, /@media screen \{\s*:root\[data-waves\] body \{[^}]*\}\s*:root\[data-waves\] \.app \{[^}]*\}\s*\}/,
     'só na tela: na impressão a folha fica com a largura dela');
   assert.match(css, /\n\.waves \{[^}]*width: 100vw;/, 'o canvas não muda de largura quando a barra aparece');
+  assert.match(css, /@media \(min-width: 53\.1875rem\) \{\s*@container \(max-width: 60rem\) \{\s*\.status-model \{/,
+    'no computador o nome do modelo sai com a barra de cima até 60 rem: o atalho não encolhe com o botão "Fundo animado"');
 });
