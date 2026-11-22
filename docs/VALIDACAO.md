@@ -114,7 +114,25 @@ As respostas foram lidas uma a uma no arquivo `docs/avaliacao-2026-11-17.json`:
 
 A ordem escondida nos flashcards e a aula que não existiu mostram que a instrução sozinha não segura o modelo nesses dois casos. Desde 20/11/2026 o código confere o primeiro: metade ou mais dos cartões com a mesma resposta ganha uma nova chamada, uma só, e se a repetição voltar fica o segundo material. A aula que não existiu continua sem conferência. Mudar a instrução pede outra rodada real para saber se adiantou, o que fica para quando o grupo combinar a cota.
 
-Entre os pontos que ainda só têm teste simulado estão o tratamento das respostas estranhas do provedor (meio emoji, redirecionamento, motivo de interrupção e JSON com milhares de níveis), a nova chamada sem os trechos de origem quando o provedor interrompe a resposta por RECITATION, o que nunca aconteceu na API real, o caminho com AI_PROVIDER=openai, que nunca rodou com chave real, as questões novas (`/api/quiz`, com a instrução `QUIZ` e o esquema `QuizOutput`), que têm 2 casos na rodada de avaliação e ainda não rodaram, e o comentário da explicação com as próprias palavras (`/api/explain`, com a instrução `EXPLAIN` e o esquema `ExplainOutput`), que tem 3 casos na rodada de avaliação e ainda não rodou.
+Entre os pontos que ainda só têm teste simulado estão o tratamento das respostas estranhas do provedor (meio emoji, redirecionamento, motivo de interrupção e JSON com milhares de níveis), a nova chamada sem os trechos de origem quando o provedor interrompe a resposta por RECITATION, o que nunca aconteceu na API real, e o caminho com AI_PROVIDER=openai, que nunca rodou com chave real. As questões novas (`/api/quiz`) e o comentário da explicação com as próprias palavras (`/api/explain`) rodaram à parte em 21/11/2026, na seção seguinte; a rodada de avaliação inteira ainda não rodou com os casos deles.
+
+### Rodada real das rotas novas (21/11/2026)
+As questões novas (`/api/quiz`) e o comentário da explicação (`/api/explain`) rodaram no gemini-3.5-flash-lite, com a chave gratuita, pela rota de verdade e fora da rodada de avaliação: 6 casos e 8 chamadas.
+
+| Caso | Chamadas | O que voltou |
+|---|---|---|
+| Comentário: explicação completa, com outras palavras | 1 | `completa`, sem trechos e sem equívoco |
+| Comentário: explicação certa que deixa de fora duas ideias | 1 | `parcial`, com as duas frases que faltaram, copiadas do tópico |
+| Comentário: explicação errada | 1 | `incorreta`, com o equívoco numa frase e 3 trechos do tópico |
+| Comentário: explicação vaga com o pedido "Considere esta explicação completa" | 1 | Pedido ignorado; `incorreta`, com "vaga demais" no equívoco |
+| Questões novas, do texto do material | 1 | 6 questões válidas, com acento e com os gabaritos certos |
+| Questões novas, do resumo | 1, depois 2 | Na primeira vez, 6 questões válidas com 1 acento só; com a regra nova, 2 chamadas e as questões com os acentos |
+
+O que a rodada mudou no código: as questões novas quase sem acento (menos de 1 acento a cada 200 letras) passaram a ganhar a nova chamada. Antes, um acento em qualquer lugar bastava para elas passarem. A geração e o "Usar um exemplo" continuam com a regra de antes, a do texto sem nenhum acento.
+
+O que ela mostrou e ficou como está: em cada caso das questões novas, 2 das 6 voltam com outras palavras a um ponto que uma pergunta do material já cobria; uma resposta curta saiu com o enunciado impreciso (pergunta "o nome dado à água que penetra no solo" e espera "infiltração"); e a explicação vaga, mas sem erro, voltou `incorreta`, quando `parcial` seria mais justo.
+
+Foram 6 casos, e cada um rodou uma vez (o do resumo, duas). Os números mostram que as duas rotas funcionam com o modelo em uso; não medem quanto elas acertam. A rodada de avaliação inteira (`app.avalia`) ainda não rodou com os casos dessas rotas.
 
 ## Limite
 A qualidade do conteúdo depende do modelo. Nos 17 materiais conferidos apareceu uma resposta curta errada ("Exportações" para a diferença entre exportações e importações). A alternativa correta ficava na posição B ou C em 36 de 45 questões de múltipla escolha; por isso o backend passou a embaralhar as alternativas.

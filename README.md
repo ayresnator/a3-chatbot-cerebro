@@ -469,7 +469,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia.
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo.
-- A revisão de resposta curta feita pela IA também pode errar, e o comentário da explicação com as próprias palavras também. O comentário (`/api/explain`) só tem teste simulado: a instrução e o esquema dele ainda não rodaram na API real.
+- A revisão de resposta curta feita pela IA também pode errar, e o comentário da explicação com as próprias palavras também. Na API real, o comentário (`/api/explain`) rodou 4 casos em 21/11/2026, com os vereditos esperados; numa explicação vaga, mas sem erro, ele respondeu "incorreta".
 - As questões novas podem repetir com outras palavras uma pergunta que o material já tem, e as feitas a partir do resumo podem só repetir o resumo.
 - A demonstração (`?demo`) organiza frases, sem consultar a IA.
 - No modo estudo do celular, os dados ficam no celular: o caminho de volta para o computador é o Exportar. No iPhone, com o app fora da tela inicial, o Safari apaga os dados depois de 7 dias sem uso.

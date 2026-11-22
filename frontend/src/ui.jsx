@@ -472,6 +472,12 @@ export function PerfilSkeleton() {
 // forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
 const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
   '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
+// Onde as ondas rodam, o fundo parado entra antes da primeira tela (data-waves, styles.css) e o pedaço delas é pedido
+// junto com o app (issue #136). O Waves pede de novo e recebe o mesmo módulo; a falha é dele para tratar.
+if (WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches) {
+  document.documentElement.setAttribute('data-waves', '');
+  import('./waves.js').catch(() => {});
+}
 function watchWavesMedia(change) {
   WAVES_MEDIA.forEach(list => list.addEventListener('change', change));
   return () => WAVES_MEDIA.forEach(list => list.removeEventListener('change', change));
@@ -487,20 +493,23 @@ export function useWavesStill() {
 
 // Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
 // desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
-// quando entra. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco (styles.css), e as ondas
-// ficam só em volta deles: ele entra com o primeiro quadro e sai quando o contexto do WebGL se perde. Numa troca de
-// animate ele fica: o canvas guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
+// onde as ondas rodam. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco e põe o fundo
+// parado nas margens (styles.css); com o primeiro quadro ele vira "on", e o canvas aparece por cima. Sem WebGL, ou
+// com o contexto perdido, volta a ficar sem valor: fica o fundo parado. Numa troca de animate o "on" fica: o canvas
+// guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
 // avisa: sem as ondas (false), o botão "Fundo animado" some.
 export function Waves({ on, animate, onActive }) {
   const canvas = useRef(null);
   useEffect(() => {
-    const show = active => document.documentElement.toggleAttribute('data-waves', active);
+    const root = document.documentElement;
     if (!on) {
-      show(false);
+      root.removeAttribute('data-waves');
       return;
     }
+    // Sem valor, o fundo parado; "on", o canvas por cima. Num começo novo o "on" fica até o aviso seguinte.
+    if (!root.hasAttribute('data-waves')) root.setAttribute('data-waves', '');
     const report = active => {
-      show(active);
+      root.setAttribute('data-waves', active ? 'on' : '');
       onActive(active);
     };
     let stop = null;
