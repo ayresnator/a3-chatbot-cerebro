@@ -275,6 +275,21 @@
         backdrop-filter: var(--blur)
     }
 
+    /* Janela baixa (o celular deitado, o zoom de 200% a 400%): presas, a faixa e a barra de baixo deixavam de 21 a
+       113 px para a questão com o zoom de 400% (#140). As duas faixas rolam com a página, como a caixa do Dúvidas
+       (styles.css), e a rolagem até o foco volta a parar só acima da barra. */
+    @media (max-height: 36rem) {
+        .next-row,
+        .sure-row {
+            position: static
+        }
+
+        html:has(.next-row),
+        html:has(.sure-row) {
+            scroll-padding-bottom: calc(var(--tabbar-h) + var(--sp-4))
+        }
+    }
+
     /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
     .exam-next .primary {
         flex: 1
@@ -905,12 +920,33 @@
 }
 
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
-   As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
+   As quebras acima são só pela largura, e a barra de baixo deixa de 258 a 336 px para a página. Sem a frase de
    abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
    "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
    cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e ao virar o cartão quem tem a vez é a resposta
    (App.jsx, turnCard). */
 @media (max-height: 30rem) {
+    /* A barra de baixo numa linha só, o nome sem o ícone: 46 px no lugar de 58 (#140), e o item com os 44 px do toque.
+       Com o ícone ao lado do nome os oito itens não cabem em 667 px, e a barra rolaria de lado. A medida dela só muda
+       onde ela existe (até 850 px): no computador continua 0. */
+    @media (max-width: 850px) {
+        :root {
+            --tabbar-h: calc(var(--control-h) + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px))
+        }
+    }
+
+    .tabbar {
+        padding-block: 0
+    }
+
+    .tab-item {
+        height: var(--control-h)
+    }
+
+    .tab-item .icon {
+        display: none
+    }
+
     .lead {
         display: none
     }
