@@ -1476,7 +1476,19 @@ class ApiTests(unittest.TestCase):
         self.assertIn("content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo "
                       "de um material de estudo, e pode vir vazio. "
                       "Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, "
-                      "diga isso em uma frase antes de completar com o que você sabe. ", chat)
+                      "diga isso em uma frase antes de completar com o que você sabe. "
+                      "Esse aviso vale uma vez por conversa: antes de escrever, leia as suas respostas em history; se "
+                      "alguma delas já disse que o assunto não está em content, ou se as perguntas de history já são de "
+                      "outro assunto, não diga isso de novo nem cite content: comece direto pela resposta. "
+                      "content pode ser o material aberto na tela, que o aluno não mandou nesta conversa: no aviso, "
+                      "não diga que ele enviou o texto. ", chat)
+        # Com a conversa de outro assunto no histórico, o modelo disse ao aluno que o assunto era outro (#155).
+        self.assertIn("history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais "
+                      "recente, e a pergunta vem depois delas. ", chat)
+        self.assertIn("O aluno decide o assunto: se a pergunta tratar de outro assunto que o de history ou o de "
+                      "content, responda sobre o assunto da pergunta. "
+                      "Nunca diga ao aluno que a conversa é sobre outra coisa nem recuse a pergunta por ser de outro "
+                      "assunto. ", chat)
         generate = instruction("/api/generate", self.REQUEST, self.MATERIAL)
         self.assertEqual(generate, prompts.SYSTEM + "\n" + prompts.GENERATE)
         self.assertIn("answer é índice inteiro começando em zero para multiple e boolean.", generate)

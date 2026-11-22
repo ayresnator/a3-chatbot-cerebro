@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import {
   AREAS, LEVELS, STARTERS, EXAMPLE, localDay, fold, norm, demo, fitsAbove,
   shortAnswerOk, expectedText, streak, firstAttempts, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays,
-  areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, slashHints, hello,
-  chatSubject, capText, readWriteFirst, spokenCard, CARD_REMINDER,
+  areaLine, deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, matches, hints, chatHistory, slashHints, hello,
+  chatSubject, subjectKey, capText, readWriteFirst, spokenCard, CARD_REMINDER,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
   noticeTime, chartLine, topicCount,
@@ -1400,7 +1400,11 @@ test('examLine: quantas questões entram e de quantos materiais, no singular e n
 });
 
 const NO_TIPS = { key: '', list: [] };
-const ANSWERED = [{ role: 'user', text: 'O que é PIB?' }, { role: 'assistant', text: 'É a soma das riquezas.' }];
+// Conversa sobre o texto "Um texto", na área Economia: cada mensagem leva a marca do assunto (App.jsx, ask).
+const CHAT_KEY = subjectKey('Um texto', 'Economia');
+const ANSWERED = [
+  { role: 'user', text: 'O que é PIB?', key: CHAT_KEY }, { role: 'assistant', text: 'É a soma das riquezas.', key: CHAT_KEY },
+];
 const FIXED_HINTS = ['Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar'];
 
 test('AREAS: as seis áreas do contrato da API, cada uma com duas perguntas de partida', () => {
@@ -1410,14 +1414,16 @@ test('AREAS: as seis áreas do contrato da API, cada uma com duas perguntas de p
 
 test('hints: antes da primeira resposta, sem texto no editor, usa as perguntas da área', () => {
   assert.deepEqual(
-    hints({ chat: [], input: '  ', area: 'Economia', tips: NO_TIPS }),
+    hints({ chat: [], input: '  ', area: 'Economia', tips: NO_TIPS, key: subjectKey('  ', 'Economia') }),
     ['Me introduza ao assunto', 'O que é inflação?', 'Como funcionam oferta e demanda?']
   );
 });
 
 test('hints: antes da primeira resposta, com texto no editor, pergunta sobre o texto', () => {
   assert.deepEqual(
-    hints({ chat: [{ role: 'user', text: 'oi' }], input: 'Um texto', area: 'Economia', tips: NO_TIPS }),
+    hints({
+      chat: [{ role: 'user', text: 'oi', key: CHAT_KEY }], input: 'Um texto', area: 'Economia', tips: NO_TIPS, key: CHAT_KEY,
+    }),
     [
       'Me introduza ao assunto',
       'Quais são os pontos principais do texto?',
@@ -1426,17 +1432,57 @@ test('hints: antes da primeira resposta, com texto no editor, pergunta sobre o t
   );
 });
 
-test('hints: depois da resposta, valem as sugestões que a IA mandou para este texto e esta área', () => {
-  const tips = { key: JSON.stringify(['Um texto', 'Economia']), list: ['E o PIB per capita?', 'Como se mede?'] };
-  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips }), tips.list);
+test('hints: depois da resposta, valem as sugestões que a IA mandou para este assunto', () => {
+  const tips = { key: CHAT_KEY, list: ['E o PIB per capita?', 'Como se mede?'] };
+  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips, key: CHAT_KEY }), tips.list);
 });
 
-test('hints: com a chave trocada ou sem sugestões da IA, entram as três fixas', () => {
-  const tips = { key: JSON.stringify(['Um texto', 'Economia']), list: ['E o PIB per capita?'] };
-  assert.deepEqual(hints({ chat: ANSWERED, input: 'Outro texto', area: 'Economia', tips }), FIXED_HINTS);
-  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Direito', tips }), FIXED_HINTS);
-  const empty = { ...tips, list: [] };
-  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips: empty }), FIXED_HINTS);
+test('hints: de volta a um assunto respondido, com as sugestões de outro ou sem sugestões da IA, entram as três fixas', () => {
+  const other = subjectKey('Outro texto', 'Economia');
+  const chat = [
+    ...ANSWERED, { role: 'user', text: 'E o câmbio?', key: other }, { role: 'assistant', text: 'É o preço da moeda.', key: other },
+  ];
+  const tips = { key: other, list: ['E o dólar?'] };
+  assert.deepEqual(hints({ chat, input: 'Um texto', area: 'Economia', tips, key: CHAT_KEY }), FIXED_HINTS);
+  const empty = { key: CHAT_KEY, list: [] };
+  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips: empty, key: CHAT_KEY }), FIXED_HINTS);
+});
+
+test('hints: a conversa de outro assunto, ou gravada sem a marca dele, não conta: voltam as de partida', () => {
+  const tips = { key: CHAT_KEY, list: ['E o PIB per capita?'] };
+  const start = [
+    'Me introduza ao assunto', 'Quais são os pontos principais do texto?', 'Faça uma pergunta sobre o texto para eu praticar',
+  ];
+  const other = subjectKey('Outro texto', 'Economia');
+  assert.deepEqual(hints({ chat: ANSWERED, input: 'Outro texto', area: 'Economia', tips, key: other }), start);
+  const old = ANSWERED.map(({ key, ...m }) => m);
+  assert.deepEqual(hints({ chat: old, input: 'Um texto', area: 'Economia', tips, key: CHAT_KEY }), start);
+});
+
+test('chatHistory: só vão as mensagens do assunto atual; voltar a um assunto traz as dele; sem marca, nenhuma', () => {
+  const other = subjectKey('Fotossíntese', 'Escolar');
+  const chat = [
+    // Rascunho gravado antes da marca do assunto.
+    { role: 'user', text: 'O que é câmbio?' }, { role: 'assistant', text: 'É o preço de uma moeda.' },
+    { role: 'user', text: 'E a fotossíntese?', key: other }, { role: 'assistant', text: 'A planta usa luz.', key: other },
+    ...ANSWERED,
+    { role: 'user', text: 'E a clorofila?', key: other }, { role: 'assistant', text: 'Absorve a luz.', key: other },
+  ];
+  assert.deepEqual(chatHistory(chat, CHAT_KEY, ''), [
+    { role: 'user', text: 'O que é PIB?' }, { role: 'assistant', text: 'É a soma das riquezas.' },
+  ]);
+  assert.deepEqual(chatHistory(chat, other, '').map(m => m.text),
+    ['E a fotossíntese?', 'A planta usa luz.', 'E a clorofila?', 'Absorve a luz.']);
+  assert.deepEqual(chatHistory(chat, subjectKey('', 'Economia'), ''), []);
+});
+
+test('chatHistory: as 6 últimas do assunto, cada uma com até 4.000 caracteres, sem a cópia do texto do editor', () => {
+  const turns = Array.from({ length: 8 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: 'm' + i, key: CHAT_KEY }));
+  assert.deepEqual(chatHistory(turns, CHAT_KEY, '').map(m => m.text), ['m2', 'm3', 'm4', 'm5', 'm6', 'm7']);
+  const long = { role: 'assistant', text: '😀'.repeat(4001), key: CHAT_KEY };
+  assert.equal([...chatHistory([long], CHAT_KEY, '')[0].text].length, 4000);
+  const own = { role: 'user', text: 'Um texto', key: CHAT_KEY };
+  assert.deepEqual(chatHistory([own, ...ANSWERED], CHAT_KEY, 'Um texto').map(m => m.text), ANSWERED.map(m => m.text));
 });
 
 const STARTER_HINTS = ['Me introduza ao assunto', 'O que são hardware e software?', 'Como a internet funciona?'];
@@ -1518,12 +1564,15 @@ const EDITOR = { input: 'Hardware e software são as duas partes do computador.'
 
 test('chatSubject: com um material aberto, vão o título e o resumo dele, com a área e o nível do material', () => {
   const got = chatSubject({ material: OPENED, made: '', editor: false, ...EDITOR });
+  const content = 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.';
   assert.deepEqual(got, {
     title: 'Revolução Francesa',
-    content: 'Revolução Francesa\nCausas: A crise financeira e a desigualdade.\nA Queda da Bastilha.',
+    content,
     area: 'Escolar',
     level: 'Intermediário',
     swap: 'Usar o texto do editor',
+    // Material sem o texto de onde saiu: a marca do assunto é o resumo, com a área do material.
+    key: subjectKey(content, 'Escolar'),
   });
   // Sem texto no editor não há outra fonte para escolher, nem com a escolha antiga pelo editor.
   for (const editor of [false, true]) {
@@ -1540,7 +1589,9 @@ test('chatSubject: material antigo, sem área ou nível da lista, usa os do edit
 });
 
 test('chatSubject: sem material, com o texto escolhido ou com o material feito do texto do editor, vale o editor', () => {
-  const editorOnly = { title: '', content: EDITOR.input, area: 'Tecnologia', level: 'Básico' };
+  const editorOnly = {
+    title: '', content: EDITOR.input, area: 'Tecnologia', level: 'Básico', key: subjectKey(EDITOR.input, 'Tecnologia'),
+  };
   assert.deepEqual(chatSubject({ material: null, made: '', editor: false, ...EDITOR }), { ...editorOnly, swap: '' });
   assert.deepEqual(
     chatSubject({ material: OPENED, made: '', editor: true, ...EDITOR }),
@@ -1556,11 +1607,41 @@ test('chatSubject: sem material, com o texto escolhido ou com o material feito d
   assert.equal(chatSubject({ material: OPENED, made, editor: false, ...EDITOR, input: 'Hardware' }).title, OPENED.title);
 });
 
+test('chatSubject: o material reaberto da Biblioteca tem a marca de quando acabou de ser gerado do editor', () => {
+  const made = JSON.stringify([EDITOR.input, 'Tecnologia', 'Básico']);
+  const fresh = { ...OPENED, area: 'Tecnologia', level: 'Básico', texto: EDITOR.input };
+  const justMade = chatSubject({ material: fresh, made, editor: false, ...EDITOR });
+  const reopened = chatSubject({ material: fresh, made: '', editor: false, ...EDITOR, input: 'Outro texto' });
+  assert.equal(justMade.content, EDITOR.input);
+  assert.equal(reopened.title, OPENED.title);
+  assert.equal(reopened.key, justMade.key);
+  // Outro material, ou o texto do editor escolhido no lugar do material, é outro assunto.
+  assert.notEqual(chatSubject({ material: { ...fresh, texto: 'Outro' }, made: '', editor: false, ...EDITOR }).key, justMade.key);
+  assert.equal(chatSubject({ material: fresh, made: '', editor: true, ...EDITOR, input: 'Outro texto' }).key,
+    subjectKey('Outro texto', 'Tecnologia'));
+});
+
 test('chatSubject: material enorme vai cortado em 20.000 caracteres, o limite do backend', () => {
   const huge = { ...OPENED, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] };
   const { content } = chatSubject({ material: huge, made: '', editor: false, ...EDITOR });
   assert.equal([...content].length, 20000);
   assert.ok(content.startsWith('Revolução Francesa\nLongo: ááá'));
+});
+
+test('subjectKey: a marca é curta e não leva o texto; o mesmo texto e área dão a mesma, outro texto ou área dá outra', () => {
+  const long = 'á'.repeat(20000);
+  const key = subjectKey(long, 'Escolar');
+  assert.ok(key.length <= 11, key);
+  assert.equal(subjectKey(long, 'Escolar'), key);
+  assert.notEqual(subjectKey(long + 'b', 'Escolar'), key);
+  assert.notEqual(subjectKey(long, 'Economia'), key);
+  assert.notEqual(subjectKey('a', 'b'), subjectKey('a', ''));
+  // A mensagem gravada no rascunho leva só a marca: com o texto do assunto nela, o rascunho crescia umas 20 vezes (#155).
+  const huge = { ...OPENED, summary: [{ concept: 'Longo', text: 'á'.repeat(30000) }] };
+  const key2 = chatSubject({ material: huge, made: '', editor: false, ...EDITOR }).key;
+  const saved = JSON.stringify({ role: 'user', text: 'E a clorofila?', key: key2 });
+  assert.ok(saved.length < 80, saved.slice(0, 80));
+  assert.ok(!saved.includes('Longo'));
 });
 
 test('LEVELS: os três níveis do contrato da API', () => {
@@ -1948,6 +2029,13 @@ test('"Ver no texto": o botão não aparece no material recebido nem com o texto
   assert.equal(appCode.split('setPassage({').length - 1, 1);
 });
 
+test('ask: o pedido leva só o histórico do assunto atual, e a pergunta e as duas respostas guardam a marca dele', () => {
+  assert.match(appCode, /const key = own \? subjectKey\(input, area\) : subject\.key;\s*const mine = \{ role: 'user', text: msg, key \};/);
+  assert.match(appCode, /history: chatHistory\(chat, key, input\.trim\(\)\),/);
+  assert.match(appCode, /\{ role: 'assistant', text: data\.answer, key \}/);
+  assert.match(appCode, /\(topic\.content \|\| EXAMPLE\)\.slice\(0, 450\),\s*key,\s*\}\]\);/);
+});
+
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
   const cards = [1, 2, 3].map(n => ({ question: 'Pergunta ' + n, answer: 'Resposta ' + n }));
   assert.deepEqual(pretestCards(cards), cards.slice(0, 2));
@@ -2132,7 +2220,7 @@ const DRAFT = {
   result: { ...GOOD, area: 'Economia', level: 'Avançado' },
   made: { key: JSON.stringify(['Inflação e juros', 'Economia', 'Avançado']) },
   chat: ANSWERED,
-  tips: { key: JSON.stringify(['Inflação e juros', 'Economia']), list: ['E o PIB per capita?', 'Como se mede?'] },
+  tips: { key: subjectKey('Inflação e juros', 'Economia'), list: ['E o PIB per capita?', 'Como se mede?'] },
   editorChat: true,
 };
 // O rascunho bom com alguns campos trocados, lido como o App lê na abertura.
@@ -2222,6 +2310,14 @@ test('readDraft: da conversa só ficam mensagens { role, text } de user ou assis
   assert.deepEqual(draft({ chat: 'oi' }).chat, []);
   assert.deepEqual(draft({ chat: null }).chat, []);
   assert.deepEqual(draft({ chat: { 0: ANSWERED[0] } }).chat, []);
+});
+
+test('readDraft: a marca do assunto volta com a mensagem; a que não é texto não tira a mensagem e não conta', () => {
+  assert.equal(chatHistory(draft({}).chat, CHAT_KEY, '').length, 2);
+  const chat = [{ ...ANSWERED[0], key: 5 }, { ...ANSWERED[1], key: ['Um texto', 'Economia'] }];
+  const got = draft({ chat }).chat;
+  assert.equal(got.length, 2);
+  assert.deepEqual(chatHistory(got, CHAT_KEY, ''), []);
 });
 
 test('readDraft: pergunta que ficou sem resposta no fim da conversa sai', () => {

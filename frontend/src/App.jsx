@@ -25,7 +25,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove, nameCut,
   validCardReview, scheduleCard, dueCards, dayCards,
   noticeTime, topicCount, chartLine,
-  matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
+  matches, libraryCount, hints, chatHistory, hello, chatSubject, subjectKey, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
   seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
@@ -1625,16 +1625,19 @@ function App() {
 
   // Pergunta enviada pelo editor já é o conteúdo: não manda o mesmo texto duas vezes ao modelo, e o chat passa a ser
   // sobre o texto do editor. As outras levam o assunto do chat (subject): o material aberto ou o texto do editor.
-  // O servidor não guarda conversa: as 6 últimas mensagens vão junto, para ele entender um "me dê um exemplo".
+  // O servidor não guarda conversa: as 6 últimas mensagens do assunto vão junto, para ele entender um "me dê um exemplo".
+  // Cada mensagem leva a marca do assunto (key), e a conversa de outro assunto, que fica na tela, não vai (lib.js, chatHistory).
   // O texto do editor já vai em content (ou é a própria pergunta), então a cópia dele fica fora do histórico.
   // Pergunta que falhou sai da conversa: sem isso ela ia sem resposta no histórico do próximo pedido. Se veio da caixa, volta para a caixa.
   // A caixa só é esvaziada quando a pergunta saiu dela: sugestão clicada ou envio pelo editor não apagam um rascunho.
   async function ask(message = question) {
     if (waiting || !message.trim()) return;
     const msg = message.trim();
-    const mine = { role: 'user', text: msg };
     const own = msg === input.trim();
     const topic = own ? { content: input, area, level } : subject;
+    // A marca da pergunta pelo editor é a do texto do editor (lib.js, chatSubject).
+    const key = own ? subjectKey(input, area) : subject.key;
+    const mine = { role: 'user', text: msg, key };
     if (own) setEditorChat(true);
     // A pergunta nova encerra o Desfazer de "Nova conversa": ele não pode mais trocar a conversa que começa agora.
     if (undo?.kind === 'conversa') {
@@ -1651,6 +1654,7 @@ function App() {
           ? 'No modo estudo não há IA neste aparelho: as respostas a dúvidas precisam do computador com a IA. '
           : 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. ') +
           'Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
+        key,
       }]);
       return;
     }
@@ -1663,13 +1667,10 @@ function App() {
         content: own ? '' : topic.content,
         area: topic.area,
         level: topic.level,
-        history: chat
-          .filter(m => m.text !== input.trim())
-          .slice(-6)
-          .map(m => ({ role: m.role, text: [...m.text].slice(0, 4000).join('') })),
+        history: chatHistory(chat, key, input.trim()),
       });
-      setChat(c => [...c, { role: 'assistant', text: data.answer }]);
-      setTips({ key: JSON.stringify([topic.content, topic.area]), list: Array.isArray(data.suggestions) ? data.suggestions : [] });
+      setChat(c => [...c, { role: 'assistant', text: data.answer, key }]);
+      setTips({ key, list: Array.isArray(data.suggestions) ? data.suggestions : [] });
     } catch (e) {
       if (!e.cancelled) setError(e);
       setChat(c => c.filter(m => m !== mine));
@@ -1978,7 +1979,7 @@ function App() {
   // O chat pergunta sobre o material aberto ou sobre o texto do editor (lib.js): o pedido, as sugestões, a saudação e a
   // caixa usam o mesmo assunto.
   const subject = chatSubject({ material: opened, made: made.current.key, editor: editorChat, input, area, level });
-  const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
+  const chatHints = hints({ chat, input: subject.content, area: subject.area, tips, key: subject.key });
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
     study: SEM_IA,
