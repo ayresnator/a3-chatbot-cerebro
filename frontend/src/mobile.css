@@ -137,6 +137,7 @@
 
     .ask-pill,
     .topbar .profile,
+    .top-actions .icon-button,
     .tab-extra {
         display: none
     }
@@ -165,9 +166,9 @@
     }
 
     /* A espera da IA toma a barra de cima inteira, por cima da marca e do estado: com o Cancelar ela não cabia ao lado
-       da marca. A marca (e o perfil, de 600 a 850 px) sai do Tab enquanto isso; se o foco estava nela, vai para o item
-       da página aberta na barra de baixo (App.jsx). Nas laterais, as margens da barra de cima (.app), fora do entalhe
-       do iPhone deitado. */
+       da marca. A marca (e o perfil e o "Fundo animado", de 600 a 850 px) sai do Tab enquanto isso; se o foco estava
+       nela, vai para o item da página aberta na barra de baixo (App.jsx). Nas laterais, as margens da barra de cima
+       (.app), fora do entalhe do iPhone deitado. */
     .busy {
         left: max(var(--sp-2), env(safe-area-inset-left, 0px));
         right: max(var(--sp-2), env(safe-area-inset-right, 0px));
@@ -176,7 +177,7 @@
         translate: none
     }
 
-    .app:has(> .busy) :is(.brand, .topbar .profile) {
+    .app:has(> .busy) :is(.brand, .topbar .profile, .top-actions .icon-button) {
         visibility: hidden
     }
 
@@ -313,8 +314,9 @@
 }
 
 /* Tablet em pé: de 600 a 850 px os oito nomes cabem na barra de baixo (a partir de uns 565 px), e Dúvidas, Desempenho
-   e Biblioteca ficam a um toque, sem "Mais". O perfil volta para a barra de cima, no botão redondo do computador. O
-   inline-flex é o display de todo botão (styles.css); com display none os itens saem também do Tab. */
+   e Biblioteca ficam a um toque, sem "Mais". O perfil e o "Fundo animado" voltam para a barra de cima, nos botões
+   redondos do computador. O inline-flex é o display de todo botão (styles.css); com display none os itens saem também
+   do Tab. */
 @media (min-width: 600px) and (max-width: 850px) {
     /* A barra de cima com o perfil: o botão de 44 px, o respiro e a borda. A faixa de espera se centra por esta altura. */
     :root {
@@ -322,6 +324,7 @@
     }
 
     .topbar .profile,
+    .top-actions .icon-button,
     .tab-extra {
         display: inline-flex
     }

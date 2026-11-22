@@ -18,6 +18,11 @@ export const FRAME_WAIT_MS = FRAME_MS - FRAME_SLACK_MS - 4;
 export const MAX_STEP_MS = 100;
 // Depois de uma hora o tempo volta a zero quando a aba reaparece: em float, um número grande perde precisão.
 export const RESTART_S = 3600;
+// Sem ponteiro nem tecla por este tempo, o laço para (issue #144): com o app aberto e parado, as ondas gastavam CPU e
+// bateria sem ninguém olhando. INPUT são os eventos da window que contam como alguém mexendo; o focus é a volta à
+// janela.
+export const IDLE_MS = 30000;
+export const INPUT = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll', 'focus'];
 export const UNIFORMS = {
   // Cores do mais escuro ao mais claro: #031C26, #1B6CA8, #5AD2F4 e #EAF9FF. O shader tem 8 vagas; só 4 são usadas.
   colors: [
@@ -364,7 +369,8 @@ function compile(gl, type, source) {
 // onActive(true) sai junto com o primeiro quadro, também quando o contexto volta; onActive(false), quando falta WebGL,
 // o shader é recusado ou o contexto se perde (ou já chega perdido).
 // animate verdadeiro: o laço, a no máximo 30 quadros por segundo, desenha só as faixas em volta do palco (bands), e o
-// buraco atrás dele fica no tom do palco.
+// buraco atrás dele fica no tom do palco. O laço para depois de IDLE_MS sem ninguém mexer e quando a janela perde o
+// foco, e volta na primeira entrada (INPUT), do quadro em que parou.
 // animate falso (movimento reduzido ou "Fundo animado" desligado): um quadro parado da tela inteira, redesenhado quando o
 // tamanho ou a densidade de pixels mudam.
 export function startWaves(canvas, { animate = true, onActive = () => {} } = {}) {
@@ -382,6 +388,8 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   let poll = 0;
   let stopped = false;
   let density = null;
+  // A hora da última entrada (INPUT); -Infinity com a janela sem foco.
+  let seen = performance.now();
 
   // u_resolution é sempre o canvas inteiro: o scissor só escolhe que pixels saem, e o desenho não muda.
   function paint(full) {
@@ -483,8 +491,13 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
   }
 
   // Depois de um quadro desenhado, o pedido do próximo espera no temporizador; o quadro que chega cedo pede o seguinte
-  // direto. O laço está tocando enquanto raf ou wait têm valor, e nunca há dois.
+  // direto. O laço está tocando enquanto raf ou wait têm valor, e nunca há dois. Sem ninguém mexer há IDLE_MS, ele
+  // para sem desenhar: o canvas guarda o último quadro, e o play() da próxima entrada continua dele.
   function frame(now) {
+    if (now - seen > IDLE_MS) {
+      raf = 0;
+      return;
+    }
     const next = tick(seconds, last, now);
     if (next === null) {
       raf = requestAnimationFrame(frame);
@@ -523,6 +536,14 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     if (seconds > RESTART_S) seconds = 0;
     if (animate) play();
   }
+  function onInput() {
+    seen = performance.now();
+    play();
+  }
+  // A janela perdeu o foco: o próximo quadro para o laço, como se ninguém mexesse há IDLE_MS.
+  function onBlur() {
+    seen = -Infinity;
+  }
   // A janela foi para uma tela de outra densidade, ou o zoom mudou: a consulta vale só para a densidade de agora.
   function onDensity() {
     watchDensity();
@@ -556,6 +577,10 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     }
     window.addEventListener('resize', render);
     document.addEventListener('visibilitychange', onVisibility);
+    if (animate) {
+      INPUT.forEach(type => window.addEventListener(type, onInput, { passive: true }));
+      window.addEventListener('blur', onBlur);
+    }
     canvas.addEventListener('webglcontextlost', onLost);
     // O contexto voltou: só desenha de novo se o shader ligar outra vez (check).
     canvas.addEventListener('webglcontextrestored', link);
@@ -584,6 +609,8 @@ export function startWaves(canvas, { animate = true, onActive = () => {} } = {})
     pause();
     window.removeEventListener('resize', render);
     document.removeEventListener('visibilitychange', onVisibility);
+    INPUT.forEach(type => window.removeEventListener(type, onInput));
+    window.removeEventListener('blur', onBlur);
     density?.removeEventListener('change', onDensity);
     if (!gl) return;
     canvas.removeEventListener('webglcontextlost', onLost);

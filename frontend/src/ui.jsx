@@ -471,7 +471,8 @@ export function PerfilSkeleton() {
 // e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
 // forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
 const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
-  '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
+  '(prefers-reduced-motion: reduce)', '(prefers-contrast: more), (forced-colors: active)']
+  .map(query => window.matchMedia(query));
 // Onde as ondas rodam, o fundo parado entra antes da primeira tela (data-waves, styles.css) e o pedaço delas é pedido
 // junto com o app (issue #136). O Waves pede de novo e recebe o mesmo módulo; a falha é dele para tratar.
 if (WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches) {
@@ -490,14 +491,19 @@ export function useWavesAllowed() {
 export function useWavesStill() {
   return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[2].matches);
 }
+// Contraste alto ou cores forçadas: a lua do Dúvidas sai da tela (styles.css), e o "Fundo animado" só tem as ondas
+// para parar.
+export function useMoonHidden() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[3].matches);
+}
 
 // Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
-// desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
+// desligado, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
 // onde as ondas rodam. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco e põe o fundo
 // parado nas margens (styles.css); com o primeiro quadro ele vira "on", e o canvas aparece por cima. Sem WebGL, ou
 // com o contexto perdido, volta a ficar sem valor: fica o fundo parado. Numa troca de animate o "on" fica: o canvas
 // guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
-// avisa: sem as ondas (false), o botão "Fundo animado" some.
+// avisa: sem as ondas (false), o botão "Fundo animado" fica só com a lua do Dúvidas para parar.
 export function Waves({ on, animate, onActive }) {
   const canvas = useRef(null);
   useEffect(() => {
