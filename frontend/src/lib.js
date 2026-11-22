@@ -219,17 +219,26 @@ export function markExample(summary, ai, ready) {
     inText(s.source, ai) ? { ...s, ia: true } : inText(s.source, ready) ? { ...s, pronto: true } : s);
 }
 
-// O rótulo do trecho diz de que texto ele saiu.
-export function sourceLabel(s) {
-  const from = s.ia ? 'No exemplo escrito pela IA' : s.pronto ? 'No texto de exemplo' : 'No seu texto';
+// O rótulo do trecho diz de que texto ele saiu. O material que veio do arquivo de um colega traz a marca recebido
+// (shareFile): o trecho dele, que também pode ter sido trocado no arquivo, é do texto de quem gerou e não é conferido
+// aqui. Só vale a marca true. Sem ela, com ou sem o texto guardado (o material de antes do campo texto não o tem), o
+// material foi gerado neste navegador: "No seu texto" ou "No texto de exemplo".
+export function sourceLabel(s, recebido) {
+  const from = s.ia ? 'No exemplo escrito pela IA' : recebido === true ? 'No texto de quem gerou'
+    : s.pronto ? 'No texto de exemplo' : 'No seu texto';
   return from + ': "' + s.source.trim() + '"';
 }
 
-// O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), de um
-// exemplo pronto (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um
-// tema, ou material de antes dos trechos).
-export function originNote(summary) {
+// O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), do
+// texto de um colega (trecho em material com a marca recebido, como no sourceLabel), de um exemplo pronto
+// (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um tema, ou material
+// de antes dos trechos).
+export function originNote(summary, recebido) {
   if (summary.some(s => s.ia)) return 'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.';
+  if (recebido === true && summary.some(s => s.source?.trim())) {
+    return 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+      'Confira em uma fonte confiável.';
+  }
   if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
   if (summary.some(s => s.source?.trim())) return AI_NOTE;
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
@@ -237,8 +246,8 @@ export function originNote(summary) {
 
 // O aviso da folha impressa (Folha.jsx): o mesmo da tela. O papel pode ir para quem não viu o app, e o aviso do
 // material sem nenhum trecho não fala da IA: ele ganha "Gerado por IA." na frente.
-export function printNote(summary) {
-  const note = originNote(summary);
+export function printNote(summary, recebido) {
+  const note = originNote(summary, recebido);
   return summary.some(s => s.ia || s.pronto || s.source?.trim()) ? note : 'Gerado por IA. ' + note;
 }
 
@@ -893,9 +902,11 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   };
 }
 
-// Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
+// Dica do selo da IA (title), repetida no pé da janela do perfil: a conta do selo é só deste computador, e a cota do
+// Google é do projeto inteiro.
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
-  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
+  'até 6, quando o Cérebro precisa tentar de novo.';
 
 // O teto de chamadas por dia que o grupo escolheu (AI_DAILY_LIMIT, no /api/health em daily_limit) chegou: os botões da
 // IA ficam desligados até a contagem recomeçar. Sem teto (null, ou backend antigo, sem o campo), nunca.
@@ -1513,10 +1524,13 @@ export function mergeBackup(atual, novo) {
 // fora: o colega marca a dele, e o plano do dia não aparece sem ele pedir. As listas do aluno (desempenho, caderno de
 // erros, caixas dos cartões, índice do acerto que ficou e perfil) nem entram. As marcas semIA, ia e pronto vão junto: o
 // aviso da IA segue o material. Material sem data (o que o navegador não conseguiu salvar) leva a de agora: é pela data
-// que o Importar o reconhece e não o duplica.
+// que o Importar o reconhece e não o duplica. O material do arquivo leva a marca recebido: no navegador do colega o
+// trecho de cada tópico aparece como "No texto de quem gerou" (sourceLabel). A marca fica no material dali em diante,
+// na biblioteca, no backup e no arquivo que o colega mandar adiante.
 export function shareFile(material, now) {
   const { texto, prova, provaMarcada, ...rest } = material;
-  return { versao: 1, saved: [{ ...rest, date: isDate(material.date) ? material.date : now.toISOString() }] };
+  const date = isDate(material.date) ? material.date : now.toISOString();
+  return { versao: 1, saved: [{ ...rest, date, recebido: true }] };
 }
 
 // Os cartões em texto, um por linha, com a frente e o verso separados por tabulação, como o Anki e o Quizlet importam.

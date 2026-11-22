@@ -14,7 +14,7 @@ export default function Folha({ material }) {
       <header>
         <h1>{title}</h1>
         {meta && <p>{meta}</p>}
-        {ai && <p>{printNote(summary)}</p>}
+        {ai && <p>{printNote(summary, material.recebido)}</p>}
       </header>
       <section>
         <h2>Resumo</h2>
@@ -23,7 +23,7 @@ export default function Folha({ material }) {
             <li key={i}>
               <h3>{s.concept}</h3>
               <p>{s.text}</p>
-              {s.source?.trim() && <p className="folha-trecho">{sourceLabel(s)}</p>}
+              {s.source?.trim() && <p className="folha-trecho">{sourceLabel(s, material.recebido)}</p>}
               {ai && (s.ia || !s.source?.trim()) && <p className="folha-etiqueta">Explicação da IA: confira</p>}
             </li>
           ))}

@@ -884,9 +884,12 @@ function App() {
       const twin = stored.findIndex(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       // O que já está lá fica com o texto deste clique: a demonstração só usa as 8 primeiras frases, e o resto do texto
-      // pode ter mudado. O material de antes do campo texto também o ganha.
-      if (twin >= 0 && stored[twin].texto !== input) {
-        stored[twin] = { ...stored[twin], texto: input };
+      // pode ter mudado. O material de antes do campo texto também o ganha. O igual que veio de um colega, com a mesma
+      // área e o mesmo nível, perde a marca recebido: agora ele foi gerado aqui, do texto daqui. Com outra área ou
+      // outro nível ele não é o gêmeo, e a Biblioteca fica com os dois.
+      if (twin >= 0 && (stored[twin].texto !== input || stored[twin].recebido)) {
+        const { recebido, ...mine } = stored[twin];
+        stored[twin] = { ...mine, texto: input };
         if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
       }
       const next = twin >= 0 ? stored[twin] : store(material) || material;
@@ -1981,12 +1984,12 @@ function App() {
   const waiting = !!busy || !!asking || !!pausedUntil || capped;
   // IA sem chave neste computador: o botão de gerar fica desligado, e o aviso embaixo do editor diz por quê.
   const aiOff = !!API_BASE && health?.ai_configured === false;
-  // O custo do clique ("1 chamada de IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração, o
+  // O custo do clique ("1 pedido à IA") vai nos botões que chamam a IA, só quando ela está ligada: a demonstração, o
   // backend sem a IA configurada e o teto do dia não gastam chamada.
   const cost = !!API_BASE && !aiOff && !capped;
   // Nos botões que pedem à IA de dentro do estudo ("Não entendi, me explique" e "Pedir revisão da IA"), o custo dá lugar
   // ao motivo no teto do dia: eles ficam desligados com o motivo ao lado.
-  const askCost = capped ? 'teto do dia atingido' : '1 chamada de IA';
+  const askCost = capped ? 'teto do dia atingido' : '1 pedido à IA';
   // O teto chegou (o último pedido gastou a última chamada, ou a aba abriu ou voltou com ele): o leitor de tela ouve
   // por que os botões da IA desligaram. Se o foco estava num deles (outra aba gastou o resto), ele iria para o body:
   // antes da pintura, vai para o título da página.
@@ -2363,7 +2366,7 @@ function App() {
                         {/* O custo vai no nome quando o clique chama a IA (addExample); sem ela o exemplo é pronto. Fica
                             fora da tela: com ele, as quatro ferramentas não cabiam na linha do contador e do "Perguntar
                             ao Cérebro" no computador. */}
-                        {cost && <small className="sr-only">1 chamada de IA</small>}
+                        {cost && <small className="sr-only">1 pedido à IA</small>}
                         <span className="short" aria-hidden="true">Exemplo</span>
                       </button>
                       {/* Depois de Limpar (ou do exemplo por cima de um texto), o mesmo lugar vira Desfazer até o aluno
@@ -2463,7 +2466,7 @@ function App() {
                         {busy?.kind === 'gerar'
                           ? 'Gerando…'
                           : fresh ? 'Gerar de novo' : 'Gerar resumo, flashcards e quiz'}
-                        {cost && busy?.kind !== 'gerar' && <small>1 chamada de IA</small>}
+                        {cost && busy?.kind !== 'gerar' && <small>1 pedido à IA</small>}
                       </button>
                     </div>
                   </m.div>
@@ -2589,7 +2592,7 @@ function App() {
                               ? aiNote || (SEM_IA &&
                                 virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
                                 <p className="ai-note">{AI_NOTE}</p>)
-                              : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary, result.recebido)}</p>}
                           </div>
                           {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela, o Compartilhar e o
                               Salvar ficam juntos: na tela estreita, os três descem para baixo do título. */}
@@ -2740,10 +2743,11 @@ function App() {
                                         </button>
                                       )}
                                       <p>{s.text}</p>
-                                      {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                       {/* O trecho dentro do texto inteiro, numa janela que abre nele. Material de antes do
-                                          campo texto não guardou o texto e fica sem o botão. */}
-                                      {s.source?.trim() && result.texto && (
+                                          campo texto não guardou o texto e fica sem o botão. O recebido de um colega
+                                          também: o texto de um arquivo mexido à mão não é o do aluno. */}
+                                      {s.source?.trim() && result.recebido !== true && result.texto?.trim() && (
                                         <button
                                           type="button"
                                           className="link source-link"
@@ -2828,7 +2832,7 @@ function App() {
                                                   {markPieces(s.text, own.review?.missing || []).map((part, k) =>
                                                     part.mark ? <mark key={k}>{part.text}</mark> : part.text)}
                                                 </p>
-                                                {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                                {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                                 {result.semIA !== true && (s.ia || !s.source?.trim()) && (
                                                   <span className="ai-tag">Explicação da IA: confira</span>
                                                 )}
