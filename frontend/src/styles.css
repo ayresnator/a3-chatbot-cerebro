@@ -1190,7 +1190,7 @@ select {
     }
 }
 
-/* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 1070 px, e com a letra a 200%, o nome
+/* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 920 px, e com a letra a 200%, o nome
    virava "P…". Sem os 13 rem do orbe, do nome, da lupa e dos vãos, o nome sai da vista e continua no botão para o
    leitor de tela; ficam o orbe e a lupa. O !important vence o recorte da animação da frase, que continua valendo depois
    que ela termina. */
@@ -3984,7 +3984,8 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
-/* min-width: 0 só pesa com a letra aumentada (a do navegador ou o texto do celular): a coluna encolhe abaixo da data e
+/* min-width: 0 pesa com a letra aumentada (a do navegador ou o texto do celular) e, com a letra padrão, quando a barra
+   de rolagem clássica tira 15 px da página (janelas de 320 a 333 e de 360 a 365 px): a coluna encolhe abaixo da data e
    o gráfico fica na caixa, com os rótulos vizinhos uns por cima dos outros (sem ele o gráfico saía da caixa). Com a
    letra padrão quem põe as 7 colunas na caixa abaixo de 360 px é o vão de 2 px com a letra de 12 px (mobile.css). */
 .chart > div {
