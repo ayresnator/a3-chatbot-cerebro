@@ -2029,6 +2029,13 @@ test('"Ver no texto": o botão não aparece no material recebido nem com o texto
   assert.equal(appCode.split('setPassage({').length - 1, 1);
 });
 
+test('ask: o pedido leva só o histórico do assunto atual, e a pergunta e as duas respostas guardam a marca dele', () => {
+  assert.match(appCode, /const key = own \? subjectKey\(input, area\) : subject\.key;\s*const mine = \{ role: 'user', text: msg, key \};/);
+  assert.match(appCode, /history: chatHistory\(chat, key, input\.trim\(\)\),/);
+  assert.match(appCode, /\{ role: 'assistant', text: data\.answer, key \}/);
+  assert.match(appCode, /\(topic\.content \|\| EXAMPLE\)\.slice\(0, 450\),\s*key,\s*\}\]\);/);
+});
+
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
   const cards = [1, 2, 3].map(n => ({ question: 'Pergunta ' + n, answer: 'Resposta ' + n }));
   assert.deepEqual(pretestCards(cards), cards.slice(0, 2));
