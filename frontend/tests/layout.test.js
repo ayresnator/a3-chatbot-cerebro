@@ -26,7 +26,8 @@ const rule = (css, selector) => css.split('\n' + selector + ' {')[1]?.split('}')
 
 test('gráfico do Desempenho: a coluna encolhe abaixo da data e, abaixo de 360 px, as 7 cabem na caixa', () => {
   assert.match(rule(styles, '.chart > div'), /min-width: 0/, 'sem isto a data segura a largura da coluna');
-  const narrow = inside(mobile, '@media (max-width: 359px)');
+  // 359 px com a letra padrão: a quebra está em rem (#141).
+  const narrow = inside(mobile, '@media (max-width: 22.4375rem)');
   assert.match(narrow, /\.chart \{\s*gap: var\(--sp-0\)\s*\}/);
   assert.match(narrow, /\.chart > div,\s*\.chart small \{\s*font-size: var\(--fs-0\)\s*\}/);
 });

@@ -1,10 +1,13 @@
 /* Telas estreitas. Este arquivo é carregado depois do styles.css: o que está aqui vale por último. Só muda a arrumação;
-   cores, tipos e medidas continuam saindo das variáveis do styles.css. */
+   cores, tipos e medidas continuam saindo das variáveis do styles.css.
+   As quebras de largura estão em rem (px ÷ 16): com a letra padrão valem nos mesmos px de antes, e com a letra do
+   navegador maior o app cai no layout mais estreito, como no zoom, em vez de rolar de lado (issue #141). Os comentários
+   dão as medidas em px da letra padrão. */
 
 /* Até 850 px o dock vira a barra de baixo, uma pílula de vidro solta da borda: as cinco primeiras seções e "Mais",
    que abre uma folha com as outras e o perfil. Cabe tudo sem rolar de lado e sem cortar nome. A barra de cima fica só
    com a marca e o estado da IA. De 600 a 850 px as oito seções cabem na barra, sem "Mais" (bloco abaixo deste). */
-@media (max-width: 850px) {
+@media (max-width: 53.125rem) {
     :root {
         /* Do pé da tela ao topo da barra de baixo, com 8 px de folga embaixo e em cima dela. */
         --tabbar-h: calc(3rem + var(--dock-pad) * 2 + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px));
@@ -111,6 +114,40 @@
         color: var(--on-accent)
     }
 
+    /* "Mais" é o único caminho para o Dúvidas, o Desempenho, a Biblioteca e o perfil. Quando a barra rola de lado a
+       ponto de cortar o nome dele (o texto ampliado no aparelho, o espaçamento de texto do aluno), data-rola (App.jsx)
+       o prende na ponta, sempre à vista, e os outros itens passam por baixo: por isso o fundo, que vale também no hover
+       (no toque o hover fica preso), a sombra, que cobre o respiro da barra à direita dele, e a ponta esquerda, que
+       esmaece. Com o foco do teclado em outro item da barra ele volta ao lugar: ela rola até o item do foco, como antes,
+       e ele não cobre esse item. Com o foco nele, continua preso: o Esc fecha a folha e devolve o foco sem rolar a
+       barra, e solto ele ficaria fora da vista, com o anel. */
+    [data-rola]:not(:has(:focus-visible)) > [aria-haspopup=dialog],
+    [data-rola] > [aria-haspopup=dialog]:focus-visible {
+        position: sticky;
+        right: 0
+    }
+
+    [data-rola] > [aria-haspopup=dialog] {
+        box-shadow: var(--dock-pad) 0 var(--paper)
+    }
+
+    [data-rola] > [aria-haspopup=dialog]:not([data-current]) {
+        background: var(--paper)
+    }
+
+    [data-rola] > [aria-haspopup=dialog]::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 100%;
+        bottom: 0;
+        width: var(--sp-2);
+        background: var(--paper);
+        -webkit-mask-image: linear-gradient(to right, transparent, #000);
+        mask-image: linear-gradient(to right, transparent, #000);
+        pointer-events: none
+    }
+
     /* O anel vai por dentro do item (a barra é justa e rola de lado); no item ciano ele é preto. */
     .tab-item:focus-visible {
         outline-offset: calc(-2 * var(--ring))
@@ -137,6 +174,7 @@
 
     .ask-pill,
     .topbar .profile,
+    .top-actions .icon-button,
     .tab-extra {
         display: none
     }
@@ -165,9 +203,9 @@
     }
 
     /* A espera da IA toma a barra de cima inteira, por cima da marca e do estado: com o Cancelar ela não cabia ao lado
-       da marca. A marca (e o perfil, de 600 a 850 px) sai do Tab enquanto isso; se o foco estava nela, vai para o item
-       da página aberta na barra de baixo (App.jsx). Nas laterais, as margens da barra de cima (.app), fora do entalhe
-       do iPhone deitado. */
+       da marca. A marca (e o perfil e o "Fundo animado", de 600 a 850 px) sai do Tab enquanto isso; se o foco estava
+       nela, vai para o item da página aberta na barra de baixo (App.jsx). Nas laterais, as margens da barra de cima
+       (.app), fora do entalhe do iPhone deitado. */
     .busy {
         left: max(var(--sp-2), env(safe-area-inset-left, 0px));
         right: max(var(--sp-2), env(safe-area-inset-right, 0px));
@@ -176,7 +214,7 @@
         translate: none
     }
 
-    .app:has(> .busy) :is(.brand, .topbar .profile) {
+    .app:has(> .busy) :is(.brand, .topbar .profile, .top-actions .icon-button) {
         visibility: hidden
     }
 
@@ -275,6 +313,21 @@
         backdrop-filter: var(--blur)
     }
 
+    /* Janela baixa (o celular deitado, o zoom de 200% a 400%): presas, a faixa e a barra de baixo deixavam de 21 a
+       113 px para a questão com o zoom de 400% (#140). As duas faixas rolam com a página, como a caixa do Dúvidas
+       (styles.css), e a rolagem até o foco volta a parar só acima da barra. */
+    @media (max-height: 36rem) {
+        .next-row,
+        .sure-row {
+            position: static
+        }
+
+        html:has(.next-row),
+        html:has(.sure-row) {
+            scroll-padding-bottom: calc(var(--tabbar-h) + var(--sp-4))
+        }
+    }
+
     /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
     .exam-next .primary {
         flex: 1
@@ -313,15 +366,17 @@
 }
 
 /* Tablet em pé: de 600 a 850 px os oito nomes cabem na barra de baixo (a partir de uns 565 px), e Dúvidas, Desempenho
-   e Biblioteca ficam a um toque, sem "Mais". O perfil volta para a barra de cima, no botão redondo do computador. O
-   inline-flex é o display de todo botão (styles.css); com display none os itens saem também do Tab. */
-@media (min-width: 600px) and (max-width: 850px) {
+   e Biblioteca ficam a um toque, sem "Mais". O perfil e o "Fundo animado" voltam para a barra de cima, nos botões
+   redondos do computador. O inline-flex é o display de todo botão (styles.css); com display none os itens saem também
+   do Tab. */
+@media (min-width: 37.5rem) and (max-width: 53.125rem) {
     /* A barra de cima com o perfil: o botão de 44 px, o respiro e a borda. A faixa de espera se centra por esta altura. */
     :root {
         --top-h: calc(var(--control-h) + var(--sp-1) * 2 + var(--hair) * 2)
     }
 
     .topbar .profile,
+    .top-actions .icon-button,
     .tab-extra {
         display: inline-flex
     }
@@ -335,7 +390,7 @@
    745 px, onde não cabem ao lado do aviso da IA. O esqueleto da geração guarda a linha deles (o campo de 44 px e o
    respiro), e as abas não pulam quando o material chega. De 746 px para cima eles ficam ao lado da área e do aviso
    (styles.css). */
-@media (min-width: 551px) and (max-width: 745px) {
+@media (min-width: 34.4375rem) and (max-width: 46.5625rem) {
     .result-header > .header-actions {
         flex-basis: 100%
     }
@@ -347,7 +402,7 @@
 
 /* Celular. O editor fica mais baixo: tudo até os botões de gerar cabe na primeira tela, acima da barra, de 360 × 780
    para cima. */
-@media (max-width: 550px) {
+@media (max-width: 34.375rem) {
     :root {
         --fs-6: 2rem;
         --top-h: 3rem;
@@ -450,12 +505,14 @@
     }
 
     /* As quatro ferramentas dividem a linha em partes iguais, com o ícone sobre a palavra, como os itens da barra de
-       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. */
+       baixo: com a palavra ao lado do ícone, a quarta descia para outra linha, já em 390 px. Sem min-width: 0: a parte
+       não fica mais estreita que a palavra dela. Com a letra padrão toda palavra cabe na parte igual, até 320 px; com o
+       texto ampliado no aparelho a parte da palavra larga cresce e, sem lugar, a última ferramenta desce de linha, em
+       vez de as palavras se encostarem. */
     .tool {
         flex: 1 1 0;
         flex-direction: column;
         gap: 0;
-        min-width: 0;
         padding: 0;
         font-size: var(--fs-1)
     }
@@ -808,7 +865,7 @@
 
 /* Telefone de 380 px ou menos: os seis nomes da barra cabem inteiros, até 320 px, com o nome a 12 px, a barra mais
    perto da borda e os itens curtos com no mínimo 40 px de largura (e 48 de altura; em 320 px eles medem 44). */
-@media (max-width: 380px) {
+@media (max-width: 23.75rem) {
     .tabbar {
         right: max(var(--sp-1), env(safe-area-inset-right, 0px));
         left: max(var(--sp-1), env(safe-area-inset-left, 0px));
@@ -897,7 +954,7 @@
 /* Telefone de menos de 360 px: a etiqueta mais longa ("Verdadeiro ou falso") e a caixa "Marcar certeza" (#80) não cabem
    na mesma linha. A caixa vai sempre para a linha de baixo: o cabeçalho do quiz não muda de altura de uma questão para
    a outra. */
-@media (max-width: 359px) {
+@media (max-width: 22.4375rem) {
     .quiz-tools {
         flex-direction: column;
         align-items: flex-start
@@ -916,12 +973,33 @@
 }
 
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
-   As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
+   As quebras acima são só pela largura, e a barra de baixo deixa de 258 a 336 px para a página. Sem a frase de
    abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
    "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
    cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e ao virar o cartão quem tem a vez é a resposta
    (App.jsx, turnCard). */
 @media (max-height: 30rem) {
+    /* A barra de baixo numa linha só, o nome sem o ícone: 46 px no lugar de 58 (#140), e o item com os 44 px do toque.
+       Com o ícone ao lado do nome os oito itens não cabem em 667 px, e a barra rolaria de lado. A medida dela só muda
+       onde ela existe (até 850 px): no computador continua 0. */
+    @media (max-width: 53.125rem) {
+        :root {
+            --tabbar-h: calc(var(--control-h) + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px))
+        }
+    }
+
+    .tabbar {
+        padding-block: 0
+    }
+
+    .tab-item {
+        height: var(--control-h)
+    }
+
+    .tab-item .icon {
+        display: none
+    }
+
     .lead {
         display: none
     }

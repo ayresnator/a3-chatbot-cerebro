@@ -9,6 +9,7 @@ import {
   chatSubject, capText, readWriteFirst, spokenCard, CARD_REMINDER,
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
+  noticeTime, chartLine, topicCount,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   shareFile, cardLines, ankiFile, fileName, answerLine, printNote,
@@ -17,6 +18,7 @@ import {
   textOrigin,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
   libraryCount, read, storageKey, demoStorage, newId, backupStatus, backupSummary, deckRestart, plural,
+  backdropMoves,
   addDays, validCardReview, scheduleCard, dueCards, dayCards, stepOf, dueOf, dueMistakes, dayMistakes, backOn,
   examPool, mockExam, examScore, examLine, provaOf, daysUntil, inDays, planTask, studyPlan, planLine, virtualNote,
   CONF, noteAnswer, calibration, sureText, guessLine, restoreMistake,
@@ -327,6 +329,14 @@ test('spokenDay: a coluna do gráfico por extenso, para o leitor de tela', () =>
   assert.equal(spokenDay({ day: '2026-11-16', total: 6, rate: 33 }), '16 de novembro: 6 respostas, 33% de acerto');
   assert.equal(spokenDay({ day: '2026-03-01', total: 1, rate: 100 }), '1 de março: 1 resposta, 100% de acerto');
   assert.equal(spokenDay({ day: '2026-11-15', total: 0, rate: 0 }), '15 de novembro: nenhuma resposta');
+});
+
+test('chartLine: a área do gráfico e as respostas dos 7 dias dela, para o leitor de tela', () => {
+  const events = [...SIX_ANSWERS, quizAt(14, 7, true, { area: 'Direito', title: 'Constituição' })];
+  assert.equal(chartLine('Todas', chartDays(events, 'Todas', today())), 'Todas as áreas: 7 respostas nos últimos 7 dias');
+  assert.equal(chartLine('Economia', chartDays(events, 'Economia', today())), 'Economia: 6 respostas nos últimos 7 dias');
+  assert.equal(chartLine('Direito', chartDays(events, 'Direito', today())), 'Direito: 1 resposta nos últimos 7 dias');
+  assert.equal(chartLine('Escolar', chartDays(events, 'Escolar', today())), 'Escolar: nenhuma resposta nos últimos 7 dias');
 });
 
 test('lastDays: do mais antigo para hoje, se houve estudo em cada dia', () => {
@@ -1111,6 +1121,19 @@ test('typeDelay: a frase mais longa das seis áreas se escreve letra a letra e t
   assert.ok(typeDelay(1, () => 0) >= 20, String(typeDelay(1, () => 0)));
 });
 
+test('noticeTime: o aviso fica o tempo de ler o texto, com o mínimo de 4 s e, com botão, de 10 s', () => {
+  // WCAG 2.2.1: a frase de 14 palavras do arquivo cortado ficava os mesmos 3,2 s do aviso de 2 palavras.
+  const cut = 'Texto do arquivo: longo.txt. Entrou só o começo: o editor recebe até 20.000 caracteres';
+  assert.equal(noticeTime(cut), 7600);
+  assert.equal(noticeTime('Cartão movido para o final do baralho'), 4800);
+  assert.equal(noticeTime('Material já salvo'), 4000, '3 palavras: o mínimo');
+  assert.equal(noticeTime('Pedido cancelado'), 4000);
+  assert.equal(noticeTime('  Ouvindo…  '), 4000, 'os espaços das pontas não contam');
+  // Com botão, o tempo de chegar a ele: nunca menos que os 10 s de antes, e mais quando o texto pede.
+  assert.equal(noticeTime('Questão tirada do caderno', { label: 'Desfazer' }), 10000);
+  assert.equal(noticeTime(cut + ' ' + cut, { label: 'Abrir' }), 13200);
+});
+
 test('rove: as setas andam um item e dão a volta nas pontas', () => {
   assert.equal(rove('ArrowRight', 0, 6), 1);
   assert.equal(rove('ArrowDown', 2, 6), 3);
@@ -1153,14 +1176,15 @@ test('askKey: tecla da composição de texto (acento, IME) e Ctrl com outra tecl
 });
 
 // O retorno do quiz depois de errar (uns 315 px, com a faixa de "Próxima questão" de 69 px dentro dele): inteiro no
-// computador e no celular em pé. No celular deitado e no zoom de 200% a raiz reserva 155 px (a barra de baixo, a faixa
-// presa e o respiro); sem a faixa, que já está no bloco, sobram 86 px de reserva, e ele não cabe.
+// computador e no celular em pé, onde a raiz reserva 155 px (a barra de baixo, a faixa presa e o respiro) e a faixa,
+// que já está no bloco, sai da reserva. No celular deitado e no zoom de 200% a faixa rola com a página (#140): a raiz
+// reserva só a barra e o respiro (78 px), o App não passa a faixa, e ele não cabe.
 test('fitsAbove: o bloco cabe na janela menos a reserva da raiz; "auto" (computador) não reserva nada', () => {
   assert.equal(fitsAbove(315, 768, 'auto', 69), true, 'computador, 1366 x 768');
   assert.equal(fitsAbove(315, 844, '155px', 69), true, 'celular em pé, 390 x 844');
-  assert.equal(fitsAbove(315, 390, '155px', 69), false, 'celular deitado, 844 x 390');
-  assert.equal(fitsAbove(315, 312, '155px', 69), false, 'zoom de 200%, 683 x 312');
-  assert.equal(fitsAbove(304, 390, '155px', 69), true, 'na medida exata, cabe');
+  assert.equal(fitsAbove(315, 390, '78px'), false, 'celular deitado, 844 x 390');
+  assert.equal(fitsAbove(315, 312, '78px'), false, 'zoom de 200%, 683 x 312');
+  assert.equal(fitsAbove(312, 390, '78px'), true, 'na medida exata, cabe');
   assert.equal(fitsAbove(315, 768, ''), true, 'sem valor, sem reserva');
 });
 
@@ -1171,6 +1195,23 @@ test('fitsAbove: a faixa dentro do bloco sai da reserva, e no computador não au
   assert.equal(fitsAbove(700, 844, '155px', 69), true, 'contada uma vez, cabe');
   assert.equal(fitsAbove(759, 844, '155px', 69), false, 'passou da barra e do respiro');
   assert.equal(fitsAbove(800, 768, 'auto', 69), false, 'computador, retorno mais alto que a janela');
+});
+
+// Janela baixa (#140): presas, as faixas do quiz e a barra de baixo deixavam uma fresta para a questão. Abaixo de 36rem
+// de altura as faixas ficam soltas (dentro do bloco de até 850 px, depois das regras que as prendem) e a reserva do
+// foco volta a ser só a da barra; abaixo de 30rem a barra fica numa linha só, com o item de 44 px, e a medida dela
+// (--tabbar-h) só muda até 850 px de largura, onde a barra existe (53,125rem: as quebras de largura são em rem, #141).
+test('mobile.css: na janela baixa as faixas do quiz rolam com a página e a barra de baixo fica numa linha só', () => {
+  const css = readFileSync(new URL('../src/mobile.css', import.meta.url), 'utf8');
+  const low = css.indexOf('@media (max-height: 36rem) {');
+  assert.ok(low > css.indexOf('position: sticky', css.indexOf('.sure-row {')), 'depois das regras que as prendem');
+  assert.ok(low < css.indexOf('\n@media', css.indexOf('@media (max-width: 53.125rem) {')), 'dentro do bloco de até 850 px');
+  const loose = css.slice(low, css.indexOf('.exam-next', low));
+  assert.match(loose, /^@media \(max-height: 36rem\) \{\s*\.next-row,\s*\.sure-row \{\s*position: static\s*\}/);
+  assert.match(loose, /html:has\(\.next-row\),\s*html:has\(\.sure-row\) \{\s*scroll-padding-bottom: calc\(var\(--tabbar-h\) \+ var\(--sp-4\)\)\s*\}\s*\}/);
+  const bar = css.slice(css.indexOf('@media (max-height: 30rem) {'));
+  assert.match(bar, /@media \(max-width: 53\.125rem\) \{\s*:root \{\s*--tabbar-h: calc\(var\(--control-h\) \+ var\(--hair\) \* 2 \+ var\(--sp-2\) \* 2 \+ env\(/);
+  assert.match(bar, /\.tabbar \{\s*padding-block: 0\s*\}\s*\.tab-item \{\s*height: var\(--control-h\)\s*\}\s*\.tab-item \.icon \{\s*display: none\s*\}/);
 });
 
 test('LEVEL_NOTES: cada nível do menu tem a nota dele', () => {
@@ -1224,6 +1265,14 @@ test('libraryCount: o resultado da busca da Biblioteca, com nenhum, um e vários
   assert.equal(libraryCount(0), 'Nenhum material encontrado');
   assert.equal(libraryCount(1), '1 material encontrado');
   assert.equal(libraryCount(2), '2 materiais encontrados');
+});
+
+test('topicCount: a contagem da lista "Mostrar" do Resumo não passa dos tópicos do material', () => {
+  assert.equal(topicCount('todos', 8), 'Mostrando 8 de 8 tópicos');
+  assert.equal(topicCount('6', 8), 'Mostrando 6 de 8 tópicos');
+  assert.equal(topicCount('3', 8), 'Mostrando 3 de 8 tópicos');
+  assert.equal(topicCount('6', 4), 'Mostrando 4 de 4 tópicos');
+  assert.equal(topicCount('3', 1), 'Mostrando 1 de 1 tópico');
 });
 
 // Material do simulado com n questões de múltipla escolha, congelado: função que mexesse nele falharia aqui.
@@ -1765,23 +1814,39 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
   const nothing = 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
   assert.equal(AI_NOTE, 'Gerado por IA. Pode conter erros: confira com o seu material.');
-  assert.equal(originNote([own, none]), AI_NOTE);
-  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }]), nothing);
-  assert.equal(originNote([]), nothing);
-  assert.equal(originNote([own, { ...own, ia: true }, none]),
+  assert.equal(originNote([own, none], EXAMPLE), AI_NOTE);
+  assert.equal(originNote([none, { ...none, source: '   ' }, { concept: 'Luz', text: 'Energia.' }], EXAMPLE), nothing);
+  assert.equal(originNote([], EXAMPLE), nothing);
+  assert.equal(originNote([own, { ...own, ia: true }, none], EXAMPLE),
     'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.');
   // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
-  assert.equal(originNote([own, { ...own, pronto: true }, none]),
+  assert.equal(originNote([own, { ...own, pronto: true }, none], EXAMPLE),
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('originNote: sem o texto do material no navegador, o aviso diz que os trechos não foram conferidos aqui', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
+  const away = 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+    'Confira em uma fonte confiável.';
+  // O recebido de um colega e o de antes do campo texto; texto em branco vale como sem texto.
+  for (const texto of [undefined, null, '', ' \n']) {
+    assert.equal(originNote([own, none], texto), away);
+    assert.equal(originNote([{ ...own, pronto: true }, none], texto), away, 'a marca pronto veio no arquivo');
+    // O exemplo da IA e o material sem trecho nenhum dizem o mesmo com ou sem o texto.
+    assert.equal(originNote([own, { ...own, ia: true }], texto), originNote([own, { ...own, ia: true }], EXAMPLE));
+    assert.equal(originNote([none], texto), originNote([none], EXAMPLE));
+  }
 });
 
 test('printNote: a folha impressa leva o aviso da tela; sem nenhum trecho, com "Gerado por IA." na frente', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: ' ' };
   for (const summary of [[own, none], [{ ...own, ia: true }], [{ ...own, pronto: true }, none]]) {
-    assert.equal(printNote(summary), originNote(summary));
+    // Com o texto do material e sem ele (o recebido de um colega).
+    for (const texto of [EXAMPLE, undefined]) assert.equal(printNote(summary, texto), originNote(summary, texto));
   }
-  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }]),
+  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }], EXAMPLE),
     'Gerado por IA. Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.');
 });
 
@@ -1827,9 +1892,32 @@ test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pro
 
 test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
   const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
-  assert.equal(sourceLabel(s), 'No seu texto: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+  const texto = EXAMPLES.Economia[0].text;
+  assert.equal(sourceLabel(s, texto), 'No seu texto: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, pronto: true }, texto), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+});
+
+test('sourceLabel: sem o texto do material no navegador, o trecho é do texto de quem gerou', () => {
+  const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
+  const away = 'No texto de quem gerou: "o índice oficial de inflação é o IPCA"';
+  for (const texto of [undefined, null, '', ' \n']) {
+    assert.equal(sourceLabel(s, texto), away);
+    // A marca pronto vem no arquivo, e sem o texto não há como conferi-la aqui.
+    assert.equal(sourceLabel({ ...s, pronto: true }, texto), away);
+    assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+  }
+});
+
+test('sourceLabel: o material gerado aqui diz "No seu texto"; o mesmo material, importado do arquivo para um colega, não', () => {
+  const made = { ...demo(EXAMPLE), id: 4, date: at(11), texto: EXAMPLE };
+  const [got] = readBackup(JSON.stringify(shareFile(made, today()))).saved;
+  const labels = m => m.summary.map(s => sourceLabel(s, m.texto).split(':')[0]);
+  assert.deepEqual([...new Set(labels(made))], ['No seu texto']);
+  assert.deepEqual([...new Set(labels(got))], ['No texto de quem gerou']);
+  // O trecho trocado à mão no arquivo entra com o mesmo rótulo: não aparece como conferido.
+  const edited = { ...got, summary: [{ ...got.summary[0], source: 'Uma frase que não está em texto nenhum.' }] };
+  assert.equal(sourceLabel(edited.summary[0], edited.texto), 'No texto de quem gerou: "Uma frase que não está em texto nenhum."');
 });
 
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
@@ -2223,6 +2311,15 @@ test('storageKey: o "Fundo animado" é do aparelho, e a demonstração lê a mes
   assert.equal(storageKey('fundo'), 'cerebro-fundo');
 });
 
+test('backdropMoves: o "Fundo animado" aparece com as ondas ou a lua para parar, e some com movimento reduzido', () => {
+  const shown = (still, waves, moon) => backdropMoves({ still, waves, moon });
+  assert.equal(shown(false, true, true), true, 'computador: as ondas e a lua');
+  assert.equal(shown(false, false, true), true, 'celular, ou computador sem WebGL: só a lua');
+  assert.equal(shown(false, true, false), true, 'contraste alto no computador: só as ondas');
+  assert.equal(shown(false, false, false), false, 'cores forçadas, ou contraste alto no celular: nada se move');
+  assert.equal(shown(true, true, true), false, 'movimento reduzido: as duas já estão paradas');
+});
+
 test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {
   assert.equal(newId([], 1000), 1000);
   assert.equal(newId([{ id: 5 }, { id: 9 }], 1000), 1000);
@@ -2232,7 +2329,14 @@ test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois mat
 });
 
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
-  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
+  'até 6, quando o Cérebro precisa tentar de novo.';
+
+test('healthLabel: a dica do selo diz o teto de chamadas de um pedido, o request_calls do backend', () => {
+  const config = readFileSync(new URL('../../backend/app/config.py', import.meta.url), 'utf8');
+  const [, calls] = config.match(/^\s*request_calls: int = (\d+)$/m);
+  assert.ok(QUOTA_NOTE.includes('mais de uma chamada, até ' + calls + ','));
+});
 
 test('healthLabel: conferindo, Cérebro desligado e IA não configurada', () => {
   assert.deepEqual(healthLabel(null), { text: 'Conferindo a IA…', tone: '' });

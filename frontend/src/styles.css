@@ -420,22 +420,36 @@ body::before {
    aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
    espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
    no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
-   ninguém vê. */
+   ninguém vê. O canvas tem a largura da janela (100vw), com ou sem a barra de rolagem: o desenho não estica quando ela
+   aparece. */
 .waves {
     position: fixed;
     inset: 0;
     z-index: var(--z-behind);
     display: block;
-    width: 100%;
+    width: 100vw;
     height: 100%;
     visibility: hidden;
     pointer-events: none
 }
 
-/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá. */
+/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá.
+   A reserva da barra de rolagem sai (issue #144): vazia, ela era uma faixa preta de cima a baixo ao lado das ondas. No
+   lugar dela, o body ganha à esquerda a largura da barra quando ela aparece (100vw conta a barra, 100% não), e o app
+   continua centrado na janela; a largura dele deixa 34 px (duas barras de 17 px) de fora, para ser a mesma na página
+   que rola e na que não rola. A faixa de espera (.busy), presa à janela, acompanha esse centro. */
 :root[data-waves] {
     --glass: #080808;
-    --quiet: #040404
+    --quiet: #040404;
+    scrollbar-gutter: auto
+}
+
+:root[data-waves] body {
+    padding-left: calc(100vw - 100%)
+}
+
+:root[data-waves] .app {
+    max-width: min(84rem, 100vw - 34px)
 }
 
 :root[data-waves=on] .waves {
@@ -447,7 +461,8 @@ body::before {
 }
 
 :root[data-waves] .busy {
-    --glass-float: #0b0b0b
+    --glass-float: #0b0b0b;
+    left: calc(50vw + var(--dock-out) / 2)
 }
 
 :root[data-waves] :is(.topbar, .rail, .busy) {
@@ -741,6 +756,25 @@ select {
     box-shadow: var(--edge), var(--shadow);
     -webkit-backdrop-filter: var(--blur);
     backdrop-filter: var(--blur)
+}
+
+/* Janela mais baixa que o dock preso: as últimas seções ficavam fora da janela, e só apareciam no fim da página. A
+   conta é a dele (os oito itens de 2,75 rem e os 31 px dos vãos, do respiro e da borda) mais o 1,5 rem do topo, menos
+   1 px: até 406 px com a letra padrão, e cresce com a letra do navegador. O dock fica com a altura que sobra abaixo da
+   barra de cima e rola por dentro, sem barra de rolagem; o item cortado na borda mostra que há mais, e o Tab rola o
+   dock até o anel do foco. Só aqui: a rolagem corta as dicas, que saem para o lado, e o nome da seção fica no nome do
+   botão e no título da página. */
+@media (max-height: calc(23.5rem + 30px)) {
+    .rail {
+        max-height: calc(100dvh - var(--top-y) - var(--top-h) - var(--sp-4) - var(--sp-6) - var(--sp-5));
+        overflow: hidden auto;
+        scrollbar-width: none;
+        scroll-padding-block: var(--sp-2)
+    }
+
+    .rail .nav-item {
+        flex: none
+    }
 }
 
 /* A pílula ciano da seção aberta desliza até ela (--i, App.jsx), por transform. */
@@ -1132,9 +1166,26 @@ select {
     }
 }
 
-/* O atalho é quem cede lugar ao estado da IA: de 851 a uns 1000 px, e com a letra a 200%, o nome virava "P…". Sem os
-   13 rem do orbe, do nome, da lupa e dos vãos, o nome sai da vista e continua no botão para o leitor de tela; ficam o
-   orbe e a lupa. O !important vence o recorte da animação da frase, que continua valendo depois que ela termina. */
+/* No computador a barra de cima tem também o atalho e o botão "Fundo animado" (#144): até 50 rem o modelo já sai, e o
+   atalho não fica menor do que era sem o botão. A largura é a em que o dock entra (mobile.css), em rem como lá: 851 px
+   com a letra padrão. */
+@media (min-width: 53.1875rem) {
+    @container (max-width: 50rem) {
+        .status-model {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap
+        }
+    }
+}
+
+/* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 1070 px, e com a letra a 200%, o nome
+   virava "P…". Sem os 13 rem do orbe, do nome, da lupa e dos vãos, o nome sai da vista e continua no botão para o
+   leitor de tela; ficam o orbe e a lupa. O !important vence o recorte da animação da frase, que continua valendo depois
+   que ela termina. */
 .ask-pill {
     container-type: inline-size
 }
@@ -1380,8 +1431,11 @@ main:focus {
     pointer-events: none
 }
 
+/* overflow: com o texto ampliado no aparelho a frase de exemplo (.typed) fica mais alta que o campo vazio, e o que
+   passa do campo é cortado em vez de cobrir a linha das áreas. */
 .editor-field {
-    position: relative
+    position: relative;
+    overflow: hidden
 }
 
 /* De 3 a 12 linhas (ui.jsx, useFit): o JS dá a altura do texto e estes limites seguram. --pad é o respiro de cima do
@@ -1465,8 +1519,8 @@ main:focus {
 }
 
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
-   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da janela do perfil (App.jsx)
-   é um chip de ligar e desligar: ligado, fica marcado e ganha o ✓. */
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da folha "Mais" (App.jsx) é
+   um chip de ligar e desligar: ligado, fica marcado, com o ícone de pausar; parado, com o de tocar. */
 .chip {
     min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
@@ -1932,7 +1986,7 @@ main:focus {
    o da Biblioteca, com o nome no leitor de tela: assim a data, ele e o "Salvo" somam 342 px, e o aviso da IA cabe numa
    linha ao lado deles num cabeçalho de 737 px ou mais. Mais estreito, o esqueleto guarda a altura do aviso em duas
    linhas (abaixo, .material-wait). */
-@media (min-width: 551px) and (max-width: 1179px) {
+@media (min-width: 34.4375rem) and (max-width: 73.6875rem) {
     .result-header > .header-actions {
         gap: var(--sp-2)
     }
@@ -2106,7 +2160,7 @@ main:focus {
     text-align: left
 }
 
-/* O custo do clique, escrito no próprio botão: "1 chamada de IA". */
+/* O custo do clique, escrito no próprio botão: "1 pedido à IA". */
 .ai-ask small,
 .ask small,
 .action small {
@@ -4178,16 +4232,18 @@ main:focus {
     white-space: nowrap
 }
 
-/* Na tela de toque o aviso flutua às vezes sobre os botões do cartão: o toque no corpo dele passa para o que está
-   embaixo (antes ele caía no aviso, e o botão não mudava nada). Só o botão do aviso recebe toque, e não no aviso que
-   está saindo ([data-motion-pop-id]). Com mouse o corpo inteiro continua recebendo: o mouse em cima segura o aviso. */
-@media (hover: none) {
-    .toast {
-        pointer-events: none
+/* No celular e na tela de toque o aviso fica no alto, sobre a barra de cima, como a faixa de espera, e logo abaixo dela
+   quando há uma. Embaixo ele ficava por cima dos botões do cartão ("Errei", "Revisar depois" e "Acertei") enquanto
+   durava, e o corpo dele, que recebe o dedo (o dedo parado segura o aviso: App.jsx), tirava o toque deles. A região
+   continua indo até onde o aviso ficava (bottom): com a altura dela fixa, o aviso que sai fica no lugar (App.jsx,
+   anchorY). A largura é a da barra de baixo (mobile.css), em rem como lá: 850 px com a letra padrão. */
+@media (max-width: 53.125rem), (hover: none) {
+    .toast-region {
+        top: var(--top-y)
     }
 
-    .toast:not([data-motion-pop-id]) button {
-        pointer-events: auto
+    .app:has(> .busy) .toast-region {
+        top: calc(var(--top-y) + var(--top-h) + var(--sp-2))
     }
 }
 
@@ -4309,7 +4365,7 @@ dialog[data-closing]::backdrop {
 
 /* Com a janela ou a folha aberta, a página de trás não rola: o arrasto no fundo escuro e a roda do mouse a levavam
    para outro ponto, e ao fechar o aluno tinha de achar de novo onde estava. A folha alta continua rolando por dentro, e
-   o scrollbar-gutter da raiz guarda o lugar da barra de rolagem que some. */
+   o scrollbar-gutter da raiz (com as ondas, o centro compensado) guarda o lugar da barra de rolagem que some. */
 html:has(dialog[open]) {
     overflow: hidden
 }
@@ -4640,14 +4696,14 @@ main[data-instant] > .view[data-motion-pop-id] {
     }
 }
 
-.profile-dialog .chip {
+.sheet .chip {
     align-self: flex-start
 }
 
-/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a janela abre, para o leitor de
-   tela ler o texto quando ele entra. Vazio, não ocupa lugar: a margem devolve o espaço entre os blocos (.dialog-body). */
-.profile-dialog [role=status]:empty {
-    margin-top: calc(var(--sp-4) * -1)
+/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a folha abre, para o leitor de
+   tela ler o texto quando ele entra. Vazio, sai do fluxo: não ocupa lugar nem o respiro entre os blocos. */
+.sheet [role=status]:empty {
+    position: absolute
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o

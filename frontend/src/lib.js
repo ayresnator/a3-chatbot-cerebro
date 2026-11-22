@@ -29,6 +29,13 @@ export function typeDelay(shown, random = Math.random) {
   return shown ? 26 + random() * 20 : 900;
 }
 
+// Quanto tempo um aviso fica na tela (App.jsx, toast), em ms: 2 s mais 0,4 s por palavra, e nunca menos de 4 s. Os
+// 3,2 s fixos não davam para ler a frase de 14 palavras (WCAG 2.2.1). O aviso com botão (action) não fica menos de
+// 10 s: é o tempo de chegar ao botão.
+export function noticeTime(text, action) {
+  return Math.max(action ? 10000 : 4000, 2000 + 400 * text.trim().split(/\s+/).length);
+}
+
 // Setas, Home e End num grupo de opções ou num menu: o índice aonde a tecla leva, dando a volta nas pontas; -1 quando
 // a tecla não anda.
 export function rove(key, at, count) {
@@ -54,6 +61,14 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
   return height <= viewport - Math.max(0, (parseFloat(reserve) || 0) - strip);
 }
 
+// A barra de baixo, com scroll px de conteúdo em client px de largura, rola de lado a ponto de cortar o nome do último
+// item ("Mais")? O item mede item px, com o nome, de name px, no meio, e a barra tem pad de respiro depois dele (o
+// padding calculado). Uma sobra menor só tira da vista o vazio em volta do nome, como de 381 a 389 px com a letra
+// padrão, e nada muda.
+export function nameCut(scroll, client, item, name, pad) {
+  return scroll - client > (item - name) / 2 + (parseFloat(pad) || 0);
+}
+
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
 // não entra no desempenho, no caderno de erros nem na biblioteca do app com IA, e os dados do app com IA não aparecem
 // nela. O App liga a demonstração antes da primeira leitura. O "Fundo animado" (fundo) fica de fora: não é dado do
@@ -64,6 +79,11 @@ export function demoStorage(on) {
   prefix = on ? 'cerebro-demo-' : 'cerebro-';
 }
 export const storageKey = k => (k === 'fundo' ? 'cerebro-' : prefix) + k;
+
+// O botão "Fundo animado" só aparece com algo para parar: as ondas (waves: onde elas rodam e o WebGL as desenha) ou a
+// lua do Dúvidas (moon: ela sai com contraste alto e cores forçadas). Com movimento reduzido no sistema (still) as duas
+// já estão paradas.
+export const backdropMoves = ({ still, waves, moon }) => !still && (waves || moon);
 
 // session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
 // que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
@@ -203,17 +223,25 @@ export function markExample(summary, ai, ready) {
     inText(s.source, ai) ? { ...s, ia: true } : inText(s.source, ready) ? { ...s, pronto: true } : s);
 }
 
-// O rótulo do trecho diz de que texto ele saiu.
-export function sourceLabel(s) {
-  const from = s.ia ? 'No exemplo escrito pela IA' : s.pronto ? 'No texto de exemplo' : 'No seu texto';
+// O rótulo do trecho diz de que texto ele saiu. "No seu texto" e "No texto de exemplo" só valem com o texto do material
+// neste navegador (texto): o material recebido de um colega (shareFile) e o de antes desse campo não o trazem, e o
+// trecho deles, que também pode ter sido trocado no arquivo, é do texto de quem gerou.
+export function sourceLabel(s, texto) {
+  const from = s.ia ? 'No exemplo escrito pela IA' : !texto?.trim() ? 'No texto de quem gerou'
+    : s.pronto ? 'No texto de exemplo' : 'No seu texto';
   return from + ': "' + s.source.trim() + '"';
 }
 
 // O aviso sob o título do material diz de onde ele veio: do exemplo que a própria IA escreveu (trecho com ia), de um
-// exemplo pronto (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um
-// tema, ou material de antes dos trechos).
-export function originNote(summary) {
+// texto que não está neste navegador (trecho sem o texto do material, como no sourceLabel), de um exemplo pronto
+// (trecho com pronto), de um texto do aluno (trecho conferido) ou de nada que dê para conferir (só um tema, ou material
+// de antes dos trechos).
+export function originNote(summary, texto) {
   if (summary.some(s => s.ia)) return 'Feito de um exemplo escrito pela IA. Confira os fatos em uma fonte confiável.';
+  if (!texto?.trim() && summary.some(s => s.source?.trim())) {
+    return 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+      'Confira em uma fonte confiável.';
+  }
   if (summary.some(s => s.pronto)) return 'Gerado por IA. Pode conter erros: confira com o texto de exemplo.';
   if (summary.some(s => s.source?.trim())) return AI_NOTE;
   return 'Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.';
@@ -221,8 +249,8 @@ export function originNote(summary) {
 
 // O aviso da folha impressa (Folha.jsx): o mesmo da tela. O papel pode ir para quem não viu o app, e o aviso do
 // material sem nenhum trecho não fala da IA: ele ganha "Gerado por IA." na frente.
-export function printNote(summary) {
-  const note = originNote(summary);
+export function printNote(summary, texto) {
+  const note = originNote(summary, texto);
   return summary.some(s => s.ia || s.pronto || s.source?.trim()) ? note : 'Gerado por IA. ' + note;
 }
 
@@ -574,6 +602,14 @@ export function spokenDay({ day, total, rate }) {
     (total ? total + (total === 1 ? ' resposta, ' : ' respostas, ') + rate + '% de acerto' : 'nenhuma resposta');
 }
 
+// O gráfico numa frase, que o leitor de tela ouve quando a lista "Área do gráfico" troca as colunas (App.jsx): a área
+// e as respostas dos 7 dias dela (days, de chartDays).
+export function chartLine(area, days) {
+  const total = days.reduce((sum, d) => sum + d.total, 0);
+  return (area === 'Todas' ? 'Todas as áreas' : area) + ': ' +
+    (total ? total + ' ' + plural(total, 'resposta', 'respostas') : 'nenhuma resposta') + ' nos últimos 7 dias';
+}
+
 // Houve estudo (quiz ou cartão) em cada um dos n últimos dias? Do mais antigo para hoje.
 export function lastDays(events, n, now) {
   const studied = new Set(events.map(e => localDay(e.date)));
@@ -741,6 +777,13 @@ export function libraryCount(n) {
   return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
 }
 
+// Quantos tópicos a lista "Mostrar" do Resumo deixa na tela: a frase ao lado dela, que o leitor de tela ouve na troca
+// (App.jsx). size é o valor da lista ("todos", "6" ou "3"), e total, os tópicos do material.
+export function topicCount(size, total) {
+  const shown = size === 'todos' ? total : Math.min(total, Number(size));
+  return 'Mostrando ' + shown + ' de ' + total + ' ' + plural(total, 'tópico', 'tópicos');
+}
+
 // Embaralha a lista no lugar (Fisher-Yates) e a devolve. random devolve de 0 a 1, como Math.random.
 function shuffle(list, random) {
   for (let i = list.length - 1; i > 0; i--) {
@@ -862,9 +905,11 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   };
 }
 
-// Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
+// Dica do selo da IA (title), repetida no pé da janela do perfil: a conta do selo é só deste computador, e a cota do
+// Google é do projeto inteiro.
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
-  'Brasília). O saldo real fica no painel de uso do Google AI Studio.';
+  'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
+  'até 6, quando o Cérebro precisa tentar de novo.';
 
 // O teto de chamadas por dia que o grupo escolheu (AI_DAILY_LIMIT, no /api/health em daily_limit) chegou: os botões da
 // IA ficam desligados até a contagem recomeçar. Sem teto (null, ou backend antigo, sem o campo), nunca.
