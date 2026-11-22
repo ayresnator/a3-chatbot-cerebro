@@ -1177,17 +1177,17 @@ test('fitsAbove: a faixa dentro do bloco sai da reserva, e no computador não au
 // Janela baixa (#140): presas, as faixas do quiz e a barra de baixo deixavam uma fresta para a questão. Abaixo de 36rem
 // de altura as faixas ficam soltas (dentro do bloco de até 850 px, depois das regras que as prendem) e a reserva do
 // foco volta a ser só a da barra; abaixo de 30rem a barra fica numa linha só, com o item de 44 px, e a medida dela
-// (--tabbar-h) só muda até 850 px de largura, onde a barra existe.
+// (--tabbar-h) só muda até 850 px de largura, onde a barra existe (53,125rem: as quebras de largura são em rem, #141).
 test('mobile.css: na janela baixa as faixas do quiz rolam com a página e a barra de baixo fica numa linha só', () => {
   const css = readFileSync(new URL('../src/mobile.css', import.meta.url), 'utf8');
   const low = css.indexOf('@media (max-height: 36rem) {');
   assert.ok(low > css.indexOf('position: sticky', css.indexOf('.sure-row {')), 'depois das regras que as prendem');
-  assert.ok(low < css.indexOf('\n@media', css.indexOf('@media (max-width: 850px) {')), 'dentro do bloco de até 850 px');
+  assert.ok(low < css.indexOf('\n@media', css.indexOf('@media (max-width: 53.125rem) {')), 'dentro do bloco de até 850 px');
   const loose = css.slice(low, css.indexOf('.exam-next', low));
   assert.match(loose, /^@media \(max-height: 36rem\) \{\s*\.next-row,\s*\.sure-row \{\s*position: static\s*\}/);
   assert.match(loose, /html:has\(\.next-row\),\s*html:has\(\.sure-row\) \{\s*scroll-padding-bottom: calc\(var\(--tabbar-h\) \+ var\(--sp-4\)\)\s*\}\s*\}/);
   const bar = css.slice(css.indexOf('@media (max-height: 30rem) {'));
-  assert.match(bar, /@media \(max-width: 850px\) \{\s*:root \{\s*--tabbar-h: calc\(var\(--control-h\) \+ var\(--hair\) \* 2 \+ var\(--sp-2\) \* 2 \+ env\(/);
+  assert.match(bar, /@media \(max-width: 53\.125rem\) \{\s*:root \{\s*--tabbar-h: calc\(var\(--control-h\) \+ var\(--hair\) \* 2 \+ var\(--sp-2\) \* 2 \+ env\(/);
   assert.match(bar, /\.tabbar \{\s*padding-block: 0\s*\}\s*\.tab-item \{\s*height: var\(--control-h\)\s*\}\s*\.tab-item \.icon \{\s*display: none\s*\}/);
 });
 

@@ -469,8 +469,9 @@ export function PerfilSkeleton() {
 
 // Onde o fundo em ondas roda: a tela larga do computador, com mouse. Na tela estreita o texto fica direto sobre o fundo,
 // e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
-// forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
-const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
+// forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta. A
+// largura é a em que o dock entra (mobile.css), em rem como lá: 851 px com a letra padrão.
+const WAVES_MEDIA = ['(min-width: 53.1875rem) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
   '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
 // Onde as ondas rodam, o fundo parado entra antes da primeira tela (data-waves, styles.css) e o pedaço delas é pedido
 // junto com o app (issue #136). O Waves pede de novo e recebe o mesmo módulo; a falha é dele para tratar.
