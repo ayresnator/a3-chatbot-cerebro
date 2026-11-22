@@ -31,7 +31,9 @@ jobs:
       - run: npx vite build --base ./
       # shortcut: a versão do service worker sai do build, antes desta linha, e mudar só esta linha não chega ao app já
       # instalado; se ela passar a mudar, escrever o config.js em public/ antes do build.
-      - run: echo "window.CEREBRO_CONFIG = { demo: false, apiBaseUrl: '', semIA: true };" > dist/config.js
+      # Em bloco: numa linha só, o ": " de dentro do comando é lido como chave e o arquivo deixa de ser YAML.
+      - run: |
+          echo "window.CEREBRO_CONFIG = { demo: false, apiBaseUrl: '', semIA: true };" > dist/config.js
       - uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/dist
