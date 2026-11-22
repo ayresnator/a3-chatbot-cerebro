@@ -11,6 +11,7 @@ import {
   rateAtCap, pauseNotice, dictate,
   dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
+  shareFile, cardLines, ankiFile, fileName, answerLine, printNote,
   quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   typeDelay, rove, askKey, LEVEL_NOTES, AI_NOTE, inText, originNote, markExample, sourceLabel, findSource, markPieces,
   textOrigin,
@@ -707,6 +708,16 @@ test('expectedText: o gabarito em texto, a opção certa ou as formas da respost
   assert.equal(expectedText(short(' PIB | Produto Interno Bruto |')), 'PIB ou Produto Interno Bruto');
   assert.equal(expectedText(short('||')), '||', 'só barras (o operador OU) é a própria resposta');
   assert.equal(expectedText({ ...multiple, answer: 7 }), '7', 'material antigo com índice fora das opções');
+});
+
+test('answerLine: no gabarito impresso, a letra da opção certa e o texto dela; na resposta curta, as formas', () => {
+  const multiple = { type: 'multiple', question: 'Quem fixa a Selic?', options: ['Senado', 'STF', 'Copom'], answer: 2 };
+  assert.equal(answerLine(multiple), 'C) Copom');
+  assert.equal(answerLine({ type: 'boolean', question: 'Freia?', options: ['Verdadeiro', 'Falso'], answer: 1 }), 'B) Falso');
+  assert.equal(answerLine({ type: 'short', question: 'Sigla?', options: [], answer: 'PIB|Produto Interno Bruto' }),
+    'PIB ou Produto Interno Bruto');
+  assert.equal(answerLine({ ...multiple, answer: 7 }), '7', 'índice fora das opções vai sem letra');
+  assert.equal(answerLine({ ...multiple, answer: '2' }), 'Copom', 'resposta em texto vai sem letra');
 });
 
 // Baralho congelado: função que mexesse no que recebeu falharia aqui.
@@ -1762,6 +1773,16 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
   // Feito de um exemplo pronto: nem o aviso de material do aluno, nem o do exemplo da IA.
   assert.equal(originNote([own, { ...own, pronto: true }, none]),
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
+});
+
+test('printNote: a folha impressa leva o aviso da tela; sem nenhum trecho, com "Gerado por IA." na frente', () => {
+  const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
+  const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: ' ' };
+  for (const summary of [[own, none], [{ ...own, ia: true }], [{ ...own, pronto: true }, none]]) {
+    assert.equal(printNote(summary), originNote(summary));
+  }
+  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }]),
+    'Gerado por IA. Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.');
 });
 
 test('virtualNote: o material temporário leva o aviso, a menos que cada item venha de material feito sem IA', () => {
@@ -3452,6 +3473,76 @@ test('mergeBackup: o que a tela ignora continua gravado, e nada do que entra na 
     cartoes: [null, { key: 5 }, ...BACKUP.cartoes],
     questoes: BACKUP.questoes,
   });
+});
+
+// Material como a biblioteca o guarda, com o texto colado no editor (#89).
+const SHARED = Object.freeze({ ...BACKUP.saved[0], texto: EXAMPLE });
+
+test('shareFile: o Importar do colega traz 1 material, sem nada de fora, e importar de novo não duplica', () => {
+  const file = readBackup(JSON.stringify(shareFile(SHARED, today())));
+  assert.deepEqual(file, { ...EMPTY, saved: BACKUP.saved, fora: NONE, user: null });
+  const once = mergeBackup(EMPTY, file);
+  assert.equal(backupNote(EMPTY, once, file.fora), '1 material importado');
+  const again = mergeBackup(once, readBackup(JSON.stringify(shareFile(SHARED, new Date(2026, 10, 20)))));
+  assert.deepEqual(again, once);
+  assert.equal(backupNote(once, again, file.fora), 'Nada novo neste arquivo');
+});
+
+test('shareFile: o arquivo não tem events, erros, cartoes, user nem o texto colado, e o material da tela não muda', () => {
+  const file = shareFile(SHARED, today());
+  assert.deepEqual(Object.keys(file), ['versao', 'saved']);
+  assert.deepEqual(file.saved, BACKUP.saved);
+  assert.equal(SHARED.texto, EXAMPLE);
+});
+
+test('shareFile: a data da prova é do aluno e não vai no arquivo; o material da tela continua com ela', () => {
+  const dated = Object.freeze({ ...SHARED, prova: '2026-11-22', provaMarcada: at(16, 13) });
+  assert.deepEqual(shareFile(dated, today()).saved, BACKUP.saved);
+  assert.equal(provaOf(dated), '2026-11-22');
+});
+
+test('shareFile: material sem data leva a de agora; a demonstração e o exemplo pronto levam as marcas', () => {
+  const { id, date, ...unsaved } = SHARED;
+  assert.equal(shareFile(unsaved, today()).saved[0].date, today().toISOString());
+  assert.equal(shareFile({ ...unsaved, date: 'ontem' }, today()).saved[0].date, today().toISOString());
+  const made = demo(EXAMPLE);
+  const marked = { ...made, summary: markExample(made.summary, '', EXAMPLE), id: 4, date: at(11), texto: EXAMPLE };
+  const { texto, ...sent } = marked;
+  assert.deepEqual(readBackup(JSON.stringify(shareFile(marked, today()))).saved, [sent]);
+  assert.ok(sent.semIA && sent.summary.every(s => s.pronto));
+});
+
+const CARDS = [
+  { question: 'O que é PIB?', answer: 'A soma das riquezas\tproduzidas \r\n no país.' },
+  { question: '  Onde\nocorre?  ', answer: 'Nos cloroplastos.' },
+  { question: 'Linha\rsó com CR', answer: 'Fim.' },
+];
+
+test('cardLines: um cartão por linha, frente e verso separados por tabulação; tabulação e quebra de dentro viram espaço', () => {
+  assert.equal(cardLines(CARDS),
+    'O que é PIB?\tA soma das riquezas produzidas no país.\nOnde ocorre?\tNos cloroplastos.\nLinha só com CR\tFim.');
+});
+
+test('ankiFile: o cabeçalho que o Anki lê vem antes das mesmas linhas; o Quizlet recebe só as linhas', () => {
+  const lines = ankiFile(CARDS).split('\n');
+  assert.deepEqual(lines.slice(0, 2), ['#separator:tab', '#html:false']);
+  assert.equal(lines.slice(2).join('\n'), cardLines(CARDS) + '\n');
+  assert.ok(!cardLines(CARDS).includes('#'));
+});
+
+test('ankiFile: o lado que começa com # ou aspas vai entre aspas, com as de dentro dobradas; no Quizlet fica igual', () => {
+  const cards = [{ question: '#include serve para quê?', answer: '"Inclui" o arquivo.' }, { question: 'O "x"', answer: 'y' }];
+  assert.equal(ankiFile(cards),
+    '#separator:tab\n#html:false\n"#include serve para quê?"\t"""Inclui"" o arquivo."\nO "x"\ty\n');
+  assert.equal(cardLines(cards), '#include serve para quê?\t"Inclui" o arquivo.\nO "x"\ty');
+});
+
+test('fileName: o título sem acento, sem símbolo e com hífens, até 60 letras; sem letra nenhuma, "material"', () => {
+  assert.equal(fileName('Fotossíntese: fase clara & ciclo de Calvin', '.json'),
+    'cerebro-fotossintese-fase-clara-ciclo-de-calvin.json');
+  assert.equal(fileName('  Ação e Reação — 3ª Lei!  ', '-anki.txt'), 'cerebro-acao-e-reacao-3-lei-anki.txt');
+  assert.equal(fileName('abc '.repeat(30), '.json'), 'cerebro-' + 'abc-'.repeat(14) + 'abc.json');
+  assert.equal(fileName('¿¡?!', '.json'), 'cerebro-material.json');
 });
 
 test('backupNote: quantos materiais entraram; só respostas ou erros; nada novo', () => {

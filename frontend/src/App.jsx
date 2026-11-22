@@ -27,6 +27,7 @@ import {
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
   seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
+  shareFile, cardLines, ankiFile, fileName,
   quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
   originNote, virtualNote, findSource, markPieces, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
@@ -302,6 +303,11 @@ function App() {
   // Escolha de páginas do PDF com mais texto que o editor recebe: { reader, name, pages, total, from, to }. reader é o
   // arquivo.js, que junta as páginas escolhidas; total, os caracteres do PDF inteiro.
   const [pick, setPick] = useState(null);
+  // Janela "Compartilhar" de um material (o do cabeçalho ou o de um item da Biblioteca), ou null.
+  const [sharing, setSharing] = useState(null);
+  // Folha de impressão na página: { material, Folha }, com o Folha.jsx, que chega à parte. Ela só aparece na impressão
+  // (styles.css), e o afterprint a tira (useEffect de printing).
+  const [printing, setPrinting] = useState(null);
   // Última geração: { key }, o texto, a área e o nível do material aberto. Com eles iguais aos do editor, o Estudar
   // troca o botão de gerar pelos que só abrem o material.
   const made = useRef(DRAFT.made);
@@ -325,6 +331,8 @@ function App() {
   const picker = useRef(null);
   // As páginas escolhidas na janela de páginas, que entram no editor quando ela sai (takePages).
   const pickDone = useRef(null);
+  // Fim da saída da janela "Compartilhar": o aviso de cada saída espera por ele (closeShare).
+  const shareGone = useRef(null);
   // Tema do último exemplo que entrou no editor: vai no pedido seguinte (avoid), para a IA não repetir o tema.
   const exampleTopic = useRef('');
   // Texto do último exemplo que a IA escreveu e pôs no editor ('' quando o exemplo é pronto e depois do Limpar): o
@@ -580,6 +588,22 @@ function App() {
   useEffect(() => {
     if (error) errorBox.current?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
   }, [error]);
+
+  // A folha de impressão (printSheet) entrou na página: o navegador abre a prévia, e o afterprint a tira. O título da aba
+  // vira o do material enquanto isso: é o nome que o "Salvar como PDF" propõe. Se outra página já trocou o título, ele
+  // fica.
+  useEffect(() => {
+    if (!printing) return;
+    const title = document.title;
+    const done = () => setPrinting(null);
+    document.title = printing.material.title;
+    window.addEventListener('afterprint', done);
+    window.print();
+    return () => {
+      window.removeEventListener('afterprint', done);
+      if (document.title === printing.material.title) document.title = title;
+    };
+  }, [printing]);
 
   // O material temporário (o quiz do caderno de erros, o simulado ou a revisão do dia dos cartões) só vale na página
   // dele, a que fica em virtual: sair dela por qualquer caminho (menu, logotipo, botão de um aviso) traz de volta o
@@ -1003,12 +1027,8 @@ function App() {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'),
       cartoes: readList('cartoes'), questoes: readSeen(), user: readUser(),
     };
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
-    link.download = 'cerebro-backup-' + localDay(new Date()) + '.json';
-    link.click();
-    // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
-    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    download(new File([JSON.stringify(backup)], 'cerebro-backup-' + localDay(new Date()) + '.json',
+      { type: 'application/json' }));
     // A data marca o clique: o navegador pode perguntar onde salvar, e o aluno, cancelar.
     const now = new Date().toISOString();
     if (persist('backup', now)) setLastBackup(now);
@@ -1055,6 +1075,91 @@ function App() {
       setName(profile.name);
     }
     toast(backupNote(before, after, backup.fora, profile?.name));
+  }
+
+  // Baixa o arquivo (o backup, o arquivo para um colega, os cartões do Anki).
+  function download(file) {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(file);
+    link.download = file.name;
+    link.click();
+    // O arquivo sai da memória um minuto depois: liberar na hora cancela o download em alguns navegadores.
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+  }
+
+  // "Compartilhar", no cabeçalho do material e em cada item da Biblioteca. Nenhuma saída chama a IA ou o backend, e
+  // nenhuma grava no navegador. A folha de impressão (Folha.jsx) começa a chegar aqui: no clique ela já veio.
+  function openShare(material) {
+    import('./Folha.jsx').catch(() => {});
+    setSharing(material);
+    focusAfter.current = ['#compartilhar-colega'];
+  }
+
+  // Cada saída fecha a janela, e o aviso dela espera a janela terminar de sair (a promessa que volta daqui): com a janela
+  // na tela, a região do aviso fica inerte, e o leitor de tela não o lia (como em takePages).
+  function closeShare() {
+    setSharing(null);
+    return new Promise(resolve => (shareGone.current = resolve));
+  }
+
+  // "Arquivo para um colega": só este material, no formato do backup (lib.js, shareFile), para o Importar da Biblioteca
+  // do colega. Onde o navegador compartilha o arquivo, abre a folha de compartilhar do sistema; nos outros, ou se ele
+  // recusar o arquivo, o arquivo é baixado. Fechar a folha do sistema (AbortError) não é erro.
+  async function sendMaterial(material) {
+    const file = new File([JSON.stringify(shareFile(material, new Date()))], fileName(material.title, '.json'),
+      { type: 'application/json' });
+    const gone = closeShare();
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: material.title });
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+    download(file);
+    await gone;
+    toast('Arquivo para o colega: ' + file.name + '. Ele o abre no Importar da Biblioteca.');
+  }
+
+  // "5 cartões", na janela e no aviso do Anki.
+  const cardCount = material => material.flashcards.length + ' ' + plural(material.flashcards.length, 'cartão', 'cartões');
+
+  // "Cartões para o Anki": o .txt com o cabeçalho que o Anki lê (lib.js, ankiFile). Sempre baixado: o Anki importa um
+  // arquivo do computador.
+  async function ankiCards(material) {
+    const file = new File([ankiFile(material.flashcards)], fileName(material.title, '-anki.txt'), { type: 'text/plain' });
+    const gone = closeShare();
+    download(file);
+    await gone;
+    toast(cardCount(material) + ' em ' + file.name + '. No Anki, use Arquivo > Importar.');
+  }
+
+  // "Copiar cartões para o Quizlet": as linhas do Anki sem o cabeçalho (lib.js, cardLines), como o Copiar do resumo.
+  async function quizletCards(material) {
+    const count = material.flashcards.length;
+    const gone = closeShare();
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(cardLines(material.flashcards));
+    } catch {
+      copied = false;
+    }
+    await gone;
+    toast(copied
+      ? count + ' ' + plural(count, 'cartão copiado', 'cartões copiados') + '. No Quizlet, cole em Importar.'
+      : 'Cópia indisponível neste navegador');
+  }
+
+  // "Imprimir ou salvar em PDF": a folha entra na página quando a janela sai, e o navegador abre a prévia (useEffect de
+  // printing).
+  async function printSheet(material) {
+    const gone = closeShare();
+    const sheet = import('./Folha.jsx').catch(() => null);
+    await gone;
+    const mod = await sheet;
+    if (mod) setPrinting({ material, Folha: mod.default });
+    else toast('Não foi possível abrir a folha de impressão. Recarregue a página e tente de novo.');
   }
 
   // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". from é onde o foco fica quando o cartão vira pelo
@@ -2451,11 +2556,15 @@ function App() {
                                 <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
-                          {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela e o Salvar ficam
-                              juntos: na tela estreita, os dois descem para baixo do título. */}
+                          {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela, o Compartilhar e o
+                              Salvar ficam juntos: na tela estreita, os três descem para baixo do título. */}
                           {!result.virtual && (
                             <div className="header-actions">
                               <ExamDate key={result.title} value={provaOf(result)} today={today} onSave={setExam} say={say} />
+                              <button type="button" className="share" aria-haspopup="dialog" onClick={() => openShare(result)}>
+                                <Icon name="compartilhar" />
+                                <span>Compartilhar</span>
+                              </button>
                               <button type="button" aria-disabled={isSaved || undefined} onClick={isSaved ? undefined : save}>
                                 <Icon name={isSaved ? 'check' : 'salvar'} />
                                 {isSaved ? 'Salvo' : 'Salvar material'}
@@ -3712,6 +3821,7 @@ function App() {
                     onExport={exportBackup}
                     onImport={importBackup}
                     onOpen={openSaved}
+                    onShare={openShare}
                     onRemove={(material, item) => leave(item, () => remove(material))}
                     onStart={() => openPage('Estudar')}
                     exam={examLine(examFrom, examSize)}
@@ -3995,6 +4105,64 @@ function App() {
           </Modal>
         )}
       </AnimatePresence>
+      {/* "Compartilhar" (openShare): as quatro saídas do material, cada uma com o nome e a frase do que faz. O foco
+          começa na primeira. */}
+      <AnimatePresence
+        onExitComplete={() => {
+          shareGone.current?.();
+          shareGone.current = null;
+        }}
+      >
+        {sharing && (
+          <Modal
+            key="compartilhar"
+            className="share-dialog"
+            labelledBy="compartilhar-titulo"
+            describedBy="compartilhar-texto"
+            back="main h1"
+            onClose={() => setSharing(null)}
+          >
+            <div className="dialog-body">
+              <button type="button" className="icon-button close" aria-label="Fechar" onClick={() => setSharing(null)}>
+                <Icon name="fechar" />
+              </button>
+              <h2 id="compartilhar-titulo">Compartilhar</h2>
+              <p id="compartilhar-texto">{sharing.title}</p>
+              <ul className="share-list" role="list">
+                {[
+                  ['colega', 'compartilhar', 'Arquivo para um colega', 'Só este material, sem o texto de onde ele saiu. O ' +
+                    'colega o abre no Importar da Biblioteca.', sendMaterial],
+                  ['anki', 'flashcards', 'Cartões para o Anki (.txt)', 'Um arquivo com ' + cardCount(sharing) +
+                    ', para importar no Anki.', ankiCards],
+                  ['quizlet', 'copiar', 'Copiar cartões para o Quizlet', cardCount(sharing) + ', para colar em Importar, ' +
+                    'no Quizlet.', quizletCards],
+                  ['imprimir', 'imprimir', 'Imprimir ou salvar em PDF', 'O resumo, os cartões para recortar e o quiz, com o ' +
+                    'gabarito numa página à parte.', printSheet],
+                ].map(([key, icon, label, note, run]) => (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      id={'compartilhar-' + key}
+                      className="share-option"
+                      aria-labelledby={'compartilhar-' + key + '-nome'}
+                      aria-describedby={'compartilhar-' + key + '-nota'}
+                      onClick={() => run(sharing)}
+                    >
+                      <Icon name={icon} />
+                      <span>
+                        <span id={'compartilhar-' + key + '-nome'}>{label}</span>
+                        <small id={'compartilhar-' + key + '-nota'}>{note}</small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+      {/* A folha de impressão (printSheet): fora da tela; na impressão, só ela (styles.css). */}
+      {printing && <printing.Folha material={printing.material} />}
     </div>
   );
 }

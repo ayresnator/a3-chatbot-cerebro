@@ -331,11 +331,11 @@
     }
 }
 
-/* A data da prova e o "Salvar material" (styles.css, .header-actions) ficam embaixo do título até 745 px, onde não
-   cabem ao lado dele, e no tablet em pé até 850 px, onde ao lado o título longo quebrava mais uma linha. O esqueleto da
-   geração guarda a linha deles (o campo de 44 px e o respiro), e as abas não pulam quando o material chega. No celular
-   deitado, de 746 a 850 px, eles continuam ao lado: lá falta altura. */
-@media (min-width: 551px) and (max-width: 745px), (min-width: 551px) and (max-width: 850px) and (orientation: portrait) {
+/* A data da prova, o "Compartilhar" e o "Salvar material" (styles.css, .header-actions) ficam embaixo do título até
+   745 px, onde não cabem ao lado do aviso da IA. O esqueleto da geração guarda a linha deles (o campo de 44 px e o
+   respiro), e as abas não pulam quando o material chega. De 746 px para cima eles ficam ao lado da área e do aviso
+   (styles.css). */
+@media (min-width: 551px) and (max-width: 745px) {
     .result-header > .header-actions {
         flex-basis: 100%
     }
@@ -596,10 +596,25 @@
         font-size: var(--fs-4)
     }
 
-    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas e o "Salvar material" embaixo:
-       174 px em 390 px com um título comum. O esqueleto guarda essa altura para o material não empurrar as abas. */
+    /* A data da prova, o "Compartilhar" e o "Salvo" somam 342 px mesmo com o "Compartilhar" só no ícone, e o cabeçalho
+       de um celular de 390 px tem 324: a data fica na linha dela, e os dois botões, com o nome, embaixo, numa linha
+       só até 320 px (com o espaço de sempre entre eles, ali ficavam um embaixo do outro). */
+    .result-header > .header-actions {
+        gap: var(--sp-3) var(--sp-2)
+    }
+
+    .header-actions .exam-date {
+        flex-basis: 100%
+    }
+
+    .header-actions button {
+        padding: 0 var(--sp-3)
+    }
+
+    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas, a data da prova e, embaixo, o
+       "Compartilhar" e o "Salvo": 230 px. O esqueleto guarda essa altura para o material não empurrar as abas. */
     .material-wait .result-header {
-        min-height: 10.875rem
+        min-height: 14.375rem
     }
 
     /* As três abas dividem a largura: com o respiro de 16 px, "Quiz" ficava cortado em 320 px. */
@@ -757,6 +772,11 @@
         flex: 1
     }
 
+    /* O "Compartilhar" desce com o "Abrir": em cima, ao lado do título, fica só o "Excluir". */
+    .library-item .share {
+        order: 3
+    }
+
     .chart {
         gap: var(--sp-1)
     }
@@ -825,12 +845,6 @@
 
     .mistakes .drop .short {
         display: inline
-    }
-
-    /* Aqui a data da prova e o "Salvar material" ficam em duas linhas (styles.css, .header-actions): o esqueleto da
-       geração guarda os 56 px da linha a mais, e o material não empurra as abas. */
-    .material-wait .result-header {
-        min-height: 14.375rem
     }
 
     /* O botão do nível mostra só o nível ("Nível:" continua no nome dele): sobra lugar para um chip e meio da área. */

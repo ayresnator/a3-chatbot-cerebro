@@ -1869,15 +1869,72 @@ main:focus {
     font-size: var(--fs-2)
 }
 
-/* "Data da prova" (ui.jsx, ExamDate) e "Salvar material" juntos, na ponta direita ou, sem lugar, embaixo do título. O
-   par não cresce como o bloco do título e, na tela estreita, quebra em duas linhas. O rótulo desce para cima do campo
-   quando os dois não cabem numa linha; a nota da data fora do prazo fica embaixo do campo. */
+/* "Data da prova" (ui.jsx, ExamDate), "Compartilhar" e "Salvar material" juntos, na ponta direita ou, sem lugar, embaixo
+   do título. O grupo não cresce como o bloco do título (sem a base de 20rem dele) e desce inteiro quando não cabe ao
+   lado; na tela estreita, quebra em duas linhas. O rótulo desce para cima do campo quando os dois não cabem numa linha;
+   a nota da data fora do prazo fica embaixo do campo. */
 .result-header > .header-actions {
     display: flex;
     flex: 0 1 auto;
     flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--sp-3)
+}
+
+/* Ao lado do título, o grupo tirava dele até 489 px: o título descia para a segunda linha, e o material da IA empurrava
+   as abas ao chegar (o esqueleto tem a altura de uma linha). De 746 px para cima o título fica com a largura toda, e o
+   grupo (44 px) fica ao lado da área e do aviso da IA, que são mais curtos e somam 52 px de altura. O material sem
+   aviso (o da demonstração, que não tem espera) segue com o grupo ao lado do título: sem a segunda linha, ele deixaria
+   o cabeçalho mais alto. Até 745 px o grupo fica embaixo do título (mobile.css): ao lado, sobrava menos de 300 px para
+   o aviso. A medida em rem (746 px com a letra padrão) cresce com a letra do navegador: com ela grande, o aviso ficaria
+   espremido ao lado do grupo, e ele desce para baixo do título, como antes. */
+@media (min-width: 46.625rem) {
+    .result-header:has(> .header-actions):has(.ai-note) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0 var(--sp-2)
+    }
+
+    .result-header:has(> .header-actions):has(.ai-note) > :first-child {
+        display: contents
+    }
+
+    .result-header:has(> .header-actions):has(.ai-note) h2 {
+        grid-column: 1 / -1
+    }
+
+    .result-header:has(> .header-actions):has(.ai-note) > .header-actions {
+        grid-area: 2 / 2 / span 2;
+        align-self: center
+    }
+}
+
+/* De 551 a 1179 px o grupo fica mais junto, como no celular (mobile.css), e o "Compartilhar" fica só com o ícone, como
+   o da Biblioteca, com o nome no leitor de tela: assim a data, ele e o "Salvo" somam 342 px, e o aviso da IA cabe numa
+   linha ao lado deles num cabeçalho de 737 px ou mais. Mais estreito, o esqueleto guarda a altura do aviso em duas
+   linhas (abaixo, .material-wait). */
+@media (min-width: 551px) and (max-width: 1179px) {
+    .result-header > .header-actions {
+        gap: var(--sp-2)
+    }
+
+    .header-actions button {
+        padding: 0 var(--sp-3)
+    }
+
+    .header-actions .share {
+        width: var(--control-h);
+        padding: 0
+    }
+
+    .header-actions .share span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap
+    }
 }
 
 .exam-date .inline-field {
@@ -3208,6 +3265,25 @@ main:focus {
     min-height: 5rem
 }
 
+/* Na grade do cabeçalho (.result-header, de 46,625rem para cima), o aviso padrão da IA só cabe ao lado do grupo num
+   cabeçalho de 737 px ou mais (387,25 do aviso, 8 do vão e 341,75 da data vazia, do "Compartilhar" e do "Salvo"). Mais
+   estreito, ele vai para a segunda linha, e o cabeçalho pronto ganha uma linha dele. A medida é a de dentro do painel,
+   que é a do cabeçalho, e não a da janela: a barra de rolagem clássica tira 15 px dele, e a barra lateral, que entra em
+   851 px, mais ainda; com a janela a conta errava. O contêiner é o painel, e não o cabeçalho: no navegador que junta
+   contain: layout ao container-type, o fio da espera (position: absolute) passaria a se prender ao cabeçalho e sairia
+   da borda do painel. */
+.material-wait {
+    container-type: inline-size
+}
+
+@media (min-width: 46.625rem) {
+    @container (max-width: 46.06rem) {
+        .material-wait .result-header > div {
+            min-height: calc(5rem + var(--fs-2) * var(--lh-ui))
+        }
+    }
+}
+
 .material-wait .wait-bar {
     border-radius: 0
 }
@@ -4363,6 +4439,184 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 .source-dialog .dialog-body > button:last-child {
     align-self: flex-start
+}
+
+/* Janela "Compartilhar" (App.jsx, openShare): o título e o nome do material como os da janela "Ver no texto" e as
+   quatro saídas, uma por linha, cada uma com o nome e, embaixo, a frase do que faz. */
+.share-dialog h2 {
+    padding-right: var(--sp-6);
+    font-size: var(--fs-5)
+}
+
+.share-dialog p {
+    color: var(--ink-2);
+    overflow-wrap: anywhere
+}
+
+.share-list {
+    display: grid;
+    gap: var(--sp-2);
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+/* Superfície larga, como o item do menu: encolhe menos sob o dedo. */
+.share-option {
+    --press: .98;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-2);
+    text-align: start
+}
+
+.share-option > span {
+    display: grid;
+    gap: var(--sp-1)
+}
+
+.share-option small {
+    color: var(--ink-2);
+    font-weight: 500;
+    line-height: var(--lh-ui)
+}
+
+/* Folha de impressão do material (Folha.jsx): nunca na tela. Na impressão ela é a página inteira, o resto do app sai, e
+   o papel fica branco, com letra preta e as medidas em pontos. A tela continua escura. */
+.folha {
+    display: none
+}
+
+@media print {
+    @page folha {
+        margin: 15mm
+    }
+
+    html:has(.folha),
+    html:has(.folha) body {
+        background: #fff
+    }
+
+    html:has(.folha) body::before {
+        display: none
+    }
+
+    .app:has(> .folha) {
+        display: block;
+        max-width: none;
+        min-height: 0;
+        padding: 0
+    }
+
+    .app:has(> .folha) > :not(.folha) {
+        display: none !important
+    }
+
+    .folha {
+        page: folha;
+        display: block;
+        color: #000;
+        font-size: 11pt;
+        line-height: 1.4
+    }
+
+    .folha h1 {
+        font-size: 18pt
+    }
+
+    .folha h2 {
+        margin: 18pt 0 8pt;
+        font-size: 14pt;
+        break-after: avoid
+    }
+
+    .folha h3 {
+        font-size: 11pt;
+        break-after: avoid
+    }
+
+    .folha header p {
+        margin-top: 4pt;
+        font-size: 9.5pt
+    }
+
+    .folha ol,
+    .folha ul {
+        margin: 0;
+        padding-left: 18pt
+    }
+
+    .folha section > ol > li + li {
+        margin-top: 10pt
+    }
+
+    .folha li > * + * {
+        margin-top: 3pt
+    }
+
+    .folha section > ol > li,
+    .folha-cartoes > li {
+        break-inside: avoid
+    }
+
+    /* O trecho do texto com o fio à esquerda, como na tela; a etiqueta da IA em itálico, sem a cor. */
+    .folha-trecho {
+        padding-left: 6pt;
+        border-left: 1pt solid #000;
+        font-size: 9.5pt
+    }
+
+    .folha-etiqueta {
+        font-size: 9.5pt;
+        font-style: italic
+    }
+
+    /* Cada cartão é uma tira: a pergunta à esquerda e a resposta à direita. O tracejado é o corte, e um cartão divide o
+       dele com o vizinho; o pontilhado do meio é a dobra. */
+    .folha .folha-cartoes {
+        margin-top: 8pt;
+        padding: 0;
+        list-style: none
+    }
+
+    .folha .folha-cartoes > li {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 3cm;
+        margin-top: -1pt;
+        border: 1pt dashed #000
+    }
+
+    .folha .folha-cartoes p {
+        margin: 0;
+        padding: 8pt 10pt
+    }
+
+    .folha-cartoes p + p {
+        border-left: 1pt dotted #000
+    }
+
+    .folha section > ol > li > ul {
+        padding-left: 0;
+        list-style: none
+    }
+
+    /* As linhas da resposta curta. */
+    .folha-linhas span {
+        display: block;
+        height: 20pt;
+        border-bottom: .75pt solid #000
+    }
+
+    .folha-gabarito {
+        break-before: page
+    }
+
+    .folha-gabarito h2 {
+        margin-top: 0
+    }
 }
 
 .profile-dialog .chip {

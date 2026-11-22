@@ -7,10 +7,11 @@ import { AREAS, plural, daysUntil, inDays } from './lib.js';
 
 // Página Biblioteca, carregada à parte (App.jsx, lazyView). A lista, a busca e o desfazer continuam no App; aqui só o
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave). backup é a linha do pé (ui.jsx,
-// BackupNote). O simulado também fica no App (startExam): exam é a frase dele, com o tamanho pedido (examSize).
+// BackupNote). O simulado também fica no App (startExam): exam é a frase dele, com o tamanho pedido (examSize). onShare
+// abre a janela "Compartilhar" do material (App.jsx, openShare).
 export default function Biblioteca({
   fade, pop, query, setQuery, filter, setFilter, shown, saved, undo, onUndo, backup, onExport, onImport, onOpen,
-  onRemove, onStart, exam, examSize, onExamSize, onExam,
+  onShare, onRemove, onStart, exam, examSize, onExamSize, onExam,
 }) {
   const picker = useRef(null);
   const now = new Date();
@@ -97,6 +98,15 @@ export default function Biblioteca({
               <button type="button" className="open" aria-label={'Abrir ' + s.title} onClick={() => onOpen(s)}>
                 Abrir
                 <Icon name="abrir" />
+              </button>
+              <button
+                type="button"
+                className="icon-button share"
+                aria-label={'Compartilhar ' + s.title}
+                aria-haspopup="dialog"
+                onClick={() => onShare(s)}
+              >
+                <Icon name="compartilhar" />
               </button>
               <button
                 type="button"
