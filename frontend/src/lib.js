@@ -81,6 +81,11 @@ export function demoStorage(on) {
 }
 export const storageKey = k => (k === 'fundo' ? 'cerebro-' : prefix) + k;
 
+// O botão "Fundo animado" só aparece com algo para parar: as ondas (waves: onde elas rodam e o WebGL as desenha) ou a
+// lua do Dúvidas (moon: ela sai com contraste alto e cores forçadas). Com movimento reduzido no sistema (still) as duas
+// já estão paradas.
+export const backdropMoves = ({ still, waves, moon }) => !still && (waves || moon);
+
 // session lê o que esta aba guardou (sessionStorage). Ele é avaliado dentro do try: no Node não existe, e o navegador
 // que bloqueia o armazenamento lança erro. Nos dois casos vale o padrão.
 export function read(k, d, session = false) {

@@ -1,11 +1,13 @@
 // Testes do fundo em ondas (src/waves.js): o tamanho do canvas, o relógio e o corte a 30 quadros por segundo, a espera
 // do laço no temporizador, as faixas do scissor em volta do palco, os valores da receita do Shader Builder, o começo
-// num canvas novo e num que já tem contexto e a limpeza do canvas no tom do palco antes das faixas. npm test
+// num canvas novo e num que já tem contexto, a limpeza do canvas no tom do palco antes das faixas, o laço que para com
+// o app parado ou a janela sem foco e a reserva da barra de rolagem que sai onde as ondas rodam. npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   canvasSize, tick, bands, startWaves, UNIFORMS, SPEED, MAX_DPR, FRAME_MS, FRAME_WAIT_MS, MAX_STEP_MS, FRAG,
+  IDLE_MS, INPUT,
 } from '../src/waves.js';
 
 // Quantos quadros o laço desenha em 1 s numa tela de hz quadros por segundo; o primeiro, logo ao tocar, não conta.
@@ -337,4 +339,80 @@ test('startWaves: cada quadro animado limpa o canvas inteiro no tom do palco ant
   env.begin();
   still();
   assert.deepEqual(calls, [...setup, ['scissor', 0, 0, 1351, 768], ['drawArrays', TRIANGLES, 0, 3]], 'parado: a tela inteira');
+});
+
+test('startWaves: parado há 30 s ou com a janela sem foco, o laço para sem desenhar e volta do quadro em que parou', t => {
+  const env = fakeBrowser(t);
+  // Os ouvintes da window ficam guardados: o teste dá a entrada (pointermove), tira o foco (blur) e o devolve (focus).
+  const heard = {};
+  window.addEventListener = (type, listener) => { heard[type] = listener; };
+  window.removeEventListener = (type, listener) => { if (heard[type] === listener) delete heard[type]; };
+  // O relógio é o do teste: a hora da última entrada (performance.now) e a de cada quadro saem dele.
+  let clock = 1000;
+  t.mock.method(performance, 'now', () => clock);
+  // Sem palco, cada quadro desenha o canvas inteiro.
+  globalThis.document = { ...env.quiet, querySelector: () => null };
+  // Um WebGL que aceita tudo, liga o shader na hora e anota o tempo do shader de cada quadro desenhado.
+  const times = [];
+  const gl = new Proxy({ isContextLost: () => false, getProgramParameter: () => true, uniform4f: (...args) => times.push(args[3]) },
+    { get: (real, name) => real[name] ?? (() => null) });
+  const canvas = { ...env.quiet, getContext: () => gl, clientWidth: 1351, clientHeight: 768 };
+  // Roda o quadro pedido, ms depois do anterior, e o temporizador pede o seguinte.
+  const frame = ms => {
+    clock += ms;
+    env.frames.shift()(clock);
+    t.mock.timers.tick(FRAME_WAIT_MS);
+  };
+
+  assert.equal(IDLE_MS, 30000);
+  assert.ok(['pointermove', 'keydown'].every(type => INPUT.includes(type)), 'o ponteiro e o teclado contam como entrada');
+  const stop = startWaves(canvas);
+  env.begin();
+  assert.deepEqual(INPUT.filter(type => !heard[type]), [], 'cada entrada tem ouvinte na window');
+  frame(0);
+  frame(40);
+  const [drawn, still] = [times.length, times.at(-1)];
+  assert.ok(still > 0 && env.frames.length === 1, 'com alguém mexendo o laço anda');
+
+  frame(IDLE_MS + 1000);
+  t.mock.timers.tick(1000);
+  assert.deepEqual([times.length, env.frames.length], [drawn, 0], '30 s sem entrada: nenhum desenho e nenhum quadro pedido');
+
+  heard.pointermove();
+  assert.equal(env.frames.length, 1, 'a primeira entrada pede um quadro');
+  frame(16);
+  assert.deepEqual([times.length, times.at(-1)], [drawn + 1, still], 'o primeiro quadro da volta desenha o mesmo em que parou: sem salto');
+  frame(40);
+  assert.ok(times.at(-1) > still && times.at(-1) - still <= MAX_STEP_MS / 1000 * SPEED, 'e o seguinte anda um passo');
+
+  heard.blur();
+  const before = times.length;
+  frame(100);
+  assert.deepEqual([times.length, env.frames.length], [before, 0], 'janela sem foco: para no quadro seguinte');
+  heard.focus();
+  assert.equal(env.frames.length, 1, 'o foco de volta toca o laço de novo');
+  frame(16);
+  assert.equal(times.length, before + 1, 'e o quadro seguinte desenha');
+  stop();
+  assert.deepEqual(Object.keys(heard), [], 'desligado, a window fica sem ouvinte nenhum');
+
+  const stopStill = startWaves(canvas, { animate: false });
+  env.begin();
+  assert.deepEqual(Object.keys(heard), ['resize'], 'o fundo parado só ouve o tamanho da janela: nem a entrada nem o blur');
+  stopStill();
+});
+
+test('onde as ondas rodam a reserva da barra de rolagem sai, e o centro e a largura do app não mudam com a barra', () => {
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\nhtml \{[^}]*scrollbar-gutter: stable;/, 'sem as ondas a reserva continua');
+  assert.match(css, /:root\[data-waves\] \{[^}]*scrollbar-gutter: auto\s*\}/);
+  assert.match(css, /:root\[data-waves\] body \{\s*padding-left: calc\(100vw - 100%\)\s*\}/);
+  assert.match(css, /:root\[data-waves\] \.app \{\s*max-width: min\(84rem, 100vw - 34px\)\s*\}/);
+  assert.match(css, /:root\[data-waves\] \.busy \{[^}]*left: calc\(50vw \+ var\(--dock-out\) \/ 2\)\s*\}/, 'a faixa de espera segue o centro');
+  assert.match(css, /:root\[data-waves\] \.toast-region \{\s*left: 50vw\s*\}/, 'e o aviso da tela também');
+  assert.match(css, /@media screen \{\s*:root\[data-waves\] body \{[^}]*\}\s*:root\[data-waves\] \.app \{[^}]*\}\s*\}/,
+    'só na tela: na impressão a folha fica com a largura dela');
+  assert.match(css, /\n\.waves \{[^}]*width: 100vw;/, 'o canvas não muda de largura quando a barra aparece');
+  assert.match(css, /@media \(min-width: 53\.1875rem\) \{\s*@container \(max-width: 60rem\) \{\s*\.status-model \{/,
+    'no computador o nome do modelo sai com a barra de cima até 60 rem: o atalho não encolhe com o botão "Fundo animado"');
 });

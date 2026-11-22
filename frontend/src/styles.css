@@ -420,22 +420,39 @@ body::before {
    aparecem só em volta deles, e o contraste lá dentro não muda (no alto da tela as ondas chegam a #eaf9ff). A faixa de
    espera (.busy), presa no alto, passa pela fresta entre a barra de cima e o palco quando a página rola: opaca também,
    no tom que o --glass-float dá sobre o preto. Opacos, o desfoque deles sai: ele borraria a cada quadro um fundo que
-   ninguém vê. */
+   ninguém vê. O canvas tem a largura da janela (100vw), com ou sem a barra de rolagem: o desenho não estica quando ela
+   aparece. */
 .waves {
     position: fixed;
     inset: 0;
     z-index: var(--z-behind);
     display: block;
-    width: 100%;
+    width: 100vw;
     height: 100%;
     visibility: hidden;
     pointer-events: none
 }
 
-/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá. */
+/* O --glass daqui é também a cor com que o waves.js limpa o canvas atrás do palco (clearColor): mudou aqui, mude lá.
+   A reserva da barra de rolagem sai (issue #144): vazia, ela era uma faixa preta de cima a baixo ao lado das ondas. No
+   lugar dela, o body ganha à esquerda a largura da barra quando ela aparece (100vw conta a barra, 100% não), e o app
+   continua centrado na janela; a largura dele deixa 34 px (duas barras de 17 px) de fora, para ser a mesma na página
+   que rola e na que não rola. A faixa de espera (.busy), presa à janela, acompanha esse centro. */
 :root[data-waves] {
     --glass: #080808;
-    --quiet: #040404
+    --quiet: #040404;
+    scrollbar-gutter: auto
+}
+
+/* Só na tela: na impressão a folha (.folha) fica com a largura dela. */
+@media screen {
+    :root[data-waves] body {
+        padding-left: calc(100vw - 100%)
+    }
+
+    :root[data-waves] .app {
+        max-width: min(84rem, 100vw - 34px)
+    }
 }
 
 :root[data-waves=on] .waves {
@@ -447,7 +464,13 @@ body::before {
 }
 
 :root[data-waves] .busy {
-    --glass-float: #0b0b0b
+    --glass-float: #0b0b0b;
+    left: calc(50vw + var(--dock-out) / 2)
+}
+
+/* O aviso da tela (.toast-region), preso à janela como a faixa de espera, segue o mesmo centro. */
+:root[data-waves] .toast-region {
+    left: 50vw
 }
 
 :root[data-waves] :is(.topbar, .rail, .busy) {
@@ -1150,6 +1173,22 @@ select {
     }
 }
 
+/* No computador a barra de cima tem também o atalho e o botão "Fundo animado" (#144): até 60 rem o modelo já sai, e o
+   atalho não fica menor do que era sem o botão. A largura é a em que o dock entra (mobile.css), em rem como lá: 851 px
+   com a letra padrão. */
+@media (min-width: 53.1875rem) {
+    @container (max-width: 60rem) {
+        .status-model {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap
+        }
+    }
+}
+
 /* No Dúvidas (#57) o chat chama mais atenção que o resto: a barra de cima e o dock das seções perdem o vidro forte, a
    sombra e parte da borda, e o ponteiro ou o foco dentro deles devolve o realce. Nada de opacity no elemento: o texto
    continua em 4,5:1 e os ícones em 3:1 sobre o fundo que fica. O atalho "Pergunte ao Cérebro" some (o aluno já está
@@ -1470,8 +1509,8 @@ main:focus {
 }
 
 /* Chip da área: pílula de borda fina e texto cinza. O marcado tem a borda ciano, o fundo ciano fraco e o texto branco:
-   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da janela do perfil (App.jsx)
-   é um chip de ligar e desligar: ligado, fica marcado e ganha o ✓. */
+   a escolha aparece pela borda e pelo brilho, não só pela cor do texto. O "Fundo animado" da folha "Mais" (App.jsx) é
+   um chip de ligar e desligar: ligado, fica marcado, com o ícone de pausar; parado, com o de tocar. */
 .chip {
     min-height: var(--control-h-inline);
     padding: 0 var(--sp-3);
@@ -4312,7 +4351,7 @@ dialog[data-closing]::backdrop {
 
 /* Com a janela ou a folha aberta, a página de trás não rola: o arrasto no fundo escuro e a roda do mouse a levavam
    para outro ponto, e ao fechar o aluno tinha de achar de novo onde estava. A folha alta continua rolando por dentro, e
-   o scrollbar-gutter da raiz guarda o lugar da barra de rolagem que some. */
+   o scrollbar-gutter da raiz (com as ondas, o centro compensado) guarda o lugar da barra de rolagem que some. */
 html:has(dialog[open]) {
     overflow: hidden
 }
@@ -4643,14 +4682,14 @@ main[data-instant] > .view[data-motion-pop-id] {
     }
 }
 
-.profile-dialog .chip {
+.sheet .chip {
     align-self: flex-start
 }
 
-/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a janela abre, para o leitor de
-   tela ler o texto quando ele entra. Vazio, não ocupa lugar: a margem devolve o espaço entre os blocos (.dialog-body). */
-.profile-dialog [role=status]:empty {
-    margin-top: calc(var(--sp-4) * -1)
+/* O aviso de que o "Fundo animado" não foi gravado (App.jsx) existe vazio desde que a folha abre, para o leitor de
+   tela ler o texto quando ele entra. Vazio, sai do fluxo: não ocupa lugar nem o respiro entre os blocos. */
+.sheet [role=status]:empty {
+    position: absolute
 }
 
 /* Formulário do perfil (Perfil.jsx) e o esqueleto dele (ui.jsx): os mesmos espaços da janela. No esqueleto, o

@@ -13,11 +13,13 @@ import {
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
+  useMoonHidden,
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
   PerfilSkeleton, Countdown, StudyPlan, ExamDate, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
+  backdropMoves,
   backupSummary, deckRestart, validMaterial, sameMaterial, validEvent, fold, demo, capText, MAX_INPUT,
   shortAnswerOk, expectedText, streak, quizRate, cardRate, weakSpot, chartDays, spokenDay, lastDays, areaLine, plural,
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove, nameCut,
@@ -182,25 +184,34 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
-  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado" para as ondas e a lua do Dúvidas
   // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
-  // sem nada gravado, elas andam. Com movimento reduzido no sistema (wavesStill, lido ao vivo) elas ficam paradas e o
-  // botão some.
+  // sem nada gravado, elas andam. O botão fica na barra de cima e, no celular, na folha "Mais" (#144: dentro da janela
+  // do perfil, quem se incomodava com o movimento não o achava). Com movimento reduzido no sistema (wavesStill, lido ao
+  // vivo) as ondas e a lua ficam paradas e o botão some (lib.js, backdropMoves).
   const wavesAllowed = useWavesAllowed();
   const wavesStill = useWavesStill();
+  const moonHidden = useMoonHidden();
   const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
-  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido, e aí o botão
-  // some (não teria o que ligar); null enquanto não houve aviso, e o botão fica.
+  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido; null enquanto não
+  // houve aviso, e as ondas contam como ligadas.
   const [wavesActive, setWavesActive] = useState(null);
-  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
+  const fundoShown = backdropMoves({
+    still: wavesStill, waves: wavesAllowed && wavesActive !== false, moon: !moonHidden,
+  });
+  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai também na folha "Mais", junto do botão.
   const [fundoUnsaved, setFundoUnsaved] = useState(false);
-  // O botão some com a janela do perfil aberta (sem WebGL na GPU, movimento reduzido ligado, contexto perdido, janela
-  // estreitada). Com o foco nele, o foco cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai
-  // para o "Fechar". A função do ref não muda, e o React só a chama com null logo antes de tirar o botão do DOM.
+  const toggleFundo = () => {
+    setFundo(!fundo);
+    setFundoUnsaved(!persist('fundo', !fundo));
+  };
+  // O botão some com a folha "Mais" aberta (movimento reduzido ou contraste alto ligados). Com o foco nele, o foco
+  // cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai para o "Fechar". A função do ref não
+  // muda, e o React só a chama com null logo antes de tirar o botão do DOM.
   const fundoButton = useRef(null);
   const fundoRef = useCallback(el => {
     if (!el && fundoButton.current === document.activeElement) {
-      fundoButton.current.closest('dialog')?.querySelector('.close')?.focus();
+      fundoButton.current.closest('dialog')?.querySelector('[aria-label=Fechar]')?.focus();
     }
     fundoButton.current = el;
   }, []);
@@ -2230,6 +2241,20 @@ function App() {
                 </m.span>
               </AnimatePresence>
             </p>
+            {/* O nome não muda; o estado vai no aria-pressed e no ícone (pausar com o fundo andando, tocar com ele
+                parado). Vale na hora. No celular este sai, e fica o da folha "Mais" (mobile.css). */}
+            {fundoShown && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-pressed={fundo}
+                aria-label="Fundo animado"
+                title="Fundo animado"
+                onClick={toggleFundo}
+              >
+                <Icon name={fundo ? 'pausar' : 'tocar'} />
+              </button>
+            )}
             {profileButton(() => setLogin(true))}
           </div>
         </header>
@@ -3539,7 +3564,8 @@ function App() {
                   data-state={chat.length ? 'conversa' : 'heroi'}
                   data-teto={capped ? '' : undefined}
                 >
-                  <span className="moon" aria-hidden="true"></span>
+                  {/* Com o "Fundo animado" desligado a lua para de respirar, como as ondas. */}
+                  <span className="moon" style={{ animation: fundo ? undefined : 'none' }} aria-hidden="true"></span>
                   <div className="chat-head">
                     {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
                     <div className="chat-title-box">
@@ -3978,6 +4004,19 @@ function App() {
                 setMore(false);
                 setLogin(true);
               })}
+              {fundoShown && (
+                <>
+                  <button ref={fundoRef} type="button" className="chip" aria-pressed={fundo} onClick={toggleFundo}>
+                    <Icon name={fundo ? 'pausar' : 'tocar'} />
+                    Fundo animado
+                  </button>
+                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta folha, na parte inerte da página, e
+                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
+                  <p role="status">
+                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
+                  </p>
+                </>
+              )}
             </div>
           </Modal>
         )}
@@ -4085,30 +4124,6 @@ function App() {
                   onSave={saveProfile}
                 />
               </Suspense>
-              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
-                  WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
-              {wavesAllowed && !wavesStill && wavesActive !== false && (
-                <>
-                  <button
-                    ref={fundoRef}
-                    type="button"
-                    className="chip"
-                    aria-pressed={fundo}
-                    onClick={() => {
-                      setFundo(!fundo);
-                      setFundoUnsaved(!persist('fundo', !fundo));
-                    }}
-                  >
-                    {fundo && <Icon name="check" />}
-                    Fundo animado
-                  </button>
-                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta janela, na parte inerte da página, e
-                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
-                  <p role="status">
-                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
-                  </p>
-                </>
-              )}
               {/* A dica do estado da IA (title) só aparece com o mouse em cima: aqui o teclado e o toque chegam a ela. */}
               {status.note && <p className="hint">{status.note}</p>}
             </div>
