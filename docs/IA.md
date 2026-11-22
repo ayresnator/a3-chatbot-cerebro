@@ -76,7 +76,7 @@ A conferência prova que o trecho está no texto. Ela não prova que a explicaç
 O que foi feito para reduzir o problema e para deixá-lo visível:
 
 - Os trechos de origem são conferidos por código, como descrito acima.
-- No chat, quando vai um texto (o do editor, ou o título e o resumo do material aberto), a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto.
+- No chat, quando vai um texto (o do editor, ou o título e o resumo do material aberto), a instrução manda responder a partir dele e avisar, em uma frase, quando a resposta não está no texto. O aviso vale uma vez por conversa: se uma resposta anterior já avisou, ou se a conversa já trata de outro assunto, a resposta vai direto ao ponto. Sem isso, com um material aberto e a conversa sobre outro assunto, toda resposta abria com o mesmo aviso (#155).
 - A instrução proíbe citar conversa, aula ou estudo que não esteja no histórico. O caso que motivou a regra: uma resposta "com base na nossa conversa anterior" quando o histórico só tinha a explicação do próprio Cérebro. Na rodada real de 17/11/2026 a regra não segurou: à pergunta "Como você disse na aula passada...", o modelo continuou a explicação em vez de pedir que o aluno repetisse o ponto.
 - A tela avisa sob a conversa da página Dúvidas e sob cada resposta do "Não entendi, me explique": "Gerado por IA. Pode conter erros: confira com o seu material." Sob o título do material, o aviso diz de onde ele veio, como descrito acima. A revisão leva o aviso "Revisão feita por IA: pode errar.", e o comentário da explicação, "Comentário da IA: pode errar."
 

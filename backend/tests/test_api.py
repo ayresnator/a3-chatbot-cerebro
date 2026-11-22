@@ -1476,7 +1476,9 @@ class ApiTests(unittest.TestCase):
         self.assertIn("content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo "
                       "de um material de estudo, e pode vir vazio. "
                       "Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, "
-                      "diga isso em uma frase antes de completar com o que você sabe. ", chat)
+                      "diga isso em uma frase antes de completar com o que você sabe. "
+                      "Esse aviso vale uma vez: se uma resposta sua em history já avisou, ou se a conversa em history "
+                      "já trata de outro assunto, não repita o aviso e responda direto. ", chat)
         generate = instruction("/api/generate", self.REQUEST, self.MATERIAL)
         self.assertEqual(generate, prompts.SYSTEM + "\n" + prompts.GENERATE)
         self.assertIn("answer é índice inteiro começando em zero para multiple e boolean.", generate)
