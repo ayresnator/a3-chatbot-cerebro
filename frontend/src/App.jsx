@@ -881,9 +881,11 @@ function App() {
       const twin = stored.findIndex(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       // O que já está lá fica com o texto deste clique: a demonstração só usa as 8 primeiras frases, e o resto do texto
-      // pode ter mudado. O material de antes do campo texto também o ganha.
-      if (twin >= 0 && stored[twin].texto !== input) {
-        stored[twin] = { ...stored[twin], texto: input };
+      // pode ter mudado. O material de antes do campo texto também o ganha. O igual que veio de um colega perde a
+      // marca recebido: agora ele foi gerado aqui, do texto daqui.
+      if (twin >= 0 && (stored[twin].texto !== input || stored[twin].recebido)) {
+        const { recebido, ...mine } = stored[twin];
+        stored[twin] = { ...mine, texto: input };
         if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
       }
       const next = twin >= 0 ? stored[twin] : store(material) || material;
@@ -2586,7 +2588,7 @@ function App() {
                               ? aiNote || (SEM_IA &&
                                 virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
                                 <p className="ai-note">{AI_NOTE}</p>)
-                              : result.semIA !== true && <p className="ai-note">{originNote(summary, result.texto)}</p>}
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary, result.recebido)}</p>}
                           </div>
                           {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela, o Compartilhar e o
                               Salvar ficam juntos: na tela estreita, os três descem para baixo do título. */}
@@ -2737,10 +2739,10 @@ function App() {
                                         </button>
                                       )}
                                       <p>{s.text}</p>
-                                      {s.source?.trim() && <p className="source">{sourceLabel(s, result.texto)}</p>}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                       {/* O trecho dentro do texto inteiro, numa janela que abre nele. Material de antes do
                                           campo texto não guardou o texto e fica sem o botão. */}
-                                      {s.source?.trim() && result.texto && (
+                                      {s.source?.trim() && result.texto?.trim() && (
                                         <button
                                           type="button"
                                           className="link source-link"
@@ -2825,7 +2827,7 @@ function App() {
                                                   {markPieces(s.text, own.review?.missing || []).map((part, k) =>
                                                     part.mark ? <mark key={k}>{part.text}</mark> : part.text)}
                                                 </p>
-                                                {s.source?.trim() && <p className="source">{sourceLabel(s, result.texto)}</p>}
+                                                {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                                 {result.semIA !== true && (s.ia || !s.source?.trim()) && (
                                                   <span className="ai-tag">Explicação da IA: confira</span>
                                                 )}
