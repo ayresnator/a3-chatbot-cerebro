@@ -3976,7 +3976,9 @@ main:focus {
     border-bottom: var(--hair) solid var(--line)
 }
 
-/* min-width: sem ele a data ("21/11", 37 px) segurava a largura da coluna, e as 7 passavam da caixa abaixo de 350 px. */
+/* min-width: 0 só pesa com a letra aumentada (a do navegador ou o texto do celular): a coluna encolhe abaixo da data e
+   o gráfico fica na caixa, com os rótulos vizinhos uns por cima dos outros (sem ele o gráfico saía da caixa). Com a
+   letra padrão quem põe as 7 colunas na caixa abaixo de 360 px é o vão de 2 px com a letra de 12 px (mobile.css). */
 .chart > div {
     display: flex;
     flex: 1;

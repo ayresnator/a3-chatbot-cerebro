@@ -960,7 +960,7 @@
         align-items: flex-start
     }
 
-    /* Desempenho: as 7 colunas do gráfico dividem 254 px em 320 px de tela. Com o vão de 2 px cada uma tem 34,5 px, e a
+    /* Desempenho: as 7 colunas do gráfico dividem 254 px em 320 px de tela. Com o vão de 2 px cada uma tem 34,6 px, e a
        data ("21/11") só cabe nela com a letra de 12 px (34,4 px; com 13 px, 37,3). */
     .chart {
         gap: var(--sp-0)
