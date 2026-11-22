@@ -359,7 +359,7 @@ a3-chatbot-cerebro/
 | `frontend/src/arquivo.js` | Leitura e limpeza do PDF, do TXT e do MD do "Abrir arquivo", carregada à parte da abertura |
 | `frontend/src/exemplos.js` | Exemplos prontos do "Usar um exemplo", carregados à parte da abertura |
 | `frontend/src/waves.js` | Fundo em ondas (shader WebGL1), carregado à parte e só no computador |
-| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js` e do service worker do modo estudo |
+| `frontend/tests/` | Testes das regras de `lib.js`, `arquivo.js`, `exemplos.js` e `waves.js`, do service worker do modo estudo e do layout com a letra maior (`letra.test.js`) |
 | `frontend/public/` | Arquivos públicos: o `config.js`, o favicon e, do modo estudo, o manifest e os ícones |
 | `frontend/sw-molde.js` | Molde do service worker do modo estudo: o build (`vite.config.js`) põe nele a lista de arquivos e grava o `sw.js` |
 | `docs/IA.md` | Como o Cérebro usa a IA e o que confere depois |
@@ -466,7 +466,7 @@ O número de testes, o resultado da última execução e o que ainda não rodou 
 - Limpar os dados do navegador apaga materiais, desempenho, caderno de erros e caixas dos cartões que não foram exportados.
 - O reconhecimento de voz depende do navegador e de suas permissões.
 - O "Abrir arquivo" lê o texto que o PDF guarda: PDF digitalizado (só imagem) e PDF com senha não abrem, e o de duas colunas pode sair com os trechos fora de ordem. Confira o texto no editor antes de gerar o material.
-- A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia. Os botões da IA dizem "1 pedido à IA": um pedido pode gastar mais de uma chamada, até 6, quando o backend precisa tentar de novo, e a nota da cota, no selo da IA do cabeçalho, diz isso.
+- A disponibilidade da inteligência artificial depende da conexão, do modelo e da cota do provedor. A faixa gratuita tem limite de chamadas por minuto e por dia. Os botões da IA dizem "1 pedido à IA": um pedido pode gastar mais de uma chamada, até 6, quando o backend precisa tentar de novo, e a nota da cota, no selo da IA do cabeçalho e no pé da janela do perfil, diz isso.
 - O grupo pode pôr um teto de chamadas por dia (`AI_DAILY_LIMIT`, no `.env`; vazio, sem teto). No teto, os botões da IA ficam desligados até a virada do dia, e o resto do app funciona sem IA. A conta é a deste backend, desde que ele ligou no dia, e zera quando ele reinicia: não é o saldo da cota no Google, e outros computadores com a mesma chave não entram nela.
 - O conteúdo gerado pode estar errado. O trecho "No seu texto" prova que a frase existe no texto enviado, não que o tópico está certo. O trecho "No texto de quem gerou" não foi conferido neste navegador.
 - A revisão de resposta curta feita pela IA também pode errar, e o comentário da explicação com as próprias palavras também. Na API real, o comentário (`/api/explain`) rodou 4 casos em 21/11/2026, com os vereditos esperados; numa explicação vaga, mas sem erro, ele respondeu "incorreta".

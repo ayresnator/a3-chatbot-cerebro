@@ -29,6 +29,13 @@ export function typeDelay(shown, random = Math.random) {
   return shown ? 26 + random() * 20 : 900;
 }
 
+// Quanto tempo um aviso fica na tela (App.jsx, toast), em ms: 2 s mais 0,4 s por palavra, e nunca menos de 4 s. Os
+// 3,2 s fixos não davam para ler a frase de 14 palavras (WCAG 2.2.1). O aviso com botão (action) não fica menos de
+// 10 s: é o tempo de chegar ao botão.
+export function noticeTime(text, action) {
+  return Math.max(action ? 10000 : 4000, 2000 + 400 * text.trim().split(/\s+/).length);
+}
+
 // Setas, Home e End num grupo de opções ou num menu: o índice aonde a tecla leva, dando a volta nas pontas; -1 quando
 // a tecla não anda.
 export function rove(key, at, count) {
@@ -52,6 +59,14 @@ export function askKey(e) {
 // presa, e a reserva continua 0.
 export function fitsAbove(height, viewport, reserve, strip = 0) {
   return height <= viewport - Math.max(0, (parseFloat(reserve) || 0) - strip);
+}
+
+// A barra de baixo, com scroll px de conteúdo em client px de largura, rola de lado a ponto de cortar o nome do último
+// item ("Mais")? O item mede item px, com o nome, de name px, no meio, e a barra tem pad de respiro depois dele (o
+// padding calculado). Uma sobra menor só tira da vista o vazio em volta do nome, como de 381 a 389 px com a letra
+// padrão, e nada muda.
+export function nameCut(scroll, client, item, name, pad) {
+  return scroll - client > (item - name) / 2 + (parseFloat(pad) || 0);
 }
 
 // Chave de um dado no navegador. A demonstração (?demo) grava à parte, com o prefixo cerebro-demo-: o que se faz nela
@@ -582,6 +597,14 @@ export function spokenDay({ day, total, rate }) {
     (total ? total + (total === 1 ? ' resposta, ' : ' respostas, ') + rate + '% de acerto' : 'nenhuma resposta');
 }
 
+// O gráfico numa frase, que o leitor de tela ouve quando a lista "Área do gráfico" troca as colunas (App.jsx): a área
+// e as respostas dos 7 dias dela (days, de chartDays).
+export function chartLine(area, days) {
+  const total = days.reduce((sum, d) => sum + d.total, 0);
+  return (area === 'Todas' ? 'Todas as áreas' : area) + ': ' +
+    (total ? total + ' ' + plural(total, 'resposta', 'respostas') : 'nenhuma resposta') + ' nos últimos 7 dias';
+}
+
 // Houve estudo (quiz ou cartão) em cada um dos n últimos dias? Do mais antigo para hoje.
 export function lastDays(events, n, now) {
   const studied = new Set(events.map(e => localDay(e.date)));
@@ -749,6 +772,13 @@ export function libraryCount(n) {
   return n === 0 ? 'Nenhum material encontrado' : n === 1 ? '1 material encontrado' : n + ' materiais encontrados';
 }
 
+// Quantos tópicos a lista "Mostrar" do Resumo deixa na tela: a frase ao lado dela, que o leitor de tela ouve na troca
+// (App.jsx). size é o valor da lista ("todos", "6" ou "3"), e total, os tópicos do material.
+export function topicCount(size, total) {
+  const shown = size === 'todos' ? total : Math.min(total, Number(size));
+  return 'Mostrando ' + shown + ' de ' + total + ' ' + plural(total, 'tópico', 'tópicos');
+}
+
 // Embaralha a lista no lugar (Fisher-Yates) e a devolve. random devolve de 0 a 1, como Math.random.
 function shuffle(list, random) {
   for (let i = list.length - 1; i > 0; i--) {
@@ -870,7 +900,8 @@ export function chatSubject({ material, made, editor, input, area, level }) {
   };
 }
 
-// Dica do selo da IA (title): a conta do selo é só deste computador, e a cota do Google é do projeto inteiro.
+// Dica do selo da IA (title), repetida no pé da janela do perfil: a conta do selo é só deste computador, e a cota do
+// Google é do projeto inteiro.
 const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do horário do Pacífico (4h ou 5h em ' +
   'Brasília). O saldo real fica no painel de uso do Google AI Studio. Um pedido à IA pode gastar mais de uma chamada, ' +
   'até 6, quando o Cérebro precisa tentar de novo.';
