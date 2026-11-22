@@ -576,8 +576,11 @@ function App() {
     // e conta uma vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e
     // ✗ e a nota acima da faixa. Sem caber, o lead (o cartão virado), quando há, leva o foco e sobe para o topo.
     const box = last(whole);
+    // Só a faixa presa sai da reserva: na janela baixa ela rola com a página, e a raiz já não a desconta (mobile.css).
+    const strip = box?.querySelector('.next-row');
     const fits = box && fitsAbove(box.offsetHeight, innerHeight,
-      getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
+      getComputedStyle(document.documentElement).scrollPaddingBottom,
+      strip && getComputedStyle(strip).position === 'sticky' ? strip.offsetHeight : 0);
     const top = box && !fits && last(lead);
     (top || last(selector) || last(fallback))?.focus({ preventScroll: !!(show || box) });
     if (top) top.scrollIntoView({ block: 'start' });
