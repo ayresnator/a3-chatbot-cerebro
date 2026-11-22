@@ -3,7 +3,7 @@ import { AnimatePresence, m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { UndoRow, BackupNote } from './ui.jsx';
 import { byKeyboard } from './anim.js';
-import { AREAS, plural } from './lib.js';
+import { AREAS, plural, daysUntil, inDays } from './lib.js';
 
 // Página Biblioteca, carregada à parte (App.jsx, lazyView). A lista, a busca e o desfazer continuam no App; aqui só o
 // desenho. onRemove recebe o item da lista para a saída marcada (anim.js, leave). backup é a linha do pé (ui.jsx,
@@ -14,6 +14,7 @@ export default function Biblioteca({
   onShare, onRemove, onStart, exam, examSize, onExamSize, onExam,
 }) {
   const picker = useRef(null);
+  const now = new Date();
   // Com a lista de áreas na barra, o painel só esmaece (anim.js, fade).
   return (
     <m.section className="panel" variants={fade}>
@@ -82,7 +83,11 @@ export default function Biblioteca({
           {shown.map(s => (
             <li className="library-item" key={s.id} data-id={s.id} data-flip>
               <div>
-                <small>{s.area} · {new Date(s.date).toLocaleDateString('pt-BR')}</small>
+                {/* A data da prova (#86), de hoje em diante. */}
+                <small>
+                  {s.area} · {new Date(s.date).toLocaleDateString('pt-BR')}
+                  {daysUntil(s.prova, now) !== null && <> · <strong>prova {inDays(daysUntil(s.prova, now))}</strong></>}
+                </small>
                 <h2>{s.title}</h2>
                 <p>
                   {'Resumo · ' + s.flashcards.length + ' ' + plural(s.flashcards.length, 'cartão', 'cartões') +

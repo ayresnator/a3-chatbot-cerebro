@@ -10,6 +10,8 @@
         --tabbar-h: calc(3rem + var(--dock-pad) * 2 + var(--hair) * 2 + var(--sp-2) * 2 + env(safe-area-inset-bottom, 0px));
         /* Altura da faixa presa de "Próxima questão" (.next-row): o botão, o respiro e o fio de cima. */
         --next-h: calc(var(--control-h) + var(--sp-3) * 2 + var(--hair));
+        /* A da faixa presa da certeza (.sure-row, #80), com a pergunta numa linha e os botões na de baixo: a mais alta. */
+        --sure-h: calc(var(--fs-2) * var(--lh-ui) + var(--sp-2) + var(--next-h));
         --gutter: var(--sp-2);
         --top-y: var(--sp-2);
         --top-h: 3.25rem;
@@ -19,7 +21,7 @@
 
     /* O Tab rola a página só até o controle entrar na janela, e a barra de baixo, presa, cobria o controle (WCAG
        2.4.11). A rolagem até o foco, e a de scrollIntoView (o erro, a explicação, o menu do nível, a conversa), param
-       acima dela, com o respiro. Os blocos não têm scroll-margin próprio: somado a este, o respiro contaria duas vezes.
+       acima dela, com o respiro. Os blocos não têm scroll-margin embaixo: somado a este, o respiro contaria duas vezes.
        Com o retorno do quiz na tela, também acima do "Próxima questão" preso: depois de responder, a linha com a marca
        ✓ ou ✗ e a nota fica à vista (App.jsx, submit). */
     html {
@@ -28,6 +30,11 @@
 
     html:has(.next-row) {
         scroll-padding-bottom: calc(var(--tabbar-h) + var(--next-h) + var(--sp-3))
+    }
+
+    /* Antes da correção, também acima da faixa da certeza (#80): a opção com o foco fica à vista. */
+    html:has(.sure-row) {
+        scroll-padding-bottom: calc(var(--tabbar-h) + var(--sure-h) + var(--sp-3))
     }
 
     .app {
@@ -253,6 +260,21 @@
         flex: 1
     }
 
+    /* "Quanta certeza você tem?" e os três botões (#80) ficam presos acima da barra, no lugar do "Próxima questão" depois
+       da resposta: o enunciado e as opções podem ser longos. A faixa vai de uma borda à outra do painel (24 px de
+       respiro; no celular, 16). */
+    .sure-row {
+        position: sticky;
+        bottom: var(--tabbar-h);
+        margin: var(--sp-4) calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+        padding: var(--sp-3) var(--sp-5);
+        border-top: var(--hair) solid var(--line);
+        border-radius: 0 0 calc(var(--r-3) - var(--hair)) calc(var(--r-3) - var(--hair));
+        background: var(--glass-float);
+        -webkit-backdrop-filter: var(--blur);
+        backdrop-filter: var(--blur)
+    }
+
     /* No simulado o botão de seguir também ocupa a linha (styles.css, .exam-next). */
     .exam-next .primary {
         flex: 1
@@ -306,6 +328,20 @@
 
     .tabbar [aria-haspopup=dialog] {
         display: none
+    }
+}
+
+/* A data da prova, o "Compartilhar" e o "Salvar material" (styles.css, .header-actions) ficam embaixo do título até
+   745 px, onde não cabem ao lado do aviso da IA. O esqueleto da geração guarda a linha deles (o campo de 44 px e o
+   respiro), e as abas não pulam quando o material chega. De 746 px para cima eles ficam ao lado da área e do aviso
+   (styles.css). */
+@media (min-width: 551px) and (max-width: 745px) {
+    .result-header > .header-actions {
+        flex-basis: 100%
+    }
+
+    .material-wait .result-header {
+        min-height: calc(5rem + var(--control-h) + var(--sp-3))
     }
 }
 
@@ -529,8 +565,9 @@
         font-size: var(--fs-1)
     }
 
-    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. */
-    .action {
+    /* Os botões de gerar enchem cada linha; o custo que desce para a linha de baixo ganha respiro em cima e embaixo. Só
+       no grupo de gerar do Estudar: no fim do quiz, o "Questões novas" fica do tamanho dos vizinhos. */
+    .actions .action {
         flex: 1 1 auto;
         padding: var(--sp-1) var(--sp-3)
     }
@@ -559,21 +596,25 @@
         font-size: var(--fs-4)
     }
 
-    /* "Compartilhar" e "Salvo" numa linha só até 320 px: com o espaço de sempre, ali eles ficavam um embaixo do outro, e
-       o cabeçalho crescia 56 px. */
-    .result-header > .result-actions {
-        gap: var(--sp-2)
+    /* A data da prova, o "Compartilhar" e o "Salvo" somam 342 px mesmo com o "Compartilhar" só no ícone, e o cabeçalho
+       de um celular de 390 px tem 324: a data fica na linha dela, e os dois botões, com o nome, embaixo, numa linha
+       só até 320 px (com o espaço de sempre entre eles, ali ficavam um embaixo do outro). */
+    .result-header > .header-actions {
+        gap: var(--sp-3) var(--sp-2)
     }
 
-    .result-actions button {
+    .header-actions .exam-date {
+        flex-basis: 100%
+    }
+
+    .header-actions button {
         padding: 0 var(--sp-3)
     }
 
-    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas e o "Compartilhar" e o "Salvo"
-       embaixo: 174 px em 390 px com um título comum. O esqueleto guarda essa altura para o material não empurrar as
-       abas. */
+    /* No celular o cabeçalho pronto tem o título em duas linhas, o aviso da IA em duas, a data da prova e, embaixo, o
+       "Compartilhar" e o "Salvo": 230 px. O esqueleto guarda essa altura para o material não empurrar as abas. */
     .material-wait .result-header {
-        min-height: 10.875rem
+        min-height: 14.375rem
     }
 
     /* As três abas dividem a largura: com o respiro de 16 px, "Quiz" ficava cortado em 320 px. */
@@ -600,6 +641,19 @@
     .study-head .sk-tag {
         grid-column: 1 / -1;
         justify-self: start
+    }
+
+    /* No quiz, a etiqueta e a caixa "Marcar certeza" (#80) dividem a linha de baixo, uma em cada ponta, e a caixa fica
+       com o alvo inteiro na linha dela. A coluna que sobra recebe a largura da linha de baixo: sem ela, a linha alargava
+       a coluna do "Questão X de Y", e o "Recomeçar" se afastava dele. */
+    .study-head:has(.quiz-tools) {
+        grid-template-columns: auto auto minmax(0, 1fr)
+    }
+
+    .quiz-tools {
+        grid-column: 1 / -1;
+        justify-content: space-between;
+        margin-block: 0
     }
 
     .flashcard {
@@ -634,7 +688,8 @@
     }
 
     .feedback,
-    .pretest {
+    .pretest,
+    .own {
         padding: var(--sp-4)
     }
 
@@ -646,6 +701,23 @@
     .next-row {
         margin-inline: calc(-1 * var(--sp-4));
         padding-inline: var(--sp-4)
+    }
+
+    /* A faixa da certeza (#80): a pergunta numa linha e os três botões embaixo, do mesmo tamanho, como os do baralho. */
+    .sure-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-inline: calc(-1 * var(--sp-4));
+        margin-bottom: calc(-1 * var(--sp-4));
+        padding-inline: var(--sp-4)
+    }
+
+    .sure-row > span {
+        grid-column: 1 / -1
+    }
+
+    .sure-row button {
+        padding: 0 var(--sp-2)
     }
 
     .message {
@@ -822,11 +894,22 @@
     }
 }
 
+/* Telefone de menos de 360 px: a etiqueta mais longa ("Verdadeiro ou falso") e a caixa "Marcar certeza" (#80) não cabem
+   na mesma linha. A caixa vai sempre para a linha de baixo: o cabeçalho do quiz não muda de altura de uma questão para
+   a outra. */
+@media (max-width: 359px) {
+    .quiz-tools {
+        flex-direction: column;
+        align-items: flex-start
+    }
+}
+
 /* Janela baixa, em qualquer largura: o celular deitado (390 px de altura) e o zoom de 200% num notebook (312 a 384 px).
    As quebras acima são só pela largura, e a barra de baixo deixa de 246 a 324 px para a página. Sem a frase de
    abertura, com o editor de até 5 linhas e as ferramentas com a palavra curta (numa linha só, com o custo do
    "Perguntar ao Cérebro" só no nome do botão), os botões de gerar sobem; com o cartão mais baixo, ele e os três botões
-   cabem juntos acima da barra. */
+   cabem juntos acima da barra. Com o campo "Sua resposta" não cabem, e ao virar o cartão quem tem a vez é a resposta
+   (App.jsx, turnCard). */
 @media (max-height: 30rem) {
     .lead {
         display: none

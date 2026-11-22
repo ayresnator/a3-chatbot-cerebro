@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { animate } from 'motion/mini';
 import {
@@ -14,7 +14,7 @@ import {
 } from './anim.js';
 import {
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
-  PerfilSkeleton, Countdown,
+  PerfilSkeleton, Countdown, StudyPlan, ExamDate, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
 import {
   AREAS, LEVELS, EXAMPLE, read, readList, readUser, readDraft, demoStorage, storageKey, newId, backupStatus,
@@ -24,11 +24,12 @@ import {
   validCardReview, scheduleCard, dueCards, dayCards,
   matches, libraryCount, hints, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
-  localDay, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
-  stepOf, dueOf, dueMistakes, dayMistakes, backOn,
-  gradeRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
+  localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
+  seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
+  gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
   shareFile, cardLines, ankiFile, fileName,
-  originNote, findSource, textOrigin,
+  quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
+  originNote, virtualNote, findSource, markPieces, textOrigin, readWriteFirst, spokenCard, CARD_REMINDER,
   pretestCards, readSkips, pretestOpens, recallStart, recallLine, nextSkips, markRecall, shownMarks,
 } from './lib.js';
 
@@ -38,7 +39,11 @@ const CONFIG = window.CEREBRO_CONFIG || {};
 const DEMO = CONFIG.demo === true || new URLSearchParams(window.location.search).has('demo');
 // A demonstração grava em chaves próprias (lib.js, storageKey): antes da primeira leitura, a do rascunho logo abaixo.
 demoStorage(DEMO);
-const API_BASE = DEMO ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
+// Modo estudo (#85), o build do celular, com semIA no config.js: os dados são os de verdade, nas chaves do app com IA, e
+// nenhum pedido vai para a /api. Os botões de gerar organizam o texto por frases, como na demonstração. Com ?demo, vale
+// a demonstração.
+const SEM_IA = !DEMO && CONFIG.semIA === true;
+const API_BASE = DEMO || SEM_IA ? '' : (CONFIG.apiBaseUrl || window.location.origin).replace(/\/$/, '');
 // Tela de toque: o teclado da tela não tem Shift + Enter nem Ctrl + Enter (o Enter só pula linha e quem envia é o
 // botão) e abre sozinho quando o foco vai para um campo.
 const TOUCH = window.matchMedia('(pointer: coarse)').matches;
@@ -118,11 +123,24 @@ const NAMES = { Resumos: 'Resumo', Quizzes: 'Quiz', Erros: 'Caderno de erros' };
 const SHORT = { Erros: 'Caderno' };
 const TABS = [['Resumos', 'Resumo'], ['Flashcards', 'Flashcards'], ['Quizzes', 'Quiz']];
 // O que o veredito da revisão da IA muda (review): "parcial" soa como meio ponto, e só "correta" muda a resposta.
+// chute: "correta" numa resposta marcada como chute (#80) de uma questão que já estava no caderno. Ela conta como acerto
+// e volta ao ponto do caderno de antes da resposta; a que não estava sai, como na "correta".
 const VERDICT_EFFECT = {
   correta: 'Agora conta como acerto, e a questão saiu do caderno de erros.',
+  chute: 'Agora conta como acerto. Como foi chute, a questão continua no caderno de erros, no ponto em que estava.',
   parcial: 'Parcial não vale ponto: a resposta continua contando como erro, e a questão fica no caderno de erros.',
   incorreta: 'A resposta continua contando como erro, e a questão fica no caderno de erros.',
 };
+// O veredito do comentário da IA sobre a explicação com as próprias palavras (#82), em frase: a palavra sozinha diz
+// pouco. As definições são as da instrução da IA (backend/app/prompts.py, EXPLAIN), e o backend tira do comentário o que
+// desmentiria a frase (main.explain).
+const OWN_VERDICT = {
+  completa: 'Explicação completa: as ideias essenciais do tópico estão no que você escreveu.',
+  parcial: 'Explicação parcial: o que você escreveu está certo, mas faltou uma ideia essencial.',
+  incorreta: 'Explicação incorreta: o que você escreveu contradiz o tópico ou fala de outra coisa.',
+};
+// Os botões da certeza (#80), na ordem de CONF (lib.js).
+const SURE_LABELS = { certeza: 'Tenho certeza', acho: 'Acho que sei', chute: 'Chutei' };
 
 // Aviso fixo onde há texto escrito pela IA: a conversa, o "Não entendi, me explique" e os materiais temporários (o
 // caderno de erros, o simulado, a revisão do dia). A demonstração não usa IA e não mostra. O aviso do material segue o
@@ -163,15 +181,38 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado", na janela do perfil, para as ondas
+  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
+  // sem nada gravado, elas andam. Com movimento reduzido no sistema (wavesStill, lido ao vivo) elas ficam paradas e o
+  // botão some.
+  const wavesAllowed = useWavesAllowed();
+  const wavesStill = useWavesStill();
+  const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
+  // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido, e aí o botão
+  // some (não teria o que ligar); null enquanto não houve aviso, e o botão fica.
+  const [wavesActive, setWavesActive] = useState(null);
+  // A troca do "Fundo animado" que o navegador não gravou: o aviso sai na janela do perfil, junto do botão.
+  const [fundoUnsaved, setFundoUnsaved] = useState(false);
+  // O botão some com a janela do perfil aberta (sem WebGL na GPU, movimento reduzido ligado, contexto perdido, janela
+  // estreitada). Com o foco nele, o foco cairia no body, fora da janela modal, e o primeiro Tab sairia da página: vai
+  // para o "Fechar". A função do ref não muda, e o React só a chama com null logo antes de tirar o botão do DOM.
+  const fundoButton = useRef(null);
+  const fundoRef = useCallback(el => {
+    if (!el && fundoButton.current === document.activeElement) {
+      fundoButton.current.closest('dialog')?.querySelector('.close')?.focus();
+    }
+    fundoButton.current = el;
+  }, []);
   const [name, setName] = useState(user?.name || '');
   const [area, setArea] = useState(DRAFT.area || (AREAS.includes(user?.area) ? user.area : 'Tecnologia'));
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, example),
-  // para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
+  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, own,
+  // example), para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
   // Wait); since é a hora do pedido, para os segundos.
-  // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista.
+  // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista;
+  // no comentário da explicação com as próprias palavras, item é o tópico.
   const [busy, setBusy] = useState(null);
   // Aviso de erro do Estudar e do Dúvidas: { message, tech, until } (Problem, abaixo), ou null.
   const [error, setError] = useState(null);
@@ -192,8 +233,18 @@ function App() {
   const [lastBackup, setLastBackup] = useState(() => read('backup', null));
   const [idx, setIdx] = useState(0);
   const [flip, setFlip] = useState(false);
+  // Campo "Sua resposta", embaixo do cartão: o que o aluno escreveu antes de virar (só nesta tela, não é gravado) e
+  // locked, o cartão já virado: o campo fica só para leitura até o próximo cartão. write é a caixa "Escrever antes de
+  // virar", que mostra o campo (lib.js, readWriteFirst).
+  const [typed, setTyped] = useState('');
+  const [locked, setLocked] = useState(false);
+  const [write, setWrite] = useState(() => readWriteFirst(TOUCH));
   const [answer, setAnswer] = useState(null);
   const [answers, setAnswers] = useState([]);
+  // Marcar certeza (#80): com a caixa ligada, a opção escolhida (choice, o índice dela) espera a certeza para ir à
+  // correção. A caixa (sure) fica no navegador e começa ligada; valor estragado vale ligada.
+  const [choice, setChoice] = useState(null);
+  const [sure, setSure] = useState(() => read('certeza', true) !== false);
   const [done, setDone] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('Todas');
@@ -234,6 +285,13 @@ function App() {
   // "Não entendi, me explique": { item, text } ou { item, error }; item é a questão ou o tópico do pedido.
   // Só com item, a resposta ainda não chegou.
   const [why, setWhy] = useState(null);
+  // "Explicar com minhas palavras" (#82), num tópico por vez, como o why: { item, text, compared, review, error }. item
+  // é o tópico; text, o que o aluno escreve, que só fica na tela; compared, a comparação à vista; review, o comentário da
+  // IA ({ verdict, missing, misconception }); error, o erro do pedido. Nada disso é gravado nem conta no desempenho.
+  const [own, setOwn] = useState(null);
+  // "Questões novas deste material", no fim do quiz: { of, error } quando o pedido falhou, ou { of, list, resumo } com
+  // as questões que entraram e se elas saíram do resumo. of é o material do pedido: o erro só aparece no fim do quiz dele.
+  const [extra, setExtra] = useState(null);
   // Janela "Ver no texto" de um tópico do resumo: { texto, range, origin, concept }, ou null. range é onde o trecho
   // está no texto (lib.js, findSource), ou null; origin, de onde o texto veio (lib.js, textOrigin). Tudo é guardado no
   // clique: o material aberto pode mudar com a janela aberta (a geração que terminou longe do Estudar).
@@ -258,9 +316,10 @@ function App() {
   const opened = result?.virtual ? parked : result;
   // Página e material aberto deste desenho. generate() espera a IA por até 105 s e, na volta, ainda enxerga os do
   // clique. O texto do editor, a área e o nível vão junto: na volta da IA e do arquivo dos exemplos, addExample()
-  // confere se o aluno mexeu neles durante a espera. virtual: o material temporário está na tela.
+  // confere se o aluno mexeu neles durante a espera. virtual: o material temporário está na tela. done: o quiz
+  // terminou, e o fim dele está na página do quiz.
   const latest = useRef({});
-  latest.current = { page, result: opened, virtual: !!result?.virtual, input, area, level };
+  latest.current = { page, result: opened, virtual: !!result?.virtual, done, input, area, level };
   const noticeTimer = useRef(null);
   const chatEnd = useRef(null);
   // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
@@ -336,9 +395,9 @@ function App() {
     };
   }, []);
 
-  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil ou a data do
-  // backup: esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba que gravou. O
-  // rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
+  // Outra aba gravou a biblioteca, o desempenho, o caderno de erros, as caixas dos cartões, o perfil, a data do backup
+  // ou o "Fundo animado": esta mostra a mudança sem F5, com a mesma conferência da abertura. O evento não chega à aba
+  // que gravou. O rascunho fica de fora: cada aba fica com o seu. key null: outra aba apagou tudo.
   useEffect(() => {
     const sync = e => {
       const changed = k => e.key === null || e.key === storageKey(k);
@@ -347,6 +406,7 @@ function App() {
       if (changed('erros')) setMistakes(readList('erros').filter(validMistake));
       if (changed('cartoes')) setBoxes(readList('cartoes').filter(validCardReview));
       if (changed('backup')) setLastBackup(read('backup', null));
+      if (changed('fundo')) setFundo(read('fundo', true) !== false);
       if (changed('user')) {
         const profile = readUser();
         setUser(profile);
@@ -359,6 +419,59 @@ function App() {
 
   useEffect(() => {
     if (API_BASE) checkHealth();
+  }, []);
+
+  // Modo estudo: o navegador é pedido para não apagar os dados sozinho, e o manifest entra só aqui (com ele, o navegador
+  // oferece instalar o app; o app com IA e a demonstração ficam como estão). O service worker (sw-molde.js) guarda os
+  // arquivos do build, e o app abre sem rede. A versão nova espera o "Atualizar" do aviso, oferecido quando ela chega,
+  // na abertura e na volta à aba; com ele, esta página e as outras abas recarregam na versão nova.
+  useEffect(() => {
+    if (!SEM_IA) return;
+    navigator.storage?.persist?.();
+    document.head.append(Object.assign(document.createElement('link'), { rel: 'manifest', href: './manifest.webmanifest' }));
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    let reg = null;
+    // Sem controller é a primeira visita: o service worker que chega não é versão nova.
+    const offer = () => {
+      if (reg?.waiting && sw.controller) {
+        toast('Versão nova do Cérebro', { label: 'Atualizar', run: () => reg.waiting?.postMessage('atualizar') });
+      }
+    };
+    const watch = worker => worker?.addEventListener('statechange', () => worker.state === 'installed' && offer());
+    sw.register('./sw.js').then(r => {
+      reg = r;
+      watch(r.installing);
+      r.addEventListener('updatefound', () => watch(r.installing));
+      offer();
+    }, () => {});
+    const back = () => {
+      if (document.visibilityState !== 'visible' || !reg) return;
+      offer();
+      reg.update().catch(() => {});
+    };
+    let reloading = false;
+    const reload = () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    };
+    document.addEventListener('visibilitychange', back);
+    sw.addEventListener('controllerchange', reload);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      sw.removeEventListener('controllerchange', reload);
+    };
+  }, []);
+
+  // A demonstração do build do modo estudo não registra o service worker, mas abre do cache dele: com o "Atualizar" de
+  // outra aba, ela também recarrega na versão nova, e não pede depois um arquivo que já saiu do cache.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!DEMO || CONFIG.semIA !== true || !sw) return;
+    const reload = () => window.location.reload();
+    sw.addEventListener('controllerchange', reload);
+    return () => sw.removeEventListener('controllerchange', reload);
   }, []);
 
   // Na abertura, o histórico gravado perde as repetições de dias passados (lib.js, compactEvents) e é gravado de novo
@@ -400,6 +513,10 @@ function App() {
       return;
     }
     window.scrollTo(0, 0);
+    // No toque, o quiz chega com o enunciado à vista: nos telefones baixos, a faixa presa da certeza (#80) o cobria. A
+    // rolagem para acima dela, ou do "Próxima questão", e da barra de baixo (mobile.css, scroll-padding da raiz). O foco
+    // fica onde o aluno tocou.
+    if (TOUCH && page === 'Quizzes') document.querySelector('.quiz-question')?.scrollIntoView({ block: 'nearest' });
   }, [page]);
 
   useLayoutEffect(() => {
@@ -448,22 +565,23 @@ function App() {
 
   useEffect(() => {
     if (!focusAfter.current) return;
-    const [selector, fallback, show, whole] = focusAfter.current;
+    const [selector, fallback, show, whole, lead] = focusAfter.current;
     focusAfter.current = null;
     // A última ocorrência: numa troca de página, a que sai (AnimatePresence, popLayout) fica no DOM antes da nova. Só a
     // que está na tela: o focus() num alvo escondido (display none) não pega, e o foco caía no body sem tentar a reserva.
     const last = s => s && [...document.querySelectorAll(s)].filter(e => e.getClientRects().length).pop();
-    // Com show, o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado as marcas da
-    // caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela (no celular a
-    // raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco e conta uma
-    // vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e ✗ e a nota
-    // acima da faixa.
-    (last(selector) || last(fallback))?.focus({ preventScroll: !!show });
-    if (!show) return;
+    // Com show (ou whole), o foco não rola a página: o navegador centraliza o que recebe o foco, e no celular deitado
+    // as marcas da caneta saíam pelo topo. Quem rola é o show. Se o bloco inteiro (whole) cabe no que sobra da janela
+    // (no celular a raiz desconta a barra de baixo e o "Próxima questão" preso, mobile.css; a faixa fica dentro do bloco
+    // e conta uma vez só), ele vem todo, com o botão de seguir; senão, só o último elemento que casa, com as marcas ✓ e
+    // ✗ e a nota acima da faixa. Sem caber, o lead (o cartão virado), quando há, leva o foco e sobe para o topo.
     const box = last(whole);
     const fits = box && fitsAbove(box.offsetHeight, innerHeight,
       getComputedStyle(document.documentElement).scrollPaddingBottom, box.querySelector('.next-row')?.offsetHeight);
-    (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
+    const top = box && !fits && last(lead);
+    (top || last(selector) || last(fallback))?.focus({ preventScroll: !!(show || box) });
+    if (top) top.scrollIntoView({ block: 'start' });
+    else (fits ? box : last(show))?.scrollIntoView({ block: 'nearest' });
   });
 
   // O erro aparece junto do que o aluno clicou; se estiver fora da vista (no celular), a página rola até ele.
@@ -504,6 +622,15 @@ function App() {
     setRecall(recall.of && sameMaterial(recall.of, opened) ? { ...recall, of: opened } : recallStart(opened));
   }
 
+  // O campo do "Explicar com minhas palavras" é de um tópico do material aberto. Aberto outro material, ou outra cópia
+  // do mesmo (da biblioteca), o tópico dele sai da tela: o campo fecha, e o comentário pedido sai junto, porque não teria
+  // onde aparecer e seria anunciado sem nada na tela. O material temporário guarda o aberto (opened), e o campo fica.
+  useEffect(() => {
+    if (!own || opened?.summary?.includes(own.item)) return;
+    if (busy?.kind === 'own') cancelAI();
+    setOwn(null);
+  }, [opened]);
+
   // Grava também na aba (sessionStorage): o F5 traz o rascunho desta aba (lib.js, readDraft). Cada gravação tem o seu
   // try: a que falha não impede a outra.
   function saveDraft() {
@@ -517,14 +644,17 @@ function App() {
     } catch {}
   }
 
-  // Volta ao início do quiz. "list" = só as questões erradas; sem ele, o quiz completo.
+  // Volta ao início do quiz. "list" = só as questões erradas, ou só as novas; sem ele, o quiz completo. O erro do pedido
+  // de questões novas sai junto com o fim do quiz onde ele estava.
   function restartQuiz(list = null) {
     setIdx(0);
     setDone(false);
     setAnswer(null);
+    setChoice(null);
     setAnswers([]);
     setRetry(list);
     setWhy(null);
+    setExtra(x => (x?.error ? null : x));
   }
 
   // Volta ao início do quiz e do baralho: só quando o material aberto muda (gerado, aberto da biblioteca, o quiz do
@@ -532,7 +662,7 @@ function App() {
   // aluno volta onde estava.
   function restart() {
     restartQuiz();
-    setFlip(false);
+    freshCard();
     setDeck(null);
   }
 
@@ -629,8 +759,11 @@ function App() {
   // Outra aba pode ter gravado depois que esta abriu: a lista nova parte do que está no navegador, não da cópia
   // desta aba, que apagaria o que a outra gravou. Se o navegador recusar a gravação, o evento fica só nesta tela.
   // q é o enunciado da questão do quiz: com ele o desempenho conta só a primeira resposta de cada questão no dia.
-  function event(kind, ok, topic = area, q, title = result?.title) {
-    const entry = { kind, ok, area: topic, title, q, date: new Date().toISOString() };
+  // extra leva campos a mais da resposta: a certeza marcada no quiz (conf, #80), o resultado da questão no outro dia
+  // (prev, #78) e caderno: true, quando a questão estava no caderno de erros antes da resposta. É pelo caderno que a
+  // véspera da prova sabe o que o caderno de erros tinha no começo do dia (lib.js, studyPlan).
+  function event(kind, ok, topic = area, q, title = result?.title, extra) {
+    const entry = { kind, ok, area: topic, title, q, ...extra, date: new Date().toISOString() };
     const next = [...readList('events'), entry];
     setEvents(persist('events', next) ? next.filter(validEvent) : [...events, entry]);
   }
@@ -687,7 +820,10 @@ function App() {
     if (waiting) return;
     setError(null);
     if (input.trim().length < (API_BASE ? 3 : 30)) {
-      setError({ message: 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).' });
+      setError({
+        message: SEM_IA ? 'Cole um texto completo (mínimo 30 caracteres): sem IA, os botões organizam as frases dele.'
+          : 'Escreva um tema (mínimo 3 caracteres com IA) ou cole um texto completo (mínimo 30 na demonstração).',
+      });
       return;
     }
     // Uma resposta traz resumo, flashcards e quiz, e o material abre no Resumo. Todo clique gera material novo: com o
@@ -821,6 +957,42 @@ function App() {
     toast('Material salvo na biblioteca');
   }
 
+  // "Data da prova" (ui.jsx, ExamDate): a data vai para o material na biblioteca, a partir da lista do navegador, como no
+  // store(). O material que ainda não está lá é salvo com ela, e o aviso diz isso. Sem data, o campo prova sai.
+  // provaMarcada é a hora em que a data foi marcada: com ela marcada hoje, a véspera conta dali (lib.js, studyPlan).
+  // O rascunho é gravado junto: na saída da página (ExamDate grava no pagehide) não há outro desenho, e ele já tinha
+  // sido gravado sem a data.
+  function setExam(day) {
+    const stored = readList('saved');
+    const at = result.id ? stored.findIndex(s => s?.id === result.id) : -1;
+    const { prova, provaMarcada, ...rest } = at < 0 ? result : stored[at];
+    const material = day ? { ...rest, prova: day, provaMarcada: new Date().toISOString() } : rest;
+    const note = day ? 'Prova marcada para ' + day.slice(8) + '/' + day.slice(5, 7) + ': o plano do dia fica no Estudar.'
+      : 'Data da prova apagada.';
+    const open = (opened, text) => {
+      setResult(opened);
+      toast(text);
+      if (draft.current) {
+        draft.current = { ...draft.current, result: opened };
+        saveDraft();
+      }
+    };
+    if (at < 0 && day) {
+      const entry = store(material);
+      if (entry) open(entry, 'Material salvo na biblioteca. ' + note);
+      return;
+    }
+    if (at >= 0) {
+      stored[at] = material;
+      if (!persist('saved', stored)) return;
+      setSaved(stored.filter(validMaterial));
+    }
+    // A cópia lida da biblioteca tem outros objetos. Com o resumo igual, a tela fica com os do material aberto, que o
+    // campo do "Explicar com minhas palavras" (#82) segue: marcar a data não fecha o campo nem perde o comentário pedido.
+    const same = JSON.stringify(material.summary) === JSON.stringify(result.summary);
+    open(same ? { ...material, summary: result.summary } : material, note);
+  }
+
   // Material aberto que ainda não foi para a biblioteca é guardado antes de outro tomar o lugar: ele custou uma
   // chamada de IA. Quem já tem id foi salvo ou veio de lá. Devolve true se guardou.
   function keep(previous) {
@@ -853,7 +1025,7 @@ function App() {
     if (entry) setResult(entry);
     const backup = {
       versao: 1, saved: readList('saved'), events: readList('events'), erros: readList('erros'),
-      cartoes: readList('cartoes'), user: readUser(),
+      cartoes: readList('cartoes'), questoes: readSeen(), user: readUser(),
     };
     download(new File([JSON.stringify(backup)], 'cerebro-backup-' + localDay(new Date()) + '.json',
       { type: 'application/json' }));
@@ -882,7 +1054,7 @@ function App() {
     const now = new Date();
     const before = {
       saved: readList('saved'), events: compactEvents(readList('events'), now), erros: readList('erros'),
-      cartoes: readList('cartoes'),
+      cartoes: readList('cartoes'), questoes: readList('questoes'),
     };
     const after = mergeBackup(before, backup);
     after.events = compactEvents(after.events, now);
@@ -894,6 +1066,7 @@ function App() {
     setMistakes(after.erros.filter(validMistake));
     if (!persist('cartoes', after.cartoes)) return;
     setBoxes(after.cartoes.filter(validCardReview));
+    if (!persist('questoes', after.questoes)) return;
     // O perfil do arquivo (já conferido em readBackup) só entra num navegador que ainda não tem um: o daqui vale mais.
     // A área do editor não muda.
     const profile = backup.user && !readUser() && persist('user', backup.user) ? backup.user : null;
@@ -989,6 +1162,32 @@ function App() {
     else toast('Não foi possível abrir a folha de impressão. Recarregue a página e tente de novo.');
   }
 
+  // Vira o cartão: o clique nele ou o Enter no campo "Sua resposta". from é onde o foco fica quando o cartão vira pelo
+  // teclado; pelo ponteiro (o clique e o toque), não vem. Quem já viu a resposta não reescreve a sua: o campo fica só
+  // para leitura até o próximo cartão.
+  function turnCard(from) {
+    setFlip(!flip);
+    setLocked(true);
+    // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a face nova (flip ainda é o de
+    // antes do clique).
+    say(spokenCard(card, !flip, write && typed.trim() !== ''));
+    cardMotion.current = 'perspective(900px) rotateX(-10deg)';
+    // A resposta e o "Você escreveu" empurram o campo e os botões para baixo, às vezes para fora da janela ou para trás
+    // da barra de baixo. Pelo teclado, se o bloco do cartão cabe na janela, a página rola até ele inteiro, e o foco fica
+    // onde estava. Senão (a janela baixa: o celular deitado, o zoom de 200%), a resposta e o "Você escreveu" têm a vez:
+    // o cartão sobe para o topo e leva o foco, e o Tab segue para o campo e os botões, que o scroll-padding traz acima
+    // da barra. Pelo ponteiro, a página não rola: "Errei", "Revisar depois" ou "Acertei" subiriam para baixo dele, e o
+    // segundo clique no mesmo lugar (para rever a pergunta, ou o fim de um duplo clique) avaliaria o cartão.
+    if (!flip && from) focusAfter.current = [from, null, null, '.card-block', '.flashcard'];
+  }
+
+  // O cartão seguinte, ou o mesmo recomeçado, abre na pergunta e com o campo "Sua resposta" vazio e editável.
+  function freshCard() {
+    setFlip(false);
+    setTyped('');
+    setLocked(false);
+  }
+
   // "Acertei" segue para o próximo cartão; "Errei" põe o cartão de novo no fim da fila. Os dois ficam registrados, com
   // a pergunta do cartão: como no quiz, o desempenho conta só a primeira avaliação de cada cartão no dia. Os dois mudam
   // também a caixa do cartão (lib.js, scheduleCard). Na revisão do dia, o cartão traz o material e a área de onde veio.
@@ -997,27 +1196,34 @@ function App() {
     const from = result.virtual ? card : result;
     event('flashcard', ok, from.area, fold(card.question), from.title);
     schedule(list => scheduleCard(list, from.title, card.question, ok, new Date()));
-    setFlip(false);
+    freshCard();
     setDeck(ok ? deckRight(session) : deckWrong(session));
     cardMotion.current = 'translateX(12px)';
     focusAfter.current = ['.flashcard', '.deck-done h2'];
   }
 
-  // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa.
-  // A questão errada entra no caderno de erros; a certa, no dia marcado, sobe um degrau dele (lib.js, clearMistake).
-  // As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
-  function submit(value) {
+  // given é o que o aluno respondeu: a tela final mostra ao lado da resposta certa. conf é a certeza que ele marcou
+  // antes da correção (#80), ou nada com a caixa "Marcar certeza" desligada.
+  // A questão errada entra no caderno de erros; a certa, no dia marcado, sobe um degrau dele, menos no chute (lib.js,
+  // noteAnswer). As opções ficam desabilitadas e o foco ia para a página: ele passa ao retorno, que diz se acertou.
+  function submit(value, conf) {
     if (answer !== null) return;
     const q = quizList[idx];
     const ok = q.type === 'short' ? shortAnswerOk(q.answer, value) : value === q.answer;
     const from = origin(q);
+    const key = mistakeKey(from.title, q.question);
     const now = new Date();
-    setAnswer({ value, ok });
-    setAnswers([...answers, { ...q, ok, given: value }]);
-    event('quiz', ok, from.area, fold(q.question), from.title);
-    notebook(list => (ok
-      ? clearMistake(list, mistakeKey(from.title, q.question), now)
-      : addMistake(list, q, from.title, from.area, now)));
+    // before é o erro do caderno de antes da resposta: a revisão da IA que aceita um chute o devolve (review).
+    const before = readList('erros').find(e => e?.key === key);
+    setAnswer({ value, ok, conf, before });
+    setAnswers([...answers, { ...q, ok, given: value, conf }]);
+    // O índice do acerto que ficou (#78, lib.js: seenStep) dá o prev da resposta: lido antes de gravar a resposta, que
+    // entraria no índice montado das respostas.
+    const seen = seenStep(readSeen(), key, ok, now);
+    const listed = mistakes.some(e => e.key === key);
+    event('quiz', ok, from.area, fold(q.question), from.title, { conf, prev: seen.prev, ...(listed && { caderno: true }) });
+    persist('questoes', seen.list);
+    notebook(list => noteAnswer(list, q, from.title, from.area, ok, conf, now));
     // No simulado a tela não corrige: o foco vai para o botão de seguir, e o leitor de tela ouve só que a resposta ficou.
     if (blind) {
       say('Resposta registrada.');
@@ -1027,6 +1233,15 @@ function App() {
     // Depois do foco, a página rola até o retorno inteiro ficar à vista; na janela baixa, onde ele não cabe, até a
     // última linha com marca da caneta (ou o próprio retorno).
     focusAfter.current = ['#retorno', null, '#retorno, .feedback .answer-line', '.feedback'];
+  }
+
+  // Resposta curta: só espaços vale como campo vazio. Limpo, o campo mostra o aviso do required; enviado, virava erro
+  // gravado no desempenho e no caderno de erros.
+  function filled(field) {
+    if (field.value.trim()) return true;
+    field.value = '';
+    field.reportValidity();
+    return false;
   }
 
   // Próxima questão ou o resultado. O foco vai para a questão nova (no computador, direto para a caixa da resposta
@@ -1039,6 +1254,7 @@ function App() {
     } else {
       setIdx(idx + 1);
       setAnswer(null);
+      setChoice(null);
       focusAfter.current = QUESTION_FOCUS;
     }
   }
@@ -1086,9 +1302,9 @@ function App() {
 
   // "Revisão do dia": os cartões que voltam hoje, de todos os materiais, num baralho temporário, como o quiz do caderno:
   // no máximo 20 por vez, os mais atrasados primeiro. O material que estava aberto fica guardado e volta quando o aluno
-  // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está.
-  function dayDeck() {
-    const cards = dayCards(cardsDue);
+  // sai da página Flashcards. O cabeçalho troca sem trocar de página: o leitor de tela ouve onde o aluno está. O plano
+  // até a prova (openTask) passa os cartões de hoje de um material.
+  function dayDeck(cards = dayCards(cardsDue)) {
     setParked(opened);
     setResult({
       virtual: 'Flashcards',
@@ -1103,6 +1319,23 @@ function App() {
     restart();
     setNotice(null);
     say('Revisão do dia: ' + cards.length + ' ' + plural(cards.length, 'cartão', 'cartões') + '.');
+  }
+
+  // O botão do plano até a prova (ui.jsx, StudyPlan) abre a tarefa de hoje: as questões do material no caderno; os
+  // cartões que faltam, numa revisão como a do dia, ou o baralho do material quando faltam todos; o quiz dele; ou, no dia
+  // da prova, o resumo.
+  function openTask({ material, task, left, whole }) {
+    if (task === 'erros') return redoMistakes(left);
+    if (task === 'cartoes' && !whole) return dayDeck(dayCards(left));
+    const to = task === 'quiz' ? 'Quizzes' : task === 'cartoes' ? 'Flashcards' : 'Resumos';
+    const focus = task === 'quiz' ? QUESTION_FOCUS : task === 'cartoes' ? ['.flashcard', 'main h1'] : ['#material-titulo'];
+    if (opened?.id !== material.id) return openSaved(material, to, focus);
+    // Já aberto, como no "Abrir" do Desempenho: o quiz e o baralho ficam onde estavam, e os que tinham terminado recomeçam.
+    setEditorChat(false);
+    go(to);
+    focusAfter.current = focus;
+    if (task === 'quiz' && done) restartQuiz();
+    if (task === 'cartoes' && session.pos >= session.queue.length) setDeck(null);
   }
 
   // Tira a questão do caderno na hora, sem perguntar, e deixa desfazer, como a exclusão de um material.
@@ -1134,6 +1367,69 @@ function App() {
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.why, .busy')) focusAfter.current = [back, 'main h1'];
+      setBusy(null);
+    }
+  }
+
+  // "Explicar com minhas palavras" (#82): o texto do tópico sai da tela, e o aluno escreve o que lembra. O botão fica no
+  // lugar e abre ou fecha, um tópico por vez. Fechar, ou abrir outro, apaga o que foi escrito e desiste do comentário
+  // pedido. O texto que sai ou volta acima do botão o leva para fora da janela, e o foco que já está nele não rola a
+  // página: quem o traz de volta é o show (focusAfter).
+  function toggleOwn(s, i) {
+    if (busy?.kind === 'own') cancelAI();
+    if (own?.item === s) {
+      setOwn(null);
+      // Com "Esconder o texto", o tópico volta escondido e o botão sai com ele: o foco vai ao "Mostrar".
+      focusAfter.current = ['#minhas-' + i, '#mostrar-' + i, '#minhas-' + i + ', #mostrar-' + i];
+      return;
+    }
+    setOwn({ item: s, text: '' });
+    // No toque o foco fica no botão, para o teclado da tela não abrir sozinho, e o tópico inteiro vem à vista quando
+    // cabe; senão, o botão, com o campo embaixo.
+    focusAfter.current = TOUCH
+      ? ['#minhas-' + i, null, '#minhas-' + i, '.summary > li:nth-child(' + (i + 1) + ')']
+      : ['#proprio-campo'];
+  }
+
+  // "Pedir comentário da IA": a explicação vai como dado, e o comentário só fica na tela, sem entrar no desempenho nem
+  // no caderno de erros. Campo em branco não gasta chamada: o aviso pede o texto, como o gerar sem texto. A resposta só
+  // muda a explicação do pedido: fechar o tópico durante a espera desiste dele (toggleOwn).
+  async function commentOwn() {
+    if (waiting) return;
+    const mine = own;
+    const s = mine.item;
+    if (!mine.text.trim()) {
+      setOwn({ ...mine, error: { message: 'Escreva a sua explicação antes de pedir o comentário da IA.' } });
+      focusAfter.current = ['#proprio-campo'];
+      return;
+    }
+    const from = origin(s);
+    let review = null;
+    setOwn({ ...mine, error: null });
+    setBusy({ kind: 'own', label: 'Esperando o comentário…', orb: 'solving', since: Date.now(), item: s });
+    // A espera nasce junto com o comentário e não seria lida.
+    say('Esperando o comentário da IA…');
+    try {
+      const data = await callAI('/api/explain', explainRequest(s, mine.text, from.area, from.level));
+      if (!Object.keys(OWN_VERDICT).includes(data?.verdict) || !Array.isArray(data.missing)) {
+        throw Error('A IA mandou um comentário incompleto. Tente de novo.');
+      }
+      review = {
+        verdict: data.verdict,
+        missing: data.missing.filter(piece => typeof piece === 'string'),
+        misconception: typeof data.misconception === 'string' ? data.misconception : '',
+      };
+      setOwn(o => (o?.item === s ? { ...o, compared: true, review } : o));
+    } catch (e) {
+      if (!e.cancelled) setOwn(o => (o?.item === s ? { ...o, error: e } : o));
+    } finally {
+      // Com o comentário o botão do pedido sai da tela, e o foco que estava no tópico vai para o veredito; longe dele, o
+      // leitor de tela ouve o veredito. O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
+      if (adrift(review ? '.own, .busy' : '.own .wait, .busy')) {
+        focusAfter.current = [review ? '#proprio-veredito' : '#proprio-ia', 'main h1'];
+      } else if (review) {
+        say('Comentário da IA: ' + OWN_VERDICT[review.verdict]);
+      }
       setBusy(null);
     }
   }
@@ -1186,13 +1482,105 @@ function App() {
         const fix = list => fixLastQuizEvent(list, from.title, fold(q.question), asked);
         const next = fix(readList('events'));
         setEvents(persist('events', next) ? next.filter(validEvent) : fix);
-        notebook(list => removeMistake(list, mistakeKey(from.title, q.question), asked));
+        // O chute aceito é um acerto no chute, que não muda o caderno (noteAnswer): ele volta ao que era antes da resposta.
+        const key = mistakeKey(from.title, q.question);
+        notebook(list => (mine.conf === 'chute'
+          ? restoreMistake(list, key, mine.before, asked)
+          : removeMistake(list, key, asked)));
       }
     } catch (e) {
       if (!e.cancelled) setAnswer(a => (a === mine ? { ...a, review: { error: e } } : a));
     } finally {
       // O Cancelar sai com a espera: o foco que estava nele volta ao botão do pedido.
       if (adrift('.review-wait, .busy')) focusAfter.current = ['#pedir-revisao', 'main h1'];
+      setBusy(null);
+    }
+  }
+
+  // "Questões novas deste material", no fim do quiz: a IA escreve de 4 a 6 questões sobre o texto do material (o
+  // guardado ou, no material de antes dele, o resumo: lib.js, quizSource), sem repetir as que ele já tem. Elas entram no
+  // material e, se ele está na biblioteca, também lá (lib.js, mergeQuiz), e o quiz recomeça só com elas. O botão fica
+  // fora do material temporário. Durante a espera o aluno pode sair do quiz: as questões vão para o material do pedido.
+  // Como nas outras gravações, o material parte do que está no navegador, não da cópia desta aba (lib.js, savedCopy):
+  // as questões que outra aba juntou a ele ficam, o pedido evita as perguntas delas e o teto conta com elas.
+  async function addQuestions() {
+    const material = result;
+    if (waiting || material.quiz.length >= QUIZ_CAP) return;
+    const base = savedCopy(material, readList('saved'));
+    if (base.quiz.length >= QUIZ_CAP) {
+      setExtra({ of: material, error: { message: 'Este material já tem ' + QUIZ_CAP + ' questões na Biblioteca. Abra-o de lá para ver todas.' } });
+      focusAfter.current = [null, null, '#erro-questoes'];
+      return;
+    }
+    const { fromSummary, ...source } = quizSource(base);
+    const from = origin(material);
+    // O material do pedido está aberto: esta cópia ou outra dele, aberta de novo da biblioteca durante a espera.
+    const isOpen = now => now.result === material || (!!material.id && now.result?.id === material.id);
+    setExtra(null);
+    setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', orb: 'composing', since: Date.now(), of: material });
+    // A espera nasce no fim do quiz e não seria lida. Com o botão no pé da janela ela nasceria fora da vista: a página
+    // rola até ela, e o foco fica no botão.
+    say('Escrevendo questões novas…');
+    focusAfter.current = [null, null, '.quiz-wait'];
+    try {
+      const data = await callAI('/api/quiz', { ...source, area: from.area, level: from.level });
+      const stored = readList('saved');
+      const at = material.id ? stored.findIndex(s => s?.id === material.id) : -1;
+      const copy = savedCopy(base, stored);
+      const quiz = mergeQuiz(copy.quiz, data?.quiz);
+      const list = quiz.slice(copy.quiz.length);
+      if (!list.length) throw Error('A IA não mandou questões novas para este material. Tente de novo.');
+      // As questões são texto da IA: o material da demonstração (semIA) passa a mostrar o aviso. O que saiu da
+      // biblioteca durante a espera perde a id: aberto, ele volta a ser guardado quando outro toma o lugar (keep).
+      const { semIA, id, ...rest } = copy;
+      const next = at >= 0 ? { ...rest, id, quiz } : { ...rest, quiz };
+      if (at >= 0) {
+        stored[at] = next;
+        if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
+      }
+      // O material do pedido continua aberto (ou guardado atrás do quiz do caderno de erros ou do simulado): ele troca
+      // pelo novo, e o resumo ativo, que não mudou, continua onde estava.
+      const now = latest.current;
+      const open = isOpen(now);
+      if (open) {
+        if (now.virtual) setParked(next);
+        else {
+          setResult(next);
+          restartQuiz(list);
+        }
+        setRecall(r => ({ ...r, of: next }));
+        // O campo do "Explicar com minhas palavras" também continua: o tópico dele passa a ser o mesmo do material novo,
+        // que vem da biblioteca com outros objetos. Sem isso, o efeito de opened fechava o campo e apagava o texto.
+        setOwn(o => o && { ...o, item: next.summary[now.result.summary.indexOf(o.item)] ?? o.item });
+      }
+      setExtra({ of: next, list, resumo: fromSummary });
+      const note = list.length + ' ' + plural(list.length, 'questão nova', 'questões novas') +
+        (open && !now.virtual ? ' no quiz' : ' no quiz de "' + material.title + '"') +
+        (fromSummary ? '. Questões feitas a partir do resumo' : '');
+      if (open && !now.virtual && now.page === 'Quizzes') {
+        // O fim do quiz sai da tela: o foco vai para a primeira questão nova.
+        say(note + '.');
+        if (adrift('main, .busy')) focusAfter.current = QUESTION_FOCUS;
+      } else {
+        if (adrift('.busy')) focusAfter.current = ['main h1'];
+        if (open && !now.virtual) toast(note, { label: 'Abrir', run: () => openPage('Quizzes', QUESTION_FOCUS) });
+        else toast(open || at >= 0 ? note : 'As questões novas não entraram: o material foi fechado durante a espera');
+      }
+    } catch (e) {
+      // Cancelado, nada muda. O erro fica no fim do quiz, embaixo do botão, que fica com o foco e à vista com ele. Quem
+      // saiu de lá durante a espera recebe o aviso, com "Abrir" se o fim do quiz do material continua lá.
+      if (!e.cancelled) {
+        const now = latest.current;
+        const open = isOpen(now) && !now.virtual;
+        setExtra({ of: open ? now.result : material, error: e });
+        if (!open || !now.done || now.page !== 'Quizzes') {
+          toast('Não deu para escrever as questões novas' + (open ? '' : ' de "' + material.title + '"'), open && now.done
+            ? { label: 'Abrir', run: () => openPage('Quizzes', ['#questoes-novas', 'main h1']) }
+            : undefined);
+        }
+      }
+      if (adrift('.quiz-done, .busy')) focusAfter.current = ['#questoes-novas', 'main h1', e.cancelled ? null : '#erro-questoes'];
+    } finally {
       setBusy(null);
     }
   }
@@ -1221,7 +1609,10 @@ function App() {
     if (!API_BASE) {
       setChat(c => [...c, {
         role: 'assistant',
-        text: 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
+        text: (SEM_IA
+          ? 'No modo estudo não há IA neste aparelho: as respostas a dúvidas precisam do computador com a IA. '
+          : 'Na demonstração, posso organizar o texto, mas não responder dúvidas com IA. As explicações personalizadas estarão disponíveis na versão com IA ativada. ') +
+          'Trecho para revisar: ' + (topic.content || EXAMPLE).slice(0, 450),
       }]);
       return;
     }
@@ -1455,13 +1846,14 @@ function App() {
   }
 
   // Item da biblioteca aberto: o material que estava aberto e ainda não foi salvo vai para a biblioteca antes.
-  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho.
-  function openSaved(material) {
+  // Abrir de novo o que já está aberto (ele fica no topo da lista) não recomeça o quiz nem o baralho. O plano até a
+  // prova (openTask) abre a parte da tarefa (to), com o foco nela.
+  function openSaved(material, to = 'Resumos', focus = ['#material-titulo']) {
     if (keep(result)) toast('O material anterior foi guardado na biblioteca');
     made.current = { key: '' };
     setEditorChat(false);
     setResult(material);
-    openPage('Resumos', ['#material-titulo']);
+    openPage(to, focus);
     if (!result || !sameMaterial(result, material)) restart();
   }
 
@@ -1482,6 +1874,8 @@ function App() {
   const right = answers.length - wrong.length;
   const session = deck || deckStart(result?.flashcards?.length || 0);
   const card = result?.flashcards?.[session.queue[session.pos]];
+  // Virado o cartão, o que o aluno escreveu no campo aparece logo abaixo da resposta ("Você escreveu").
+  const wrote = write && locked && typed.trim() !== '';
   const today = localDay(new Date());
   // Os números do desempenho só mudam com as respostas (ou na virada do dia), não a cada tecla no editor.
   // Quiz e cartões são números separados: nos cartões é o aluno quem diz se acertou.
@@ -1503,6 +1897,11 @@ function App() {
     [boxes, opened, saved, today]
   );
   const mistakesDue = useMemo(() => dueMistakes(mistakes, new Date()), [mistakes, today]);
+  // O plano até a prova (lib.js, studyPlan): só no Estudar e no Desempenho, fora do caminho de cada resposta.
+  const plan = useMemo(
+    () => (page === 'Estudar' || page === 'Desempenho' ? studyPlan(saved, { events, mistakes, boxes }, new Date()) : []),
+    [page, saved, events, mistakes, boxes, today]
+  );
   // Sem respostas não há percentual: "0%" diria que o aluno errou tudo.
   const percent = r => (r.total ? r.rate + '%' : '—');
   const summary = result?.summary || [];
@@ -1510,6 +1909,9 @@ function App() {
   // As perguntas do "Tente responder antes de ler" e as marcas do modo lembrar dos tópicos que estão na lista.
   const pretest = pretestCards(result?.flashcards || []);
   const marked = shownMarks(recall.marks, topics.length);
+  // O campo do "Explicar com minhas palavras" só aparece no Resumo, no tópico dele: fora daí o erro do comentário não
+  // está na tela, e o aviso do alto conta a espera do limite por minuto (counted, alerts).
+  const ownShown = page === 'Resumos' && topics.includes(own?.item);
   // A busca dobra o texto de todos os materiais: só na Biblioteca e só quando a lista, a busca ou o filtro mudam.
   const shown = useMemo(
     () => (page === 'Biblioteca' ? saved.filter(s => matches(s, query, filter)) : []),
@@ -1541,10 +1943,14 @@ function App() {
   const chatHints = hints({ chat, input: subject.content, area: subject.area, tips });
   const greeting = hello({
     user, area: subject.area, level: subject.level, input: subject.content, title: subject.title, api: !!API_BASE,
+    study: SEM_IA,
   });
   // Teto de chamadas por dia escolhido pelo grupo (lib.js, capReached): até a contagem recomeçar, os botões da IA ficam
   // desligados, com o motivo junto deles.
   const capped = !!API_BASE && capReached(health);
+  // O erro do pedido de questões novas só está na tela no fim do quiz do material do pedido: só ali ele já diz a frase
+  // e conta os segundos do limite por minuto.
+  const extraError = page === 'Quizzes' && done && extra?.of === result ? extra.error : null;
   // Um pedido à IA por vez: a geração do material e a resposta do chat não correm juntas. Na espera do limite por
   // minuto nenhum sai, nem no teto do dia. Sempre true ou false: asking guarda a hora do pedido, e aria-disabled só vale
   // com "true".
@@ -1566,10 +1972,12 @@ function App() {
     setError(rateAtCap);
     setWhy(w => (w?.error?.until ? { ...w, error: rateAtCap(w.error) } : w));
     setAnswer(a => (a?.review?.error?.until ? { ...a, review: { error: rateAtCap(a.review.error) } } : a));
+    setOwn(o => (o?.error?.until ? { ...o, error: rateAtCap(o.error) } : o));
+    setExtra(x => (x?.error?.until ? { ...x, error: rateAtCap(x.error) } : x));
     // Quando o alerta de um pedido na tela já diz a frase, a região fixa não a repete. A frase que acabou de entrar nela
     // ("Material pronto", do pedido que gastou a última chamada) vai junto: trocada logo depois, não chegaria ao leitor
     // de tela.
-    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error] : [])];
+    const alerts = [error, ...(MATERIAL.includes(page) ? [why?.error, answer?.review?.error, ownShown && own.error, extraError] : [])];
     if (!alerts.some(e => rateAtCap(e)?.message?.endsWith(ERRORS.AI_BUDGET_REACHED))) {
       say([spoken.trim(), ERRORS.AI_BUDGET_REACHED].filter(Boolean).join(' '));
     }
@@ -1587,7 +1995,8 @@ function App() {
   // A escolha de páginas: o texto das páginas marcadas, contado como o contador do editor, e se ele passa do limite.
   const picked = pick ? pick.reader.pageSpan(pick.pages, pick.from, pick.to) : '';
   const over = picked.length > MAX_INPUT;
-  const status = API_BASE ? healthLabel(health) : { text: 'Modo demonstração', tone: 'demo' };
+  const status = API_BASE ? healthLabel(health)
+    : { text: SEM_IA ? 'Modo estudo · sem IA' : 'Modo demonstração', tone: 'demo' };
   const slug = SLUG[page];
   const inMore = MORE.some(([n]) => n === page);
   // A geração espera a IA: a página do material mostra o esqueleto da parte aberta, se o material aberto ainda é o
@@ -1598,7 +2007,9 @@ function App() {
   // só monta (e só então entra) quando aparece de verdade, e não fica na tela quando a resposta chega no lugar dela.
   const waitInline = making ? MATERIAL.includes(page)
     : busy?.kind === 'why' ? (page === 'Resumos' && topics.includes(why?.item)) || (page === 'Quizzes' && !done && why?.item === quiz)
-    : busy?.kind === 'review' && page === 'Quizzes' && !done && answer === busy.answer;
+    : busy?.kind === 'own' ? ownShown && own.item === busy.item
+    : busy?.kind === 'review' ? page === 'Quizzes' && !done && answer === busy.answer
+    : busy?.kind === 'questoes' && page === 'Quizzes' && done && result === busy.of;
   const band = !!busy && !waitInline;
   // A faixa de espera fica no lugar do atalho do Dúvidas (no celular, da marca), que sai do Tab enquanto isso, e no
   // Dúvidas o atalho também sai (styles.css). Se o foco estava nele, vai para o item da página aberta no menu, o mesmo
@@ -1642,7 +2053,8 @@ function App() {
   // fim da espera.
   const pause = pauseNotice({
     until: pausedUntil, page, error, capped,
-    counted: MATERIAL.includes(page) && [why?.error, answer?.review?.error].some(e => e?.until === pausedUntil),
+    counted: MATERIAL.includes(page)
+      && [why?.error, answer?.review?.error, ownShown && own.error, extraError].some(e => e?.until === pausedUntil),
   });
   const problem = pause || error;
   // O motivo do teto do dia fica junto dos botões da IA, no aviso do Estudar e embaixo da caixa do Dúvidas, e descreve o
@@ -1731,6 +2143,7 @@ function App() {
       >
         Pular para o conteúdo
       </a>
+      <Waves on={wavesAllowed} animate={fundo && !wavesStill} onActive={setWavesActive} />
       <div className="shell">
         <header className="topbar">
           {/* A marca leva ao Estudar. No celular a barra fica só com ela e o estado da IA (mobile.css): o perfil e o
@@ -1831,7 +2244,9 @@ function App() {
                 <m.div className="page-head" variants={titleIn}>
                   <h1 className="page-title" tabIndex={-1}>{NAMES[page] || page}</h1>
                   {page === 'Estudar' && (
-                    <p className="lead">Cole o texto da aula ou escreva um tema, escolha a área e o nível e gere o material.</p>
+                    <p className="lead">
+                      Cole o texto da aula{API_BASE && ' ou escreva um tema'}, escolha a área e o nível e gere o material.
+                    </p>
                   )}
                 </m.div>
               )}
@@ -1861,6 +2276,7 @@ function App() {
                       cost={cost}
                       reason={capNote ? 'aviso-ia' : undefined}
                       onFile={openFile}
+                      topic={!!API_BASE}
                     >
                       {/* No celular cada ferramenta mostra só a palavra curta; o nome inteiro continua no botão. */}
                       <button type="button" className="tool" onClick={dictation}>
@@ -1954,7 +2370,8 @@ function App() {
                   </m.div>
                   <m.div variants={rise}>
                     {/* Sem a chave da IA, o aviso diz por que o botão de gerar está desligado e leva à demonstração, que
-                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. */}
+                        funciona sem IA. No teto do dia, diz o mesmo dele e o que funciona sem IA. No modo estudo, o que
+                        os botões fazem sem IA e de onde vêm os materiais. */}
                     <p className="note" id="aviso-ia">
                       <Icon name={API_BASE && !aiOff && !capNote ? 'privacidade' : 'info'} />
                       {aiOff ? (
@@ -1964,6 +2381,9 @@ function App() {
                         </span>
                       ) : capNote ? ERRORS.AI_BUDGET_REACHED : API_BASE
                         ? 'Seu texto é enviado ao Google Gemini para gerar o material. Não cole dados pessoais.'
+                        : SEM_IA ? 'Modo estudo, sem IA neste aparelho: os botões só organizam o texto por frases. ' +
+                          'Para estudar os seus materiais, importe o backup na Biblioteca. Os dados ficam só aqui: ' +
+                          'instale o app na tela inicial e exporte o backup para levar o progresso ao computador.'
                         : 'Demonstração local: conteúdo organizado por trechos, sem IA conectada. Nada daqui entra no ' +
                           'desempenho, no caderno de erros nem na biblioteca do app com IA.'}
                     </p>
@@ -2034,6 +2454,7 @@ function App() {
                         <Icon name="seta" />
                       </button>
                     </div>
+                    {plan.length > 0 && <StudyPlan rows={plan} onOpen={openTask} />}
                     <div className="stats">
                       <Stat
                         value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
@@ -2090,7 +2511,7 @@ function App() {
                         <div role="tabpanel" aria-label={TABS.find(([p]) => p === page)?.[1]}>
                           {page === 'Resumos'
                             ? <SummarySkeleton pretest={pretestOpens()} />
-                            : page === 'Flashcards' ? <CardSkeleton /> : <QuizSkeleton />}
+                            : page === 'Flashcards' ? <CardSkeleton write={write} /> : <QuizSkeleton />}
                         </div>
                       </m.section>
                     ) : !result ? (
@@ -2121,17 +2542,25 @@ function App() {
                             <p className="meta">
                               {result.exam ? examLine(result.quiz)
                                 : result.virtual === 'Quizzes' ? 'Questões que você errou'
-                                : result.virtual ? 'Cartões de vários materiais'
+                                : result.virtual ? (new Set(result.flashcards.map(c => c.title)).size === 1
+                                  ? 'Cartões de "' + result.flashcards[0].title + '"' : 'Cartões de vários materiais')
                                 : [result.area, result.level].filter(Boolean).join(' · ')}
                             </p>
                             {/* O aviso segue o material, e não o modo: só o da demonstração (semIA) não tem texto da IA.
-                                O dos outros diz de onde ele veio (lib.js, originNote). */}
+                                O dos outros diz de onde ele veio (lib.js, originNote). No modo estudo, o material
+                                temporário leva o aviso, a menos que cada item venha de material feito no aparelho
+                                (lib.js, virtualNote). */}
                             {result.virtual
-                              ? aiNote
+                              ? aiNote || (SEM_IA &&
+                                virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
+                                <p className="ai-note">{AI_NOTE}</p>)
                               : result.semIA !== true && <p className="ai-note">{originNote(summary)}</p>}
                           </div>
+                          {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela, o Compartilhar e o
+                              Salvar ficam juntos: na tela estreita, os três descem para baixo do título. */}
                           {!result.virtual && (
-                            <div className="result-actions">
+                            <div className="header-actions">
+                              <ExamDate key={result.title} value={provaOf(result)} today={today} onSave={setExam} say={say} />
                               <button type="button" className="share" aria-haspopup="dialog" onClick={() => openShare(result)}>
                                 <Icon name="compartilhar" />
                                 <span>Compartilhar</span>
@@ -2245,7 +2674,13 @@ function App() {
                               <ol className="summary" role="list">
                                 {topics.map((s, i) => (
                                   // Escondido, o tópico fica só com o título e o "Mostrar" (styles.css, data-escondido).
-                                  <li key={i} data-escondido={(hide && !recall.shown[i]) || undefined}>
+                                  // Explicando com as próprias palavras (data-proprio), o tópico fica com o título, o botão e
+                                  // o campo, também com "Esconder o texto": o texto volta na comparação.
+                                  <li
+                                    key={i}
+                                    data-escondido={(hide && !recall.shown[i] && own?.item !== s) || undefined}
+                                    data-proprio={own?.item === s || undefined}
+                                  >
                                     <span className="topic-n" aria-hidden="true">{i + 1}</span>
                                     <div>
                                       <h3 tabIndex={-1}>{s.concept}</h3>
@@ -2305,18 +2740,131 @@ function App() {
                                           ))}
                                         </div>
                                       )}
-                                      {/* O foco volta ao botão do pedido ou, com o tópico escondido durante a espera, ao
-                                          "Mostrar" dele: dos dois, vale o último que está na tela, e o "Mostrar" vem antes. */}
-                                      {API_BASE && (
-                                        <div className="ai-ask">
+                                      {/* O foco do "Não entendi" volta ao botão do pedido ou, com o tópico escondido durante
+                                          a espera, ao "Mostrar" dele (ao "Explicar com minhas palavras", com o campo aberto):
+                                          vale o último que está na tela, e o "Mostrar" vem antes. "Explicar com minhas
+                                          palavras" não chama a IA e fica também na demonstração. */}
+                                      <div className="ai-ask">
+                                        <button
+                                          type="button"
+                                          id={'minhas-' + i}
+                                          className="own-toggle"
+                                          aria-expanded={own?.item === s}
+                                          onClick={() => toggleOwn(s, i)}
+                                        >
+                                          <Icon name="abaixo" />
+                                          Explicar com minhas palavras
+                                        </button>
+                                        {API_BASE && (
                                           <button
                                             type="button"
                                             id={'explicar-' + i}
                                             aria-disabled={waiting || undefined}
-                                            onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #explicar-' + i)}
+                                            onClick={() => explain(s, whyTopic(s.concept), s.text, '#mostrar-' + i + ', #minhas-' + i + ', #explicar-' + i)}
                                           >
                                             Não entendi, me explique <small>{askCost}</small>
                                           </button>
+                                        )}
+                                      </div>
+                                      {/* Explicar sem olhar o texto mostra o que o aluno entendeu e o que falta: o campo vem
+                                          no lugar do texto, e a comparação só aparece depois. Nada daqui é gravado. */}
+                                      {own?.item === s && (
+                                        <div className="own">
+                                          {own.compared ? (
+                                            <div className="own-compare">
+                                              <div>
+                                                <h4 id="proprio-voce" tabIndex={-1}>Você escreveu</h4>
+                                                <p className="own-text">{own.text.trim() || 'Você não escreveu nada.'}</p>
+                                              </div>
+                                              <div>
+                                                <h4>No resumo</h4>
+                                                <p>
+                                                  {markPieces(s.text, own.review?.missing || []).map((part, k) =>
+                                                    part.mark ? <mark key={k}>{part.text}</mark> : part.text)}
+                                                </p>
+                                                {s.source?.trim() && <p className="source">{sourceLabel(s)}</p>}
+                                                {result.semIA !== true && (s.ia || !s.source?.trim()) && (
+                                                  <span className="ai-tag">Explicação da IA: confira</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras.</label>
+                                              <p className="hint" id="proprio-dica">De 2 a 5 frases, com até 1.000 caracteres.</p>
+                                              <textarea
+                                                id="proprio-campo"
+                                                rows={4}
+                                                maxLength={1000}
+                                                aria-describedby="proprio-dica"
+                                                readOnly={busy?.kind === 'own' && busy.item === s}
+                                                value={own.text}
+                                                onChange={e => {
+                                                  const text = e.target.value;
+                                                  // O aviso de campo em branco sai com o texto; o do limite por minuto
+                                                  // fica até a espera acabar, como no Estudar.
+                                                  setOwn(o => ({ ...o, text, error: o.error?.until > Date.now() ? o.error : null }));
+                                                }}
+                                              />
+                                            </>
+                                          )}
+                                          {own.review && (
+                                            <m.div className="own-review" variants={focusIn} initial={appear()} animate="show">
+                                              <p id="proprio-veredito" tabIndex={-1}><strong>{OWN_VERDICT[own.review.verdict]}</strong></p>
+                                              {own.review.missing.length > 0 && (
+                                                <>
+                                                  <p id="proprio-faltou">O que faltou, marcado no texto do resumo:</p>
+                                                  <ul aria-labelledby="proprio-faltou">
+                                                    {own.review.missing.map((piece, k) => <li key={k}>{piece}</li>)}
+                                                  </ul>
+                                                </>
+                                              )}
+                                              {own.review.misconception && <p>Equívoco: {own.review.misconception}</p>}
+                                              <p className="hint">Comentário da IA: pode errar.</p>
+                                            </m.div>
+                                          )}
+                                          {/* O comentário pedido espera no lugar onde ele vai entrar. */}
+                                          {busy?.kind === 'own' && busy.item === s && (
+                                            <div className="review-wait">
+                                              <Sk className="sk-read" />
+                                              <Sk w="72%" className="sk-read" />
+                                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                            </div>
+                                          )}
+                                          {own.error && <div role="alert" className="error"><Problem error={own.error} /></div>}
+                                          {!own.compared && (
+                                            <div className="row">
+                                              <button
+                                                type="button"
+                                                className="primary"
+                                                onClick={() => {
+                                                  // O campo sai da tela: o foco vai para o que o aluno escreveu.
+                                                  setOwn({ ...own, compared: true });
+                                                  focusAfter.current = ['#proprio-voce'];
+                                                }}
+                                              >
+                                                Comparar
+                                              </button>
+                                            </div>
+                                          )}
+                                          {/* O aviso vem antes do botão, e o botão o leva na descrição. Sem nada escrito, a
+                                              comparação fica sem o pedido à IA. */}
+                                          {API_BASE && !own.review && (!own.compared || own.text.trim()) && (
+                                            <>
+                                              <p className="hint" id="proprio-aviso">O que você escreve vai para o Google Gemini.</p>
+                                              <div className="ai-ask">
+                                                <button
+                                                  type="button"
+                                                  id="proprio-ia"
+                                                  aria-disabled={waiting || undefined}
+                                                  aria-describedby="proprio-aviso"
+                                                  onClick={commentOwn}
+                                                >
+                                                  Pedir comentário da IA <small>{askCost}</small>
+                                                </button>
+                                              </div>
+                                            </>
+                                          )}
                                         </div>
                                       )}
                                       {why?.item === s && <Why {...why} wait={busy} onCancel={cancelAI} pop={pop} focusIn={focusIn} />}
@@ -2450,7 +2998,7 @@ function App() {
                                   style={{ visibility: session.pos ? undefined : 'hidden' }}
                                   onClick={() => {
                                     setDeck(deckRestart(session));
-                                    setFlip(false);
+                                    freshCard();
                                     focusAfter.current = ['.flashcard'];
                                   }}
                                 >
@@ -2462,48 +3010,102 @@ function App() {
                               <DeckMarks session={session} fresh />
                               {/* Como no quiz do caderno; o leitor de tela ouve o material junto com o cartão. */}
                               {result.virtual && <p className="hint" id="do-material">Do material: {card.title}</p>}
-                              <button
-                                type="button"
-                                className={'flashcard' + (flip ? ' flipped' : '')}
-                                aria-describedby={result.virtual ? 'do-material' : undefined}
-                                onClick={() => {
-                                  setFlip(!flip);
-                                  // Só o nome do botão muda ao virar, e nem todo leitor de tela lê: a região fixa diz a
-                                  // face nova (flip ainda é o de antes do clique).
-                                  say(flip ? 'Pergunta: ' + card.question : 'Resposta: ' + card.answer);
-                                  cardMotion.current = 'perspective(900px) rotateX(-10deg)';
-                                }}
-                              >
-                                <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
-                                {/* A dica serve ao mouse, ao toque e ao teclado. */}
-                                <span className="face-hint">
-                                  <Icon name="refazer" />
-                                  {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
-                                </span>
-                              </button>
-                              <div className="row center verdicts">
-                                <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
-                                  <Icon name="fechar" />
-                                  Errei
-                                </button>
+                              {/* O bloco que a página mostra inteiro ao virar o cartão pelo teclado, se cabe (turnCard).
+                                  O detail do clique conta os cliques: é 0 quando o cartão vira pelo Enter ou espaço. */}
+                              <div className="card-block">
                                 <button
                                   type="button"
-                                  disabled={session.pos + 1 >= session.queue.length}
-                                  onClick={() => {
-                                    setDeck(deckLater(session));
-                                    setFlip(false);
-                                    cardMotion.current = 'translateX(12px)';
-                                    toast('Cartão movido para o final do baralho');
-                                  }}
+                                  className={'flashcard' + (flip ? ' flipped' : '')}
+                                  aria-describedby={result.virtual ? 'do-material' : undefined}
+                                  onClick={e => turnCard(e.detail ? null : '.flashcard')}
                                 >
-                                  <Icon name="refazer" />
-                                  Revisar depois
+                                  <span ref={cardText} className="face-text">{flip ? card.answer : card.question}</span>
+                                  {/* A dica serve ao mouse, ao toque e ao teclado. */}
+                                  <span className="face-hint">
+                                    <Icon name="refazer" />
+                                    {flip ? 'Mostrar a pergunta' : 'Mostrar a resposta'}
+                                  </span>
                                 </button>
-                                <button type="button" className="primary" disabled={!flip} onClick={() => cardNext(true)}>
-                                  <Icon name="check" />
-                                  Acertei
-                                </button>
+                                {/* Escrever antes de ver a resposta deixa a autoavaliação mais honesta. Virado o
+                                    cartão, o texto inteiro do aluno vem logo abaixo da resposta, com o lembrete: no
+                                    campo de uma linha a resposta longa ficava cortada. */}
+                                {wrote && (
+                                  <div className="card-wrote">
+                                    <p>Você escreveu: {typed}</p>
+                                    <p id="lembrete-cartao" className="hint">{CARD_REMINDER}</p>
+                                  </div>
+                                )}
+                                {/* O campo fica fora do cartão (botão não leva controle dentro) e vem logo depois dele
+                                    no Tab. autoComplete off: o navegador não guarda o que o aluno escreve. */}
+                                {write && (
+                                  <form
+                                    className="card-form"
+                                    onSubmit={e => {
+                                      e.preventDefault();
+                                      // O Enter vira o cartão para a resposta, como o clique (o foco e a rolagem
+                                      // depois: turnCard); virado, não volta.
+                                      if (!flip) turnCard('#resposta-cartao');
+                                    }}
+                                  >
+                                    <label htmlFor="resposta-cartao">Sua resposta (opcional)</label>
+                                    <input
+                                      id="resposta-cartao"
+                                      value={typed}
+                                      onChange={e => setTyped(e.target.value)}
+                                      readOnly={locked}
+                                      placeholder={locked && !typed ? 'Escreva no próximo cartão' : undefined}
+                                      maxLength={500}
+                                      autoComplete="off"
+                                      aria-describedby={wrote ? 'lembrete-cartao' : undefined}
+                                    />
+                                  </form>
+                                )}
+                                <div className="row center verdicts">
+                                  <button type="button" className="no" disabled={!flip} onClick={() => cardNext(false)}>
+                                    <Icon name="fechar" />
+                                    Errei
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={session.pos + 1 >= session.queue.length}
+                                    onClick={() => {
+                                      setDeck(deckLater(session));
+                                      freshCard();
+                                      cardMotion.current = 'translateX(12px)';
+                                      toast('Cartão movido para o final do baralho');
+                                    }}
+                                  >
+                                    <Icon name="refazer" />
+                                    Revisar depois
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="primary"
+                                    disabled={!flip}
+                                    onClick={() => cardNext(true)}
+                                  >
+                                    <Icon name="check" />
+                                    Acertei
+                                  </button>
+                                </div>
                               </div>
+                              {/* Embaixo dos botões, fora do caminho do Tab entre o cartão, o campo e a avaliação. A
+                                  escolha fica no navegador (lib.js, readWriteFirst). */}
+                              <label className="write-first">
+                                <input
+                                  type="checkbox"
+                                  id="escrever"
+                                  checked={write}
+                                  onChange={e => {
+                                    setWrite(e.target.checked);
+                                    persist('escrever', e.target.checked);
+                                    // Ligada, o campo entra acima da caixa e a empurra para baixo: a página rola
+                                    // até ela, que continua com o foco, acima da barra de baixo.
+                                    focusAfter.current = ['#escrever', null, '#escrever'];
+                                  }}
+                                />
+                                Escrever antes de virar
+                              </label>
                             </>
                           ))}
                           {page === 'Quizzes' && (done ? (
@@ -2511,6 +3113,7 @@ function App() {
                             <m.div className="empty quiz-done" variants={calm ? POP_CALM : FINALE} initial={appear()} animate="show">
                               <h2 tabIndex={-1}>{Math.round(right / Math.max(1, answers.length) * 100)}% de aproveitamento</h2>
                               <p>Você acertou {right} de {answers.length}.</p>
+                              {guessLine(answers) && <p>{guessLine(answers)}</p>}
                               {/* O fim do simulado diz também o acerto por material, nas linhas do acerto por área do
                                   Desempenho. */}
                               {blind && (
@@ -2530,7 +3133,11 @@ function App() {
                                       <div>
                                         <strong>{q.question}</strong>
                                         {result.exam && <span>Do material: {q.title}</span>}
-                                        <span>Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}</span>
+                                        {/* No simulado, que não tem retorno, é aqui que o erro com certeza aparece. */}
+                                        <span>
+                                          Sua resposta: {q.type === 'short' ? q.given : q.options[q.given]}
+                                          {q.conf === 'certeza' && ' (você tinha certeza)'}
+                                        </span>
                                         <span>Resposta certa: {expectedText(q)}</span>
                                         {q.explanation && <span>{q.explanation}</span>}
                                       </div>
@@ -2582,6 +3189,24 @@ function App() {
                                     Refazer o quiz todo
                                   </button>
                                 )}
+                                {/* Outras questões do mesmo material, escritas pela IA: o quiz recomeça só com elas. Fora da
+                                    demonstração e do material temporário (o caderno de erros, o simulado). No teto de 30
+                                    questões o botão fica desligado e diz por quê; na espera, com o foco nele. */}
+                                {API_BASE && !result.virtual && (
+                                  <button
+                                    type="button"
+                                    id="questoes-novas"
+                                    className="action"
+                                    aria-disabled={waiting || result.quiz.length >= QUIZ_CAP || undefined}
+                                    aria-busy={busy?.kind === 'questoes' || undefined}
+                                    onClick={addQuestions}
+                                  >
+                                    Questões novas deste material
+                                    <small>
+                                      {result.quiz.length >= QUIZ_CAP ? 'este material já tem ' + QUIZ_CAP + ' questões' : askCost}
+                                    </small>
+                                  </button>
+                                )}
                                 {/* Sair do quiz por aqui devolve o material que estava aberto, como pelo menu. Como
                                     as opções, o "Voltar à Biblioteca" ignora o segundo clique de um clique duplo. */}
                                 {result.exam ? (
@@ -2596,6 +3221,15 @@ function App() {
                                   </button>
                                 )}
                               </div>
+                              {/* A espera das questões novas e o erro dela ficam embaixo do botão, no lugar do pedido. */}
+                              {busy?.kind === 'questoes' && busy.of === result && (
+                                <div className="quiz-wait">
+                                  <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                </div>
+                              )}
+                              {extra?.error && extra.of === result && (
+                                <div id="erro-questoes" role="alert" className="error"><Problem error={extra.error} /></div>
+                              )}
                             </m.div>
                           ) : quiz && (
                             <>
@@ -2615,16 +3249,35 @@ function App() {
                                 >
                                   Recomeçar
                                 </button>
-                                <span className="tag">
-                                  {quiz.type === 'short' ? 'Resposta curta'
-                                    : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
-                                    : 'Múltipla escolha'}
-                                </span>
+                                {/* A etiqueta do tipo e a caixa "Marcar certeza" (#80) andam juntas: no celular, na linha
+                                    de baixo do cabeçalho (mobile.css). */}
+                                <div className="quiz-tools">
+                                  <span className="tag">
+                                    {quiz.type === 'short' ? 'Resposta curta'
+                                      : quiz.type === 'boolean' ? 'Verdadeiro ou falso'
+                                      : 'Múltipla escolha'}
+                                  </span>
+                                  <label className="inline-field check">
+                                    <input
+                                      type="checkbox"
+                                      checked={sure}
+                                      onChange={e => {
+                                        setSure(e.target.checked);
+                                        setChoice(null);
+                                        persist('certeza', e.target.checked);
+                                        say(e.target.checked ? 'Antes da correção, marque quanta certeza você tem.'
+                                          : 'A resposta vai direto para a correção.');
+                                      }}
+                                    />
+                                    Marcar certeza
+                                  </label>
+                                </div>
                               </div>
                               <Meter value={answers.length} max={quizList.length} label="Questões respondidas" />
                               {/* As marcas ✓ e ✗ seriam correção: no simulado ficam só o fio e o "Questão X de Y". */}
                               {!blind && <QuizMarks total={quizList.length} answers={answers} idx={idx} />}
                               {result.virtual && <p className="hint">Do material: {quiz.title}</p>}
+                              {extra?.resumo && retry === extra.list && <p className="hint">Questões feitas a partir do resumo.</p>}
                               {/* O enunciado dá a descrição da caixa da resposta e o nome do grupo das alternativas: o
                                   leitor de tela lê a pergunta junto com elas. */}
                               <h2 id={'questao-' + idx} className="quiz-question" tabIndex={-1}>{quiz.question}</h2>
@@ -2633,18 +3286,16 @@ function App() {
                                 // escreveu, também na volta de outra aba ou página.
                                 <form
                                   key={idx + '-' + answers.length}
+                                  id="resposta"
                                   className="quiz-form"
                                   onSubmit={e => {
                                     e.preventDefault();
                                     const field = e.target.elements.response;
-                                    // Só espaços vale como campo vazio: limpo, o campo mostra o aviso do required.
-                                    // Enviado, virava erro gravado no desempenho e no caderno de erros.
-                                    if (!field.value.trim()) {
-                                      field.value = '';
-                                      field.reportValidity();
-                                      return;
-                                    }
-                                    submit(field.value);
+                                    if (!filled(field)) return;
+                                    // Com as marcas, o Enter não escolhe a certeza pelo aluno: o foco vai ao grupo dos
+                                    // botões, e não ao primeiro, que o Enter seguinte (ou a tecla segurada) apertaria.
+                                    if (sure) document.querySelector('.sure-row').focus();
+                                    else submit(field.value);
                                   }}
                                 >
                                   <input
@@ -2657,7 +3308,8 @@ function App() {
                                     defaultValue={answer?.value}
                                     disabled={answer !== null}
                                   />
-                                  <button disabled={answer !== null} className="primary">Responder</button>
+                                  {/* Com as marcas, os botões da certeza, embaixo, ficam no lugar do "Responder". */}
+                                  {!sure && <button disabled={answer !== null} className="primary">Responder</button>}
                                 </form>
                               ) : (
                                 <div className="options" role="group" aria-labelledby={'questao-' + idx}>
@@ -2666,31 +3318,53 @@ function App() {
                                       key={i}
                                       type="button"
                                       disabled={answer !== null}
-                                      className={'option' + (blind ? (answer?.value === i ? ' chosen' : '')
+                                      // Com as marcas, a opção só é escolhida: quem a manda à correção é a certeza.
+                                      aria-pressed={sure && !answer ? choice === i : undefined}
+                                      className={'option' + (!answer && choice === i ? ' chosen'
+                                        : blind ? (answer?.value === i ? ' chosen' : '')
                                         : answer && i === quiz.answer ? ' correct' : answer?.value === i ? ' wrong' : '')}
                                       // O segundo clique de um clique duplo no botão que estava aqui ("Próxima
                                       // questão", "Começar simulado") não responde: detail conta os cliques.
-                                      onClick={e => e.detail < 2 && submit(i)}
+                                      onClick={e => e.detail < 2 && (sure ? setChoice(i) : submit(i))}
                                     >
                                       <span className="letter">{String.fromCharCode(65 + i)}</span>
                                       <span className="option-text">{o}</span>
                                       {/* Certo e errado também em texto: a cor sozinha não serve a quem não a distingue. */}
                                       {!blind && answer && i === quiz.answer && <Pen kind="certo" note="certa" draw />}
                                       {!blind && answer?.value === i && i !== quiz.answer && <Pen kind="errei" note="sua resposta" draw />}
-                                      {/* No simulado a escolhida fica marcada, em texto também, sem dizer se acertou. */}
-                                      {blind && answer?.value === i && (
+                                      {/* No simulado a escolhida fica marcada, em texto também, sem dizer se acertou. Com as
+                                          marcas, também a que espera a certeza. */}
+                                      {((blind && answer?.value === i) || (!answer && choice === i)) && (
                                         <span className="pen pen--escolha"><span className="pen-note">sua resposta</span></span>
                                       )}
                                     </button>
                                   ))}
                                 </div>
                               )}
+                              {/* Com as marcas, a certeza manda a resposta à correção. Os botões ficam fora do formulário
+                                  da resposta curta, para o celular os prender acima da barra de baixo (mobile.css), e
+                                  chegam ao campo pelo atributo form. */}
+                              {sure && !answer && (
+                                <Sureness
+                                  ready={quiz.type === 'short' || choice !== null}
+                                  form={quiz.type === 'short' ? 'resposta' : undefined}
+                                  onPick={(conf, button) => {
+                                    if (quiz.type === 'short') {
+                                      const field = button.form.elements.response;
+                                      if (filled(field)) submit(field.value, conf);
+                                    } else if (choice === null) say('Escolha uma opção antes de marcar a certeza.');
+                                    else submit(choice, conf);
+                                  }}
+                                />
+                              )}
                               {/* No simulado não há retorno: depois da resposta, só o botão de seguir (submit leva o foco
                                   a ele). A correção, a explicação e os pedidos à IA ficam para o fim e para o "Refazer as
                                   que errei". */}
+                              {/* Os dois "Próxima questão" ignoram o segundo clique de um clique duplo: no celular o botão
+                                  da certeza que mandou a resposta estava no mesmo lugar. */}
                               {answer && blind && (
                                 <div className="row exam-next">
-                                  <button type="button" className="primary" onClick={nextQuestion}>
+                                  <button type="button" className="primary" onClick={e => e.detail < 2 && nextQuestion()}>
                                     {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
                                     <Icon name="seta" />
                                   </button>
@@ -2707,7 +3381,21 @@ function App() {
                                   initial={appear()}
                                   animate="show"
                                 >
-                                  <strong id="retorno" tabIndex={-1}>{answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}</strong>
+                                  <strong
+                                    id="retorno"
+                                    tabIndex={-1}
+                                    aria-describedby={!answer.ok && answer.conf === 'certeza' ? 'certeza-errada' : undefined}
+                                  >
+                                    {answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}
+                                  </strong>
+                                  {/* Errou com "Tenho certeza" (#80): o aviso vem antes de tudo, e o leitor de tela o ouve
+                                      junto com o título, que recebe o foco. */}
+                                  {!answer.ok && answer.conf === 'certeza' && (
+                                    <p id="certeza-errada" className="sure-miss">
+                                      <Icon name="alerta" />
+                                      Você tinha certeza. Leia a explicação com atenção.
+                                    </p>
+                                  )}
                                   {/* Errou a opção: a marcada e a certa também em texto, como no fim do quiz. No celular
                                       deitado as marcas delas, nas opções, podiam ficar fora da vista. */}
                                   {quiz.type !== 'short' && !answer.ok && (
@@ -2740,7 +3428,10 @@ function App() {
                                     <m.div variants={focusIn} initial={appear()} animate="show">
                                       <p><strong>Revisão da IA: {answer.review.verdict}</strong></p>
                                       <p>{answer.review.feedback}</p>
-                                      <p>{VERDICT_EFFECT[answer.review.verdict]}</p>
+                                      <p>
+                                        {VERDICT_EFFECT[answer.review.verdict === 'correta' && answer.conf === 'chute' &&
+                                          answer.before ? 'chute' : answer.review.verdict]}
+                                      </p>
                                       <p className="hint">Revisão feita por IA: pode errar.</p>
                                     </m.div>
                                   )}
@@ -2772,7 +3463,7 @@ function App() {
                                   )}
                                   {/* No celular o botão fica preso acima da barra de baixo: o retorno pode ser longo. */}
                                   <div className="next-row">
-                                    <button type="button" className="primary" onClick={nextQuestion}>
+                                    <button type="button" className="primary" onClick={e => e.detail < 2 && nextQuestion()}>
                                       {idx + 1 === quizList.length ? 'Ver resultado' : 'Próxima questão'}
                                       <Icon name="seta" />
                                     </button>
@@ -2967,7 +3658,7 @@ function App() {
                       <div className="erros-rule">
                         <p className="hint">
                           A questão sai daqui depois de 3 acertos em dias diferentes, cada um no dia marcado. Se errar,
-                          ela volta ao começo.
+                          ela volta ao começo. O acerto marcado como chute não conta.
                         </p>
                         {!mistakesDue.length && (
                           <p className="erros-next">
@@ -3042,6 +3733,8 @@ function App() {
                                       delay={0.3 + Math.min(i, 6) * 0.06}
                                     />
                                     <small>{stepOf(m)} de 3 acertos</small>
+                                    {/* O último erro foi com "Tenho certeza" (#80). Só true vale: a marca vem do navegador. */}
+                                    {m.sure === true && <small className="sure-note">você tinha certeza</small>}
                                   </span>
                                   <strong>{m.item.question}</strong>
                                   <details>
@@ -3103,6 +3796,8 @@ function App() {
                     mistakes={mistakes}
                     due={mistakesDue}
                     redoMistakes={redoMistakes}
+                    plan={plan}
+                    onPlan={openTask}
                     events={events}
                     backup={backupLine}
                     onExport={exportBackup}
@@ -3340,6 +4035,30 @@ function App() {
                   onSave={saveProfile}
                 />
               </Suspense>
+              {/* Só onde as ondas andam: no celular, em cores forçadas e com movimento reduzido elas não se movem, e sem
+                  WebGL não há ondas. Vale na hora. O nome não muda; o estado vai no aria-pressed e no ✓. */}
+              {wavesAllowed && !wavesStill && wavesActive !== false && (
+                <>
+                  <button
+                    ref={fundoRef}
+                    type="button"
+                    className="chip"
+                    aria-pressed={fundo}
+                    onClick={() => {
+                      setFundo(!fundo);
+                      setFundoUnsaved(!persist('fundo', !fundo));
+                    }}
+                  >
+                    {fundo && <Icon name="check" />}
+                    Fundo animado
+                  </button>
+                  {/* A gravação falhou: o aviso da tela (persist) sai atrás desta janela, na parte inerte da página, e
+                      o leitor de tela não o lê. Este fica aqui dentro; a região já existe vazia, para o texto ser lido. */}
+                  <p role="status">
+                    {fundoUnsaved && 'Não foi possível salvar no navegador. A escolha vale só até recarregar a página.'}
+                  </p>
+                </>
+              )}
             </div>
           </Modal>
         )}
@@ -3535,6 +4254,29 @@ function QuizMarks({ total, answers, idx }) {
           kind={!answers[i] ? 'novo' : answers[i].ok ? 'certo' : 'errei'}
           className={i === idx ? 'current' : ''}
         />
+      ))}
+    </div>
+  );
+}
+
+// "Quanta certeza você tem?" (#80): os três botões que mandam a resposta à correção com a certeza. Sem a opção escolhida
+// (ready false) eles ficam com aria-disabled, e não disabled: o Tab chega a eles e o leitor de tela ouve que estão
+// desligados. Como as opções, ignoram o segundo clique de um clique duplo. onPick recebe a certeza e o botão; form é o
+// id do formulário da resposta curta, que o botão alcança sem enviá-lo. O grupo recebe o foco do Enter no campo.
+function Sureness({ ready, form, onPick }) {
+  return (
+    <div className="sure-row" role="group" aria-labelledby="certeza-titulo" tabIndex={-1}>
+      <span id="certeza-titulo">Quanta certeza você tem?</span>
+      {CONF.map(conf => (
+        <button
+          key={conf}
+          type="button"
+          form={form}
+          aria-disabled={!ready || undefined}
+          onClick={e => e.detail < 2 && onPick(conf, e.currentTarget)}
+        >
+          {SURE_LABELS[conf]}
+        </button>
       ))}
     </div>
   );

@@ -1,10 +1,12 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { m } from 'motion/react';
 import { Icon } from './icons.jsx';
 import { appear, undoExit } from './anim.js';
+import { addDays, planLine } from './lib.js';
 
 // Pedaços de tela usados por mais de uma página (App.jsx e as páginas carregadas à parte): os contadores, a linha do
-// backup, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce com o texto.
+// backup, o plano até a prova e a data dela, o "Desfazer", a espera de um pedido à IA, os esqueletos e o campo que cresce
+// com o texto.
 
 // Campo de várias linhas (field é o ref dele) que cresce com o texto entre o mínimo e o máximo do CSS e volta ao mínimo
 // quando esvazia: a caixa do Dúvidas e o editor do Estudar. Medir encolhe o campo por um instante: a rolagem da página
@@ -54,6 +56,104 @@ export function BackupNote({ status, onExport, variants }) {
         Fazer backup
       </button>
     </m.div>
+  );
+}
+
+// Plano até a prova (#86; lib.js, studyPlan): uma linha por material com a prova mais próxima e o botão que abre a
+// tarefa de hoje, na faixa "Seu progresso" do Estudar e no começo de "Seu próximo passo", no Desempenho. A tarefa feita
+// e os cartões em dia ficam sem botão. O nome do botão leva o material: com dois na lista, eles não se confundem.
+const TASK_BUTTONS = {
+  quiz: ['Fazer o quiz', 'quizzes'],
+  cartoes: ['Revisar os cartões', 'flashcards'],
+  erros: ['Refazer os erros', 'refazer'],
+  prova: ['Abrir o resumo', 'resumos'],
+};
+export function StudyPlan({ rows, onOpen }) {
+  return (
+    <div className="plan">
+      <ul role="list">
+        {rows.map(row => {
+          const [label, icon] = TASK_BUTTONS[row.task];
+          return (
+            <li key={row.material.title}>
+              <p>{planLine(row)}</p>
+              {(row.task === 'prova' || row.left.length > 0) && (
+                <button type="button" aria-label={label + ' de "' + row.material.title + '"'} onClick={() => onOpen(row)}>
+                  <Icon name={icon} />
+                  {label}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="hint">Plano sugerido pelo app, sem IA. Não é promessa de nota.</p>
+    </div>
+  );
+}
+
+// "Data da prova", no cabeçalho do material (#86). A data vale completa e dentro do prazo, de hoje a um ano, e o campo
+// vazio apaga a data. Ela é gravada 0,4 s depois da última mudança, como o rascunho (cada seta gravava a biblioteca
+// inteira e trocava o aviso), e na hora com o Enter, ao sair do campo ou ao sair da página. O que não vale (fora do
+// prazo ou só um pedaço da data, badInput) fica no campo, sem gravar; ao sair dele, ganha a nota, que o leitor de tela
+// ouve (say). Durante a digitação não: o ano passa por 0002 e 0202. Ao apagar as três partes, o Chrome só avisa a
+// primeira: o campo é lido também ao soltar o Backspace e o Delete. Na tela o rótulo é "Prova": com ele, o campo e o
+// "Salvar material" cabem numa linha em 390 px. O nome inteiro fica no campo.
+export function ExamDate({ value, today, onSave, say }) {
+  const [edit, setEdit] = useState(null);
+  const timer = useRef(0);
+  const pending = useRef(null);
+  useEffect(() => {
+    const flush = () => pending.current?.();
+    const hide = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', hide);
+      clearTimeout(timer.current);
+    };
+  }, []);
+  function read({ value: day, validity }, now) {
+    clearTimeout(timer.current);
+    pending.current = null;
+    if (!validity.valid) {
+      const note = validity.badInput ? 'Complete a data ou apague as três partes.'
+        : 'Escolha uma data entre hoje e daqui a um ano.';
+      setEdit({ day, note: now ? note : '' });
+      if (now) say(note);
+    } else if (day === value) setEdit(null);
+    else {
+      setEdit({ day });
+      pending.current = () => {
+        clearTimeout(timer.current);
+        pending.current = null;
+        onSave(day);
+      };
+      if (now) pending.current();
+      else timer.current = setTimeout(pending.current, 400);
+    }
+  }
+  return (
+    <div className="exam-date">
+      <label className="inline-field">
+        Prova
+        <input
+          type="date"
+          aria-label="Data da prova"
+          min={today}
+          max={addDays(today, 365)}
+          value={edit ? edit.day : value}
+          aria-invalid={!!edit?.note || undefined}
+          aria-describedby={edit?.note ? 'prova-nota' : undefined}
+          onChange={e => read(e.target)}
+          onKeyUp={e => (e.key === 'Backspace' || e.key === 'Delete') && read(e.target)}
+          onKeyDown={e => e.key === 'Enter' && read(e.target, true)}
+          onBlur={e => read(e.target, true)}
+        />
+      </label>
+      {edit?.note && <p className="hint" id="prova-nota">{edit.note}</p>}
+    </div>
   );
 }
 
@@ -210,8 +310,9 @@ export function SummarySkeleton({ pretest }) {
   );
 }
 
-// Cartão a caminho: o cabeçalho do baralho, o cartão e os três botões de avaliação.
-export function CardSkeleton() {
+// Cartão a caminho: o cabeçalho do baralho, o cartão, o campo "Sua resposta" (com a caixa "Escrever antes de virar"
+// ligada, write) e os três botões de avaliação.
+export function CardSkeleton({ write }) {
   return (
     <div aria-hidden="true">
       <div className="study-head">
@@ -224,6 +325,12 @@ export function CardSkeleton() {
         <Sk w="45%" className="sk-face" />
         <Sk w="11rem" />
       </div>
+      {write && (
+        <div className="card-form">
+          <Sk w="10rem" className="sk-label" />
+          <Sk className="sk-control" />
+        </div>
+      )}
       <div className="row center verdicts">
         <Sk w="7.5rem" className="sk-control" />
         <Sk w="9rem" className="sk-control" />
@@ -235,13 +342,17 @@ export function CardSkeleton() {
 
 const OPTION_W = ['70%', '55%', '62%', '48%'];
 
-// Quiz a caminho: o cabeçalho, as marcas das questões, o enunciado e quatro opções.
+// Quiz a caminho: o cabeçalho, as marcas das questões, o enunciado e quatro opções. No cabeçalho, a etiqueta do tipo
+// e a vaga da caixa "Marcar certeza" ficam juntas, como no quiz pronto.
 export function QuizSkeleton() {
   return (
     <div aria-hidden="true">
       <div className="study-head">
         <Sk w="7.5rem" />
-        <Sk w="8rem" className="sk-tag" />
+        <div className="quiz-tools">
+          <Sk w="8rem" className="sk-tag" />
+          <Sk w="7.75rem" className="sk-check" />
+        </div>
       </div>
       <div className="marks">
         {OPTION_W.concat(OPTION_W.slice(0, 2)).map((_, i) => <Sk key={i} className="sk-mark" />)}
@@ -268,7 +379,7 @@ export function DesempenhoSkeleton({ rise }) {
   return (
     <>
       <m.div className="stats" variants={rise} aria-hidden="true">
-        {['7rem', '9rem', '7rem', '12rem'].map((w, i) => (
+        {['7rem', '9rem', '7rem', '10rem', '12rem'].map((w, i) => (
           <p key={i} className="stat"><Sk w={w} /></p>
         ))}
       </m.div>
@@ -287,9 +398,17 @@ export function DesempenhoSkeleton({ rise }) {
           ))}
         </div>
         <Sk w="70%" className="sk-note" />
+        {/* A linha do acerto na hora e do que ficou, e a divisão dele (#78). */}
+        <Sk w="80%" className="sk-note" />
+        <Sk w="60%" className="sk-note" />
       </m.section>
       <m.section className="panel" variants={rise} aria-hidden="true">
         <Sk w="10rem" className="sk-h2" />
+        <Sk w="60%" className="sk-note" />
+      </m.section>
+      {/* O painel "Sua certeza" (#80). */}
+      <m.section className="panel" variants={rise} aria-hidden="true">
+        <Sk w="7rem" className="sk-h2" />
         <Sk w="60%" className="sk-note" />
       </m.section>
     </>
@@ -346,4 +465,60 @@ export function PerfilSkeleton() {
       <Sk className="sk-control sk-submit" />
     </div>
   );
+}
+
+// Onde o fundo em ondas roda: a tela larga do computador, com mouse. Na tela estreita o texto fica direto sobre o fundo,
+// e as ondas claras derrubariam o contraste; celular e tablet deitados, sem mouse, também ficam de fora. Em cores
+// forçadas o fundo é do sistema. Acompanha a janela e as preferências do sistema enquanto a página está aberta.
+const WAVES_MEDIA = ['(min-width: 851px) and (hover: hover) and (pointer: fine)', '(forced-colors: active)',
+  '(prefers-reduced-motion: reduce)'].map(query => window.matchMedia(query));
+function watchWavesMedia(change) {
+  WAVES_MEDIA.forEach(list => list.addEventListener('change', change));
+  return () => WAVES_MEDIA.forEach(list => list.removeEventListener('change', change));
+}
+export function useWavesAllowed() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[0].matches && !WAVES_MEDIA[1].matches);
+}
+// Movimento reduzido no sistema, lido ao vivo: as ondas param, e voltam a andar, sem recarregar a página. O
+// useReducedMotion da Motion, que o resto do app usa, guarda o valor da abertura.
+export function useWavesStill() {
+  return useSyncExternalStore(watchWavesMedia, () => WAVES_MEDIA[2].matches);
+}
+
+// Fundo em ondas (issue #92), onde useWavesAllowed deixa (on). Com animate falso (movimento reduzido ou o "Fundo animado"
+// desligado no perfil, App.jsx), o quadro fica parado. O shader vem num pedaço à parte do JS (waves.js), baixado só
+// quando entra. data-waves no html deixa o vidro da barra de cima, do dock e do palco opaco (styles.css), e as ondas
+// ficam só em volta deles: ele entra com o primeiro quadro e sai quando o contexto do WebGL se perde. Numa troca de
+// animate ele fica: o canvas guarda o último quadro até o do novo começo sair. onActive leva ao App o que o startWaves
+// avisa: sem as ondas (false), o botão "Fundo animado" some.
+export function Waves({ on, animate, onActive }) {
+  const canvas = useRef(null);
+  useEffect(() => {
+    const show = active => document.documentElement.toggleAttribute('data-waves', active);
+    if (!on) {
+      show(false);
+      return;
+    }
+    const report = active => {
+      show(active);
+      onActive(active);
+    };
+    let stop = null;
+    let live = true;
+    import('./waves.js').then(({ startWaves }) => {
+      if (live) stop = startWaves(canvas.current, { animate, onActive: report });
+    }, () => report(false));
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, [on, animate]);
+  // O contexto pode se perder com as ondas desligadas (a janela estreitada para menos de 851 px, por exemplo): sem
+  // ninguém ouvindo a perda, o navegador não o devolve, e as ondas só voltariam com a página recarregada. Este ouvinte
+  // fica o tempo todo e só pede a volta; com as ondas ligadas, o do waves.js cuida do resto.
+  useEffect(() => {
+    canvas.current.addEventListener('webglcontextlost', e => e.preventDefault());
+    return () => document.documentElement.removeAttribute('data-waves');
+  }, []);
+  return <canvas ref={canvas} className="waves" aria-hidden="true" />;
 }

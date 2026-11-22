@@ -110,7 +110,7 @@ A tela mostra ao estudante uma frase simples, com o que ele pode fazer. O códig
 - AI_INCOMPLETE_RESPONSE: a IA parou no meio. O motivo aparece depois do código (MAX_TOKENS, RECITATION, SAFETY). Reformule ou envie um texto menor.
 - AI_EMPTY_RESPONSE: a IA não devolveu conteúdo. Se aparecer um motivo depois do código (SAFETY, por exemplo), o provedor bloqueou o pedido: reformule.
 - AI_INVALID_MATERIAL: o material gerado não passou na validação do backend, nem na segunda chamada. Tente de novo; se repetir com o mesmo texto, envie um trecho menor.
-- AI_INVALID_ANSWER: a resposta do chat, da revisão ou do exemplo veio fora do formato esperado. Tente de novo.
+- AI_INVALID_ANSWER: a resposta do chat, da revisão, do comentário da explicação ou do exemplo veio fora do formato esperado. Tente de novo.
 - AI_INVALID_JSON: a IA respondeu fora do formato JSON, também na segunda chamada que o backend faz sozinho. Tente de novo.
 - AI_INVALID_RESPONSE: o provedor devolveu uma resposta que o backend não conseguiu ler. Tente de novo.
 - AI_PROVIDER_ERROR: o provedor recusou o pedido com um erro que não está nesta lista. O código HTTP aparece depois do código do erro (HTTP_302, por exemplo, quando um filtro de rede redireciona o pedido).
@@ -151,9 +151,9 @@ Na pasta backend:
 .\.venv\Scripts\python.exe -m app.avalia --rodar
 ```
 
-O primeiro comando só mostra os 24 casos e o teto de chamadas, sem chamar nada. O segundo chama o Gemini de verdade e grava o resultado em docs/, mesmo se for interrompido no meio. Ele para em 40 chamadas HTTP, contando as novas tentativas automáticas; `--limite 50` muda o teto. Também para sozinho se a cota do dia acabar, a chave for recusada ou a rodada chegar ao AI_DAILY_LIMIT do .env, contado só nela.
+O primeiro comando só mostra os 29 casos e o teto de chamadas, sem chamar nada. O segundo chama o Gemini de verdade e grava o resultado em docs/, mesmo se for interrompido no meio. Ele para em 40 chamadas HTTP, contando as novas tentativas automáticas; `--limite 55` muda o teto. Também para sozinho se a cota do dia acabar, a chave for recusada ou a rodada chegar ao AI_DAILY_LIMIT do .env, contado só nela.
 
-Na rodada de 17/11/2026, feita com `--limite 35`, as 35 chamadas combinadas não bastaram: as novas tentativas automáticas (503 do provedor e material sem acento, por exemplo) gastaram o teto antes das 3 últimas revisões. Para a rodada inteira, conte com umas 45 chamadas e use `--limite 50`. Não rode no dia da apresentação: a cota é a mesma.
+Na rodada de 17/11/2026, feita com `--limite 35`, as 35 chamadas combinadas não bastaram: as novas tentativas automáticas (503 do provedor e material sem acento, por exemplo) gastaram o teto antes das 3 últimas revisões. Depois dela entraram os 2 pedidos de questões novas e os 3 comentários de explicação: para a rodada inteira, conte com umas 50 chamadas e use `--limite 55`. Não rode no dia da apresentação: a cota é a mesma.
 
 ## Credenciais
 
