@@ -65,7 +65,7 @@ export function fitsAbove(height, viewport, reserve, strip = 0) {
 // item ("Mais")? O item mede item px, com o nome, de name px, no meio, e a barra tem pad de respiro depois dele (o
 // padding calculado). Uma sobra menor só tira da vista o vazio em volta do nome, como de 381 a 389 px com a letra
 // padrão no toque, e nada muda. Com mouse e a barra de rolagem clássica, que tira 15 px da barra de baixo, a sobra
-// passa disso em 320 px e de 381 a 391 px, e o "Mais" fica preso também com a letra padrão.
+// passa disso em 320 e 321 px e de 381 a 391 px, e o "Mais" fica preso também com a letra padrão.
 export function nameCut(scroll, client, item, name, pad) {
   return scroll - client > (item - name) / 2 + (parseFloat(pad) || 0);
 }
