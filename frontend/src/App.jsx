@@ -322,6 +322,7 @@ function App() {
   const latest = useRef({});
   latest.current = { page, result: opened, virtual: !!result?.virtual, done, input, area, level };
   const noticeTimer = useRef(null);
+  const noticeEnd = useRef(0); // hora em que o aviso da tela sai sozinho (Date.now())
   const chatEnd = useRef(null);
   // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
   const chipsRow = useRef(null);
@@ -686,6 +687,7 @@ function App() {
   function toast(text, action) {
     clearTimeout(noticeTimer.current);
     setNotice({ text, action });
+    noticeEnd.current = Date.now() + noticeTime(text, action);
     noticeTimer.current = setTimeout(() => setNotice(null), noticeTime(text, action));
   }
 
@@ -699,9 +701,10 @@ function App() {
     clearTimeout(noticeTimer.current);
   }
 
+  // Soltar não encurta o aviso: ele sai na hora que já tinha (noticeEnd), ou 4 s depois de solto, o que vier por último.
   function releaseNotice() {
     clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 4000);
+    noticeTimer.current = setTimeout(() => setNotice(null), Math.max(4000, noticeEnd.current - Date.now()));
   }
 
   // Ação desfeita pelo aviso ou pelo botão que ficou na tela. focus é para onde vai o foco depois.
@@ -3913,7 +3916,7 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
-        {/* O mouse em cima, o dedo parado e o foco do teclado seguram o aviso; quando saem, ele fica mais 4 s. São os
+        {/* O mouse em cima, o dedo parado e o foco do teclado seguram o aviso; quando saem, ele fica pelo menos mais 4 s. São os
             eventos de ponteiro: os de mouse, que o toque imita, não avisavam a saída do dedo, e o aviso ficava preso. */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (
