@@ -333,6 +333,7 @@ function App() {
   const latest = useRef({});
   latest.current = { page, result: opened, virtual: !!result?.virtual, done, input, area, level };
   const noticeTimer = useRef(null);
+  const noticeEnd = useRef(0); // hora em que o aviso da tela sai sozinho (Date.now())
   const chatEnd = useRef(null);
   // A linha de chips de sugestão do Dúvidas: volta ao começo quando a lista muda (useLayoutEffect mais abaixo).
   const chipsRow = useRef(null);
@@ -697,6 +698,7 @@ function App() {
   function toast(text, action) {
     clearTimeout(noticeTimer.current);
     setNotice({ text, action });
+    noticeEnd.current = Date.now() + noticeTime(text, action);
     noticeTimer.current = setTimeout(() => setNotice(null), noticeTime(text, action));
   }
 
@@ -710,9 +712,10 @@ function App() {
     clearTimeout(noticeTimer.current);
   }
 
+  // Soltar não encurta o aviso: ele sai na hora que já tinha (noticeEnd), ou 4 s depois de solto, o que vier por último.
   function releaseNotice() {
     clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 4000);
+    noticeTimer.current = setTimeout(() => setNotice(null), Math.max(4000, noticeEnd.current - Date.now()));
   }
 
   // Ação desfeita pelo aviso ou pelo botão que ficou na tela. focus é para onde vai o foco depois.
@@ -892,9 +895,11 @@ function App() {
       const twin = stored.findIndex(m =>
         validMaterial(m) && sameMaterial(m, material) && m.area === area && m.level === level);
       // O que já está lá fica com o texto deste clique: a demonstração só usa as 8 primeiras frases, e o resto do texto
-      // pode ter mudado. O material de antes do campo texto também o ganha.
-      if (twin >= 0 && stored[twin].texto !== input) {
-        stored[twin] = { ...stored[twin], texto: input };
+      // pode ter mudado. O material de antes do campo texto também o ganha. O igual que veio de um colega perde a
+      // marca recebido: agora ele foi gerado aqui, do texto daqui.
+      if (twin >= 0 && (stored[twin].texto !== input || stored[twin].recebido)) {
+        const { recebido, ...mine } = stored[twin];
+        stored[twin] = { ...mine, texto: input };
         if (persist('saved', stored)) setSaved(stored.filter(validMaterial));
       }
       const next = twin >= 0 ? stored[twin] : store(material) || material;
@@ -2611,7 +2616,7 @@ function App() {
                               ? aiNote || (SEM_IA &&
                                 virtualNote([...result.quiz, ...result.flashcards], [opened, ...saved].filter(Boolean)) &&
                                 <p className="ai-note">{AI_NOTE}</p>)
-                              : result.semIA !== true && <p className="ai-note">{originNote(summary, result.texto)}</p>}
+                              : result.semIA !== true && <p className="ai-note">{originNote(summary, result.recebido)}</p>}
                           </div>
                           {/* A data da prova monta o plano do Estudar e do Desempenho (#86). Ela, o Compartilhar e o
                               Salvar ficam juntos: na tela estreita, os três descem para baixo do título. */}
@@ -2762,10 +2767,10 @@ function App() {
                                         </button>
                                       )}
                                       <p>{s.text}</p>
-                                      {s.source?.trim() && <p className="source">{sourceLabel(s, result.texto)}</p>}
+                                      {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                       {/* O trecho dentro do texto inteiro, numa janela que abre nele. Material de antes do
                                           campo texto não guardou o texto e fica sem o botão. */}
-                                      {s.source?.trim() && result.texto && (
+                                      {s.source?.trim() && result.texto?.trim() && (
                                         <button
                                           type="button"
                                           className="link source-link"
@@ -2850,7 +2855,7 @@ function App() {
                                                   {markPieces(s.text, own.review?.missing || []).map((part, k) =>
                                                     part.mark ? <mark key={k}>{part.text}</mark> : part.text)}
                                                 </p>
-                                                {s.source?.trim() && <p className="source">{sourceLabel(s, result.texto)}</p>}
+                                                {s.source?.trim() && <p className="source">{sourceLabel(s, result.recebido)}</p>}
                                                 {result.semIA !== true && (s.ia || !s.source?.trim()) && (
                                                   <span className="ai-tag">Explicação da IA: confira</span>
                                                 )}
@@ -3937,7 +3942,7 @@ function App() {
         {/* Um aviso por vez: o novo entra enquanto o anterior esmaece fora do fluxo (popLayout). O mesmo texto outra vez
             (o cartão movido de novo) só renova o tempo, sem piscar. */}
         {/* anchorY bottom: a faixa fica presa embaixo, e o aviso que sai continua no mesmo lugar (com top ele pulava). */}
-        {/* O mouse em cima, o dedo parado e o foco do teclado seguram o aviso; quando saem, ele fica mais 4 s. São os
+        {/* O mouse em cima, o dedo parado e o foco do teclado seguram o aviso; quando saem, ele fica pelo menos mais 4 s. São os
             eventos de ponteiro: os de mouse, que o toque imita, não avisavam a saída do dedo, e o aviso ficava preso. */}
         <AnimatePresence mode="popLayout" anchorY="bottom" custom={byKeyboard()}>
           {notice && (

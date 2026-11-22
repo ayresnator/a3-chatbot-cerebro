@@ -1824,29 +1824,34 @@ test('originNote: o aviso do material diz de onde ele veio', () => {
     'Gerado por IA. Pode conter erros: confira com o texto de exemplo.');
 });
 
-test('originNote: sem o texto do material no navegador, o aviso diz que os trechos não foram conferidos aqui', () => {
+// O aviso do material que veio do arquivo de um colega (a marca recebido).
+const AWAY_NOTE = 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
+  'Confira em uma fonte confiável.';
+// O que não é a marca: material gerado aqui, ou arquivo editado à mão. Só vale true.
+const NOT_RECEIVED = [undefined, null, false, 'true', 1, EXAMPLE];
+
+test('originNote: no material recebido de um colega, o aviso diz que os trechos não foram conferidos aqui', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: '' };
-  const away = 'Gerado por IA. Os trechos são do texto de quem gerou e não foram conferidos neste navegador. ' +
-    'Confira em uma fonte confiável.';
-  // O recebido de um colega e o de antes do campo texto; texto em branco vale como sem texto.
-  for (const texto of [undefined, null, '', ' \n']) {
-    assert.equal(originNote([own, none], texto), away);
-    assert.equal(originNote([{ ...own, pronto: true }, none], texto), away, 'a marca pronto veio no arquivo');
-    // O exemplo da IA e o material sem trecho nenhum dizem o mesmo com ou sem o texto.
-    assert.equal(originNote([own, { ...own, ia: true }], texto), originNote([own, { ...own, ia: true }], EXAMPLE));
-    assert.equal(originNote([none], texto), originNote([none], EXAMPLE));
-  }
+  assert.equal(originNote([own, none], true), AWAY_NOTE);
+  assert.equal(originNote([{ ...own, pronto: true }, none], true), AWAY_NOTE, 'a marca pronto veio no arquivo');
+  // O exemplo da IA e o material sem trecho nenhum dizem o mesmo com ou sem a marca.
+  assert.equal(originNote([own, { ...own, ia: true }], true), originNote([own, { ...own, ia: true }]));
+  assert.equal(originNote([none], true), originNote([none]));
+  // Sem a marca, o material é daqui, com ou sem o texto guardado (o de antes do campo texto não o tem).
+  for (const recebido of NOT_RECEIVED) assert.equal(originNote([own, none], recebido), AI_NOTE, String(recebido));
 });
 
 test('printNote: a folha impressa leva o aviso da tela; sem nenhum trecho, com "Gerado por IA." na frente', () => {
   const own = { concept: 'Clorofila', text: 'Absorve a luz.', source: 'A clorofila absorve a luz solar' };
   const none = { concept: 'Calvin', text: 'Fixa o carbono.', source: ' ' };
   for (const summary of [[own, none], [{ ...own, ia: true }], [{ ...own, pronto: true }, none]]) {
-    // Com o texto do material e sem ele (o recebido de um colega).
-    for (const texto of [EXAMPLE, undefined]) assert.equal(printNote(summary, texto), originNote(summary, texto));
+    // O material daqui e o recebido de um colega.
+    for (const recebido of [undefined, true]) assert.equal(printNote(summary, recebido), originNote(summary, recebido));
   }
-  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }], EXAMPLE),
+  assert.equal(printNote([own, none], true), AWAY_NOTE);
+  assert.equal(printNote([own, none]), AI_NOTE, 'material de antes do campo texto, gerado aqui');
+  assert.equal(printNote([none, { concept: 'Luz', text: 'Energia.' }], true),
     'Gerado por IA. Nenhum tópico foi conferido com um texto seu. Confira em uma fonte confiável.');
 });
 
@@ -1892,32 +1897,34 @@ test('markExample: trecho do exemplo da IA leva ia, o do exemplo pronto leva pro
 
 test('sourceLabel: o rótulo do trecho diz de que texto ele saiu', () => {
   const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
-  const texto = EXAMPLES.Economia[0].text;
-  assert.equal(sourceLabel(s, texto), 'No seu texto: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, pronto: true }, texto), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
-  assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
+  // Sem a marca recebido o material é daqui, com ou sem o texto guardado: o de antes do campo texto não o tem.
+  for (const recebido of NOT_RECEIVED) {
+    assert.equal(sourceLabel(s, recebido), 'No seu texto: "o índice oficial de inflação é o IPCA"', String(recebido));
+  }
+  assert.equal(sourceLabel({ ...s, pronto: true }), 'No texto de exemplo: "o índice oficial de inflação é o IPCA"');
+  assert.equal(sourceLabel({ ...s, ia: true }), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
 });
 
-test('sourceLabel: sem o texto do material no navegador, o trecho é do texto de quem gerou', () => {
+test('sourceLabel: no material recebido de um colega, o trecho é do texto de quem gerou', () => {
   const s = { concept: 'IPCA', text: 'Índice oficial.', source: ' o índice oficial de inflação é o IPCA\n' };
   const away = 'No texto de quem gerou: "o índice oficial de inflação é o IPCA"';
-  for (const texto of [undefined, null, '', ' \n']) {
-    assert.equal(sourceLabel(s, texto), away);
-    // A marca pronto vem no arquivo, e sem o texto não há como conferi-la aqui.
-    assert.equal(sourceLabel({ ...s, pronto: true }, texto), away);
-    assert.equal(sourceLabel({ ...s, ia: true }, texto), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
-  }
+  assert.equal(sourceLabel(s, true), away);
+  // A marca pronto vem no arquivo, e o texto dela não está aqui para conferir.
+  assert.equal(sourceLabel({ ...s, pronto: true }, true), away);
+  assert.equal(sourceLabel({ ...s, ia: true }, true), 'No exemplo escrito pela IA: "o índice oficial de inflação é o IPCA"');
 });
 
 test('sourceLabel: o material gerado aqui diz "No seu texto"; o mesmo material, importado do arquivo para um colega, não', () => {
   const made = { ...demo(EXAMPLE), id: 4, date: at(11), texto: EXAMPLE };
+  const { texto, ...old } = made;
   const [got] = readBackup(JSON.stringify(shareFile(made, today()))).saved;
-  const labels = m => m.summary.map(s => sourceLabel(s, m.texto).split(':')[0]);
-  assert.deepEqual([...new Set(labels(made))], ['No seu texto']);
-  assert.deepEqual([...new Set(labels(got))], ['No texto de quem gerou']);
+  const labels = m => [...new Set(m.summary.map(s => sourceLabel(s, m.recebido).split(':')[0]))];
+  assert.deepEqual(labels(made), ['No seu texto']);
+  assert.deepEqual(labels(old), ['No seu texto'], 'gerado aqui antes do campo texto');
+  assert.deepEqual(labels(got), ['No texto de quem gerou']);
   // O trecho trocado à mão no arquivo entra com o mesmo rótulo: não aparece como conferido.
   const edited = { ...got, summary: [{ ...got.summary[0], source: 'Uma frase que não está em texto nenhum.' }] };
-  assert.equal(sourceLabel(edited.summary[0], edited.texto), 'No texto de quem gerou: "Uma frase que não está em texto nenhum."');
+  assert.equal(sourceLabel(edited.summary[0], edited.recebido), 'No texto de quem gerou: "Uma frase que não está em texto nenhum."');
 });
 
 test('pretestCards: as 2 primeiras perguntas dos flashcards; com menos de 2 cartões não há bloco', () => {
@@ -2335,7 +2342,8 @@ const QUOTA_NOTE = 'A cota da IA é do projeto inteiro e zera à meia-noite do h
 test('healthLabel: a dica do selo diz o teto de chamadas de um pedido, o request_calls do backend', () => {
   const config = readFileSync(new URL('../../backend/app/config.py', import.meta.url), 'utf8');
   const [, calls] = config.match(/^\s*request_calls: int = (\d+)$/m);
-  assert.ok(QUOTA_NOTE.includes('mais de uma chamada, até ' + calls + ','));
+  const { note } = healthLabel({ status: 'ok', ai_configured: true, model: 'm', calls_today: 0 });
+  assert.ok(note.includes('mais de uma chamada, até ' + calls + ','), note);
 });
 
 test('healthLabel: conferindo, Cérebro desligado e IA não configurada', () => {
@@ -3581,10 +3589,12 @@ test('mergeBackup: o que a tela ignora continua gravado, e nada do que entra na 
 
 // Material como a biblioteca o guarda, com o texto colado no editor (#89).
 const SHARED = Object.freeze({ ...BACKUP.saved[0], texto: EXAMPLE });
+// O mesmo material como ele vai no arquivo para um colega: sem o texto e com a marca recebido.
+const RECEIVED = [{ ...BACKUP.saved[0], recebido: true }];
 
 test('shareFile: o Importar do colega traz 1 material, sem nada de fora, e importar de novo não duplica', () => {
   const file = readBackup(JSON.stringify(shareFile(SHARED, today())));
-  assert.deepEqual(file, { ...EMPTY, saved: BACKUP.saved, fora: NONE, user: null });
+  assert.deepEqual(file, { ...EMPTY, saved: RECEIVED, fora: NONE, user: null });
   const once = mergeBackup(EMPTY, file);
   assert.equal(backupNote(EMPTY, once, file.fora), '1 material importado');
   const again = mergeBackup(once, readBackup(JSON.stringify(shareFile(SHARED, new Date(2026, 10, 20)))));
@@ -3595,14 +3605,39 @@ test('shareFile: o Importar do colega traz 1 material, sem nada de fora, e impor
 test('shareFile: o arquivo não tem events, erros, cartoes, user nem o texto colado, e o material da tela não muda', () => {
   const file = shareFile(SHARED, today());
   assert.deepEqual(Object.keys(file), ['versao', 'saved']);
-  assert.deepEqual(file.saved, BACKUP.saved);
+  assert.deepEqual(file.saved, RECEIVED);
   assert.equal(SHARED.texto, EXAMPLE);
 });
 
 test('shareFile: a data da prova é do aluno e não vai no arquivo; o material da tela continua com ela', () => {
   const dated = Object.freeze({ ...SHARED, prova: '2026-11-22', provaMarcada: at(16, 13) });
-  assert.deepEqual(shareFile(dated, today()).saved, BACKUP.saved);
+  assert.deepEqual(shareFile(dated, today()).saved, RECEIVED);
   assert.equal(provaOf(dated), '2026-11-22');
+});
+
+test('shareFile: o material do arquivo leva a marca recebido, e o da tela não; texto e data da prova ficam de fora', () => {
+  const dated = Object.freeze({ ...SHARED, prova: '2026-11-22', provaMarcada: at(16, 13) });
+  const [sent] = shareFile(dated, today()).saved;
+  assert.equal(sent.recebido, true);
+  assert.ok(!('texto' in sent) && !('prova' in sent) && !('provaMarcada' in sent));
+  assert.ok(!('recebido' in dated));
+  // O recebido que o colega manda adiante continua marcado, também com a marca estragada à mão.
+  for (const recebido of [true, 'sim']) assert.equal(shareFile({ ...sent, recebido }, today()).saved[0].recebido, true);
+});
+
+test('shareFile: a marca recebido passa pelo Importar, pelo backup do colega e pelo arquivo que ele manda adiante', () => {
+  const mine = { ...demo(EXAMPLE), id: 7, date: at(12), texto: EXAMPLE };
+  const here = mergeBackup({ ...EMPTY, saved: [mine] }, readBackup(JSON.stringify(shareFile(SHARED, today()))));
+  assert.deepEqual(here.saved, [...RECEIVED, mine]);
+  // O backup inteiro, lido em outro navegador: o recebido continua marcado, e o gerado aqui continua sem a marca.
+  const there = mergeBackup(EMPTY, readBackup(JSON.stringify({ versao: 1, ...here })));
+  assert.deepEqual(there.saved.map(m => m.recebido), [true, undefined]);
+  // O arquivo para um terceiro colega, feito do material recebido.
+  const third = mergeBackup(EMPTY, readBackup(JSON.stringify(shareFile(there.saved[0], today()))));
+  assert.deepEqual(third.saved, RECEIVED);
+  // Importar o próprio arquivo de volta não marca o material que já está aqui.
+  const back = mergeBackup({ ...EMPTY, saved: [SHARED] }, readBackup(JSON.stringify(shareFile(SHARED, today()))));
+  assert.deepEqual(back.saved, [SHARED]);
 });
 
 test('shareFile: material sem data leva a de agora; a demonstração e o exemplo pronto levam as marcas', () => {
@@ -3612,7 +3647,7 @@ test('shareFile: material sem data leva a de agora; a demonstração e o exemplo
   const made = demo(EXAMPLE);
   const marked = { ...made, summary: markExample(made.summary, '', EXAMPLE), id: 4, date: at(11), texto: EXAMPLE };
   const { texto, ...sent } = marked;
-  assert.deepEqual(readBackup(JSON.stringify(shareFile(marked, today()))).saved, [sent]);
+  assert.deepEqual(readBackup(JSON.stringify(shareFile(marked, today()))).saved, [{ ...sent, recebido: true }]);
   assert.ok(sent.semIA && sent.summary.every(s => s.pronto));
 });
 

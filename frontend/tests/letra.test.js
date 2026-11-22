@@ -46,6 +46,9 @@ test('dock: na janela mais baixa que ele, fica com a altura que sobra e rola por
 test('nameCut: a barra de baixo só prende o "Mais" quando a rolagem cortaria o nome dele', () => {
   assert.equal(nameCut(372, 372, 48, 29, '4px'), false, '390 px, letra padrão: a barra não rola');
   assert.equal(nameCut(372, 363, 48, 29, '4px'), false, '381 px, letra padrão: rola 9 px, só o vazio em volta do nome');
+  // Os dois lados do limite, medidos com mouse e a barra de rolagem clássica (15 px a menos na barra de baixo).
+  assert.equal(nameCut(372, 359, 48, 29, '4px'), false, '392 px, letra padrão, com mouse: rola 13 px, ainda no vazio');
+  assert.equal(nameCut(372, 357, 48, 29, '4px'), true, '390 px, letra padrão, com mouse: rola 15 px e cortaria o nome');
   assert.equal(nameCut(405, 372, 48, 33, '4px'), true, '390 px, texto a 115%');
   assert.equal(nameCut(367, 350, 40, 35, '3px'), true, '360 px, texto a 130%');
   assert.equal(nameCut(349, 310, 40, 31, '3px'), true, '320 px, com o espaçamento de texto da WCAG 1.4.12');

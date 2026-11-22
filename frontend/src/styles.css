@@ -444,12 +444,15 @@ body::before {
     scrollbar-gutter: auto
 }
 
-:root[data-waves] body {
-    padding-left: calc(100vw - 100%)
-}
+/* Só na tela: na impressão a folha (.folha) fica com a largura dela. */
+@media screen {
+    :root[data-waves] body {
+        padding-left: calc(100vw - 100%)
+    }
 
-:root[data-waves] .app {
-    max-width: min(84rem, 100vw - 34px)
+    :root[data-waves] .app {
+        max-width: min(84rem, 100vw - 34px)
+    }
 }
 
 :root[data-waves=on] .waves {
@@ -463,6 +466,11 @@ body::before {
 :root[data-waves] .busy {
     --glass-float: #0b0b0b;
     left: calc(50vw + var(--dock-out) / 2)
+}
+
+/* O aviso da tela (.toast-region), preso à janela como a faixa de espera, segue o mesmo centro. */
+:root[data-waves] .toast-region {
+    left: 50vw
 }
 
 :root[data-waves] :is(.topbar, .rail, .busy) {
@@ -1166,11 +1174,11 @@ select {
     }
 }
 
-/* No computador a barra de cima tem também o atalho e o botão "Fundo animado" (#144): até 50 rem o modelo já sai, e o
+/* No computador a barra de cima tem também o atalho e o botão "Fundo animado" (#144): até 60 rem o modelo já sai, e o
    atalho não fica menor do que era sem o botão. A largura é a em que o dock entra (mobile.css), em rem como lá: 851 px
    com a letra padrão. */
 @media (min-width: 53.1875rem) {
-    @container (max-width: 50rem) {
+    @container (max-width: 60rem) {
         .status-model {
             position: absolute;
             width: 1px;
