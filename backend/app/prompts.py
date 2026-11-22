@@ -61,7 +61,7 @@ avoid traz as perguntas que o material já tem: não repita nenhuma, nem com out
 # desta conversa" era o câmbio. A tela passou a mandar só o histórico do assunto atual, e a instrução diz que o aluno
 # decide o assunto (#155).
 CHAT = ('Responda a dúvida com exemplos práticos e passos quando necessário. '
-        'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta continua essa conversa. '
+        'history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais recente, e a pergunta vem depois delas. '
         'content é o texto que o aluno está estudando: o que ele colou no editor ou o título e o resumo de um material de estudo, e pode vir vazio. '
         'Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, diga isso em uma frase antes de completar com o que você sabe. '
         'Esse aviso vale uma vez: se uma resposta sua em history já avisou, ou se a conversa em history já trata de outro assunto, '

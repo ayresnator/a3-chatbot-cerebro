@@ -902,20 +902,36 @@ function summaryText(m) {
   return cut([m.title, ...topics].filter(Boolean).join('\n'), MAX_INPUT);
 }
 
+// Marca do assunto do chat: um hash curto (cyrb53, em base 36) do texto e da área. Ela vai em cada mensagem da conversa
+// gravada no navegador: com o texto inteiro (até 20.000 caracteres), o rascunho crescia umas 20 vezes e podia encher a
+// cota do armazenamento.
+export function subjectKey(text, area) {
+  const s = JSON.stringify([text, area]);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 // Assunto do chat. Vale o texto do editor sem material aberto, quando o material saiu desse texto (é o mesmo assunto,
 // e o texto é mais completo) ou quando o aluno escolheu o texto (editor) e há texto lá. Senão, o material: o título e
 // o resumo vão como content, com a área e o nível dele (material antigo sem eles usa os do editor).
 // made é a chave da última geração, [texto, área, nível] (App.jsx, generate): só o texto conta, porque a área e o
 // nível podem ter mudado depois. swap é o botão que troca a fonte, quando há outra para escolher.
-// key é a marca do assunto, gravada em cada mensagem e nas sugestões da IA (chatHistory, hints): o texto e a área, em
-// JSON. Do material vale o texto de onde ele saiu (texto), que é o do editor logo depois de gerar: reaberto da
+// key é a marca do assunto, gravada em cada mensagem e nas sugestões da IA (chatHistory, hints): o texto e a área
+// (subjectKey). Do material vale o texto de onde ele saiu (texto), que é o do editor logo depois de gerar: reaberto da
 // Biblioteca, com o resumo em content, ele continua o mesmo assunto. Material sem esse texto usa o resumo.
 export function chatSubject({ material, made, editor, input, area, level }) {
   const fromEditor = made.startsWith('[' + JSON.stringify(input) + ',');
   if (!material || fromEditor || (editor && input.trim())) {
     return {
       title: '', content: input, area, level, swap: material && !fromEditor ? 'Usar o material aberto' : '',
-      key: JSON.stringify([input, area]),
+      key: subjectKey(input, area),
     };
   }
   const content = summaryText(material);
@@ -926,7 +942,7 @@ export function chatSubject({ material, made, editor, input, area, level }) {
     area: own,
     level: LEVELS.includes(material.level) ? material.level : level,
     swap: input.trim() ? 'Usar o texto do editor' : '',
-    key: JSON.stringify([material.texto?.trim() ? material.texto : content, own]),
+    key: subjectKey(material.texto?.trim() ? material.texto : content, own),
   };
 }
 

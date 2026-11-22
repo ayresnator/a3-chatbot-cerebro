@@ -25,7 +25,7 @@ import {
   deckStart, deckRight, deckWrong, deckLater, deckMissed, deckRedo, deckSummary, fitsAbove, nameCut,
   validCardReview, scheduleCard, dueCards, dayCards,
   noticeTime, topicCount, chartLine,
-  matches, libraryCount, hints, chatHistory, hello, chatSubject, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
+  matches, libraryCount, hints, chatHistory, hello, chatSubject, subjectKey, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
   FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
   seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
@@ -1636,7 +1636,7 @@ function App() {
     const own = msg === input.trim();
     const topic = own ? { content: input, area, level } : subject;
     // A marca da pergunta pelo editor é a do texto do editor (lib.js, chatSubject).
-    const key = own ? JSON.stringify([input, area]) : subject.key;
+    const key = own ? subjectKey(input, area) : subject.key;
     const mine = { role: 'user', text: msg, key };
     if (own) setEditorChat(true);
     // A pergunta nova encerra o Desfazer de "Nova conversa": ele não pode mais trocar a conversa que começa agora.

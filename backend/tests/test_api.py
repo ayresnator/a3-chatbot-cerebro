@@ -1478,8 +1478,12 @@ class ApiTests(unittest.TestCase):
                       "Com content preenchido, responda a partir dele; se a resposta não estiver nesse texto, "
                       "diga isso em uma frase antes de completar com o que você sabe. "
                       "Esse aviso vale uma vez: se uma resposta sua em history já avisou, ou se a conversa em history "
-                      "já trata de outro assunto, não repita o aviso e responda direto. ", chat)
+                      "já trata de outro assunto, não repita o aviso e responda direto. "
+                      "content pode ser o material aberto na tela, que o aluno não mandou nesta conversa: no aviso, "
+                      "não diga que ele enviou o texto. ", chat)
         # Com a conversa de outro assunto no histórico, o modelo disse ao aluno que o assunto era outro (#155).
+        self.assertIn("history traz as últimas mensagens desta mesma conversa (no máximo 6), da mais antiga para a mais "
+                      "recente, e a pergunta vem depois delas. ", chat)
         self.assertIn("O aluno decide o assunto: se a pergunta tratar de outro assunto que o de history ou o de "
                       "content, responda sobre o assunto da pergunta. "
                       "Nunca diga ao aluno que a conversa é sobre outra coisa nem recuse a pergunta por ser de outro "
