@@ -236,12 +236,12 @@ export function Orb(props) {
 // Espera de um pedido à IA: um fio indeterminado (nada aqui finge saber quanto falta), o que está acontecendo, os
 // segundos, o limite e o Cancelar. Fica no lugar onde a resposta vai entrar, ou na faixa de cima (.busy) quando esse
 // lugar não está na tela: nunca nos dois (App.jsx, waitInline), para o Cancelar não aparecer duas vezes.
-// orb é o estado do orbe antes do texto. Ele fica dentro do texto, e não ao lado: numa espera estreita o texto quebra
-// junto com ele em vez de descer sozinho para a linha de baixo.
+// orb é o estado do orbe antes do texto, só na pílula do Dúvidas; com ele o fio sai: um indicador vivo por espera. Ele
+// fica dentro do texto, e não ao lado: numa espera estreita o texto quebra junto com ele em vez de descer sozinho.
 export function Wait({ label, since, onCancel, orb }) {
   return (
     <div className="wait">
-      <span className="wait-bar" aria-hidden="true"></span>
+      {!orb && <span className="wait-bar" aria-hidden="true"></span>}
       <span className="wait-text">
         {/* A biblioteca põe display block no style; inline-block deixa o orbe na linha do texto (styles.css, .wait-orb). */}
         {orb && <Orb state={orb} className="wait-orb" style={{ display: 'inline-block' }} />}

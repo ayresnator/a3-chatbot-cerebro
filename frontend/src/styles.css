@@ -2913,6 +2913,13 @@ main:focus {
     letter-spacing: -.02em
 }
 
+/* Até 1000 px o 4vw do título fica abaixo de 40 px: sem o aperto, como no celular (mobile.css). */
+@media (max-width: 62.5rem) {
+    .chat-title {
+        letter-spacing: 0
+    }
+}
+
 .chat-rule {
     display: block;
     height: var(--hair);
@@ -2997,8 +3004,9 @@ main:focus {
 
 /* ---------- Esperas e esqueletos ---------- */
 
-/* Espera de um pedido à IA (ui.jsx, Wait): o fio indeterminado em cima (#42), o orbe (#54), o que acontece, os
-   segundos e o limite, o Cancelar. Só o fio e o orbe se movem; o esqueleto fica parado. */
+/* Espera de um pedido à IA (ui.jsx, Wait): o fio indeterminado em cima (#42), o que acontece, os segundos e o limite,
+   o Cancelar. Uma coisa se move por espera: o fio, ou o orbe (#54) na pílula do Dúvidas, que fica sem o fio. O
+   esqueleto fica parado. */
 .wait {
     position: relative;
     display: flex;
@@ -3008,8 +3016,8 @@ main:focus {
     padding-top: var(--sp-3);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    /* Numa espera estreita (o esqueleto do material num celular de 390 px, com o orbe) o texto quebra sem deixar o
-       "min" sozinho na última linha. */
+    /* Numa espera estreita (o esqueleto do material num celular de 390 px) o texto quebra sem deixar o "min" sozinho
+       na última linha. */
     text-wrap: pretty
 }
 
@@ -3023,8 +3031,8 @@ main:focus {
     font-variant-numeric: tabular-nums
 }
 
-/* Orbe da IA no começo do texto da espera (ui.jsx, Wait): os 20 px dele presos no topo da linha e descidos metade da
-   sobra, então ele fica no centro da linha (20,3 px na faixa, 23,1 px no retorno do quiz) e a linha não cresce. As
+/* Orbe da IA no começo do texto da pílula de espera do Dúvidas (ui.jsx, Wait): os 20 px dele presos no topo da linha e
+   descidos metade da sobra, então ele fica no centro da linha e a linha não cresce. As
    margens vão separadas: num navegador sem a unidade lh só a de cima cai, e o orbe fica no topo da linha. */
 .wait-orb {
     vertical-align: top;
@@ -3506,10 +3514,6 @@ main:focus {
     backdrop-filter: var(--blur);
     font-size: var(--fs-2);
     pointer-events: auto
-}
-
-.chat-wait .wait-bar {
-    display: none
 }
 
 /* Chips de sugestão (só com a IA), acima da caixa (#109): botões secundários comuns, o vidro elevado com o fio. No herói

@@ -170,7 +170,9 @@
     .status-text {
         white-space: normal;
         text-wrap: balance;
-        line-height: 1.2
+        line-height: 1.2;
+        /* Os algarismos tabulares são mais largos: a 390 px o estado descia para duas linhas. */
+        font-variant-numeric: normal
     }
 
     .ask-pill,

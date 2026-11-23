@@ -216,9 +216,9 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, own,
-  // example), para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
-  // Wait); since é a hora do pedido, para os segundos.
+  // Espera de um pedido à IA fora do chat: { kind, label, since }. kind é o pedido (gerar, why, review, own,
+  // example), para a espera aparecer no botão dele; label vai na espera (ui.jsx, Wait, só com o fio: o orbe fica na
+  // pílula do Dúvidas); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista;
   // no comentário da explicação com as próprias palavras, item é o tópico.
   const [busy, setBusy] = useState(null);
@@ -855,7 +855,7 @@ function App() {
     // demonstração é instantânea e não mostra espera nenhuma.
     // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
     const wait = !!API_BASE;
-    setBusy({ kind: 'gerar', label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
+    setBusy({ kind: 'gerar', label: 'Gerando o material…', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
       // O botão apertado sai da tela com o Estudar: o foco espera no título da página do material, e o leitor de tela
@@ -1381,7 +1381,7 @@ function App() {
     if (waiting) return;
     const from = origin(item);
     setWhy({ item });
-    setBusy({ kind: 'why', label: 'Esperando a explicação…', orb: 'composing', since: Date.now() });
+    setBusy({ kind: 'why', label: 'Esperando a explicação…', since: Date.now() });
     // A espera nasce junto com a explicação e não seria lida.
     say('Esperando a explicação…');
     // A explicação entra abaixo do botão e vem à vista (Why): na janela baixa o botão, que fica com o foco, saía pelo
@@ -1436,7 +1436,7 @@ function App() {
     const from = origin(s);
     let review = null;
     setOwn({ ...mine, error: null });
-    setBusy({ kind: 'own', label: 'Esperando o comentário…', orb: 'solving', since: Date.now(), item: s });
+    setBusy({ kind: 'own', label: 'Esperando o comentário…', since: Date.now(), item: s });
     // A espera nasce junto com o comentário e não seria lida. Ela entra acima do botão e o empurra para trás da barra
     // de baixo: a página rola até ele, que fica com o foco.
     say('Esperando o comentário da IA…');
@@ -1501,7 +1501,7 @@ function App() {
     // O aluno pode seguir adiante, ou refazer a questão, enquanto espera: só muda a resposta que foi revista.
     // Na tela ela é reconhecida pelo próprio objeto; no que está gravado, por ser anterior a este pedido.
     const asked = new Date().toISOString();
-    setBusy({ kind: 'review', label: 'Esperando a revisão…', orb: 'solving', since: Date.now(), answer: mine });
+    setBusy({ kind: 'review', label: 'Esperando a revisão…', since: Date.now(), answer: mine });
     // A espera entra acima do botão e, no celular, o empurra para trás do "Próxima questão" preso: a página rola até
     // ele, que fica com o foco.
     focusAfter.current = [null, null, '#pedir-revisao'];
@@ -1552,7 +1552,7 @@ function App() {
     // O material do pedido está aberto: esta cópia ou outra dele, aberta de novo da biblioteca durante a espera.
     const isOpen = now => now.result === material || (!!material.id && now.result?.id === material.id);
     setExtra(null);
-    setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', orb: 'composing', since: Date.now(), of: material });
+    setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', since: Date.now(), of: material });
     // A espera nasce no fim do quiz e não seria lida. Com o botão no pé da janela ela nasceria fora da vista: a página
     // rola até ela, e o foco fica no botão.
     say('Escrevendo questões novas…');
@@ -2564,7 +2564,7 @@ function App() {
                         <div className="result-header">
                           <div>
                             <Sk w="55%" className="sk-title" />
-                            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                            <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                           </div>
                         </div>
                         {tablist(true)}
@@ -2900,7 +2900,7 @@ function App() {
                                             <div className="review-wait">
                                               <Sk className="sk-read" />
                                               <Sk w="72%" className="sk-read" />
-                                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                              <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                             </div>
                                           )}
                                           {own.error && <div role="alert" className="error"><Problem error={own.error} /></div>}
@@ -2994,7 +2994,8 @@ function App() {
                               )}
                               <button
                                 type="button"
-                                className="primary"
+                                // Com o "Tente responder antes de ler" aberto, o ciano fica no "Ler o resumo" dele.
+                                className={recall.pre === 'aberto' && pretest.length > 0 ? undefined : 'primary'}
                                 onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}
                               >
                                 Estudar flashcards deste resumo
@@ -3197,7 +3198,8 @@ function App() {
                                   ))}
                                 </ul>
                               )}
-                              {wrong.length > 0 ? (
+                              {/* Sem erro, a linha "Você acertou 6 de 6." de cima já diz tudo. */}
+                              {wrong.length > 0 && (
                                 <ol className="review" role="list">
                                   {wrong.map((q, i) => (
                                     <li key={i}>
@@ -3216,8 +3218,6 @@ function App() {
                                     </li>
                                   ))}
                                 </ol>
-                              ) : (
-                                <p>{answers.length === 1 ? 'Você acertou a questão.' : 'Você acertou as ' + answers.length + '.'}</p>
                               )}
                               {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
                                   caderno". A frase só aparece enquanto vale: o fim do quiz continua na tela na volta de
@@ -3296,7 +3296,7 @@ function App() {
                               {/* A espera das questões novas e o erro dela ficam embaixo do botão, no lugar do pedido. */}
                               {busy?.kind === 'questoes' && busy.of === result && (
                                 <div className="quiz-wait">
-                                  <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                  <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                 </div>
                               )}
                               {extra?.error && extra.of === result && (
@@ -3493,7 +3493,7 @@ function App() {
                                     <div className="review-wait">
                                       <Sk className="sk-read" />
                                       <Sk w="72%" className="sk-read" />
-                                      <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                      <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                     </div>
                                   )}
                                   {answer.review?.verdict && (
@@ -3921,7 +3921,7 @@ function App() {
       <AnimatePresence custom={byKeyboard() || waitInline}>
         {band && (
           <m.div key="espera" className="busy" variants={pop} initial={appear()} animate="show" exit="exit">
-            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
+            <Wait label={busy.label} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
           </m.div>
         )}
       </AnimatePresence>
@@ -4433,7 +4433,7 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
             <Sk w="90%" className="sk-read" />
             <Sk w="62%" className="sk-read" />
           </span>
-          {wait?.kind === 'why' && <Wait label={wait.label} orb={wait.orb} since={wait.since} onCancel={onCancel} />}
+          {wait?.kind === 'why' && <Wait label={wait.label} since={wait.since} onCancel={onCancel} />}
         </>
       )}
     </m.div>

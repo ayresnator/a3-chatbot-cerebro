@@ -81,10 +81,12 @@ export default function Desempenho({
         ) : (
           <p className="hint chart-empty">Nenhuma resposta nos últimos 7 dias</p>
         )}
-        <p className="chart-note">
-          A altura da barra é o número de respostas do dia; o percentual é o acerto. Conta a primeira resposta de cada
-          questão do quiz no dia. Os cartões ficam à parte: são autoavaliação.
-        </p>
+        {days.some(d => d.total) && (
+          <p className="chart-note">
+            A altura da barra é o número de respostas do dia; o percentual é o acerto. Conta a primeira resposta de cada
+            questão do quiz no dia. Os cartões ficam à parte: são autoavaliação.
+          </p>
+        )}
         <p className="chart-note">
           {keptLine(kept)} "Na hora" é a primeira vez que a questão aparece; "que ficou" é a mesma questão em outro dia.
         </p>
