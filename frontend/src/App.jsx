@@ -1070,7 +1070,7 @@ function App() {
     // Um backup cabe em poucos megabytes, o limite do armazenamento do navegador: arquivo maior não é um.
     const backup = file.size > 20e6 ? null : readBackup(await file.text().catch(() => ''));
     if (!backup) {
-      toast('Este arquivo não é um backup do Cérebro.');
+      toast('Este arquivo não é um backup do Cérebro');
       return;
     }
     // O histórico entra e sai sem as repetições de dias passados (lib.js, compactEvents): o backup não as traz de volta,
@@ -2520,8 +2520,8 @@ function App() {
                     {plan.length > 0 && <StudyPlan rows={plan} onOpen={openTask} />}
                     <div className="stats">
                       <Stat
-                        value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
-                        label={plural(streakDays, 'seguido de estudo', 'seguidos de estudo')}
+                        value={streakDays}
+                        label={plural(streakDays, 'dia seguido de estudo', 'dias seguidos de estudo')}
                       />
                       <Stat value={cards.total} label={plural(cards.total, 'cartão revisado', 'cartões revisados')} />
                       <Stat
@@ -2579,10 +2579,10 @@ function App() {
                       </m.section>
                     ) : !result ? (
                       <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
-                        <h2>Seu próximo aprendizado está por aqui.</h2>
-                        <p>Adicione um texto para criar seu material de estudo.</p>
+                        <h2>Nenhum material aberto</h2>
+                        <p>Cole o texto da aula no Estudar para gerar resumo, flashcards e quiz.</p>
                         <div className="row center">
-                          <button type="button" className="primary" onClick={() => openPage('Estudar')}>Adicionar conteúdo</button>
+                          <button type="button" className="primary" onClick={() => openPage('Estudar')}>Ir para Estudar</button>
                           {saved.length > 0 && (
                             <button type="button" onClick={() => openPage('Biblioteca')}>
                               Abrir da biblioteca ({saved.length})
@@ -2865,7 +2865,7 @@ function App() {
                                             </div>
                                           ) : (
                                             <>
-                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras.</label>
+                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras</label>
                                               <p className="hint" id="proprio-dica">De 2 a 5 frases, com até 1.000 caracteres.</p>
                                               <textarea
                                                 id="proprio-campo"
@@ -3220,7 +3220,7 @@ function App() {
                                   ))}
                                 </ol>
                               ) : (
-                                <p>Você acertou todas!</p>
+                                <p>{answers.length === 1 ? 'Você acertou a questão.' : 'Você acertou as ' + answers.length + '.'}</p>
                               )}
                               {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
                                   caderno". A frase só aparece enquanto vale: o fim do quiz continua na tela na volta de
@@ -3461,7 +3461,7 @@ function App() {
                                     tabIndex={-1}
                                     aria-describedby={!answer.ok && answer.conf === 'certeza' ? 'certeza-errada' : undefined}
                                   >
-                                    {answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}
+                                    {answer.ok ? 'Acertou' : 'Errou'}
                                   </strong>
                                   {/* Errou com "Tenho certeza" (#80): o aviso vem antes de tudo, e o leitor de tela o ouve
                                       junto com o título, que recebe o foco. */}
@@ -3570,7 +3570,7 @@ function App() {
                     {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
                     <div className="chat-title-box">
                       <m.h1 id="chat-titulo" className="chat-title" tabIndex={-1} variants={hero.title}>
-                        Como posso ajudar hoje?
+                        Dúvidas
                       </m.h1>
                       {!chat.length && <m.span className="chat-rule" aria-hidden="true" variants={hero.rule}></m.span>}
                     </div>
@@ -3767,7 +3767,7 @@ function App() {
                   </AnimatePresence>
                   {mistakes.length === 0 ? (
                     <div className="empty">
-                      <h2>Nenhuma questão para rever.</h2>
+                      <h2>Nenhuma questão para rever</h2>
                       <p className="hint">As que você errar nos quizzes aparecem aqui.</p>
                       <button type="button" className="primary" onClick={() => openPage(result ? 'Quizzes' : 'Estudar')}>
                         {result ? 'Fazer o quiz do material aberto' : 'Gerar um material'}
@@ -4097,7 +4097,7 @@ function App() {
                 <Icon name="fechar" />
               </button>
               <BrandMark />
-              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui.'}</h2>
+              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui'}</h2>
               <p>
                 {user
                   ? 'Seu nome e sua área principal ficam só neste navegador. Não é uma conta com senha.'
@@ -4492,7 +4492,7 @@ class ErrorBoundary extends React.Component {
     if (!this.state.failed) return this.props.children;
     return (
       <section className="panel empty" role="alert">
-        <h2>Algo quebrou nesta tela.</h2>
+        <h2>Algo quebrou nesta tela</h2>
         <button className="primary" onClick={() => window.location.reload()}>Recarregar a página</button>
       </section>
     );

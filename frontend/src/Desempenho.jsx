@@ -39,7 +39,7 @@ export default function Desempenho({
         <Stat {...keptStat(kept)} />
         <Stat
           value={percent(cards)}
-          label={'autoavaliação nos cartões · ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
+          label={'autoavaliação nos cartões\u00a0· ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
         />
       </m.div>
       {/* Com a lista "Área do gráfico" dentro, o painel só esmaece (anim.js, fade). */}

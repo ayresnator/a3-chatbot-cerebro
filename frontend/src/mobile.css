@@ -96,7 +96,7 @@
         background: none;
         color: var(--ink-2);
         font-size: var(--fs-1);
-        font-weight: 650;
+        font-weight: 500;
         line-height: 1.1;
         white-space: nowrap
     }
@@ -241,7 +241,8 @@
        palco aqui tem 16 px de respiro, e passar dele criaria rolagem de lado) e esmaece embaixo, onde a conversa aparece
        entre a caixa e a barra de baixo. */
     .chat-title {
-        font-size: clamp(1.75rem, 8vw, 2rem)
+        font-size: clamp(1.75rem, 8vw, 2rem);
+        letter-spacing: 0
     }
 
     .composer-bar select,
@@ -413,6 +414,11 @@
         --moon: 24rem;
         --moon-body: #060b0b;
         --moon-shade: #0f1d1e
+    }
+
+    /* Com 32 px o título não aperta as letras (styles.css, .page-title). */
+    .page-title {
+        letter-spacing: 0
     }
 
     .topbar {

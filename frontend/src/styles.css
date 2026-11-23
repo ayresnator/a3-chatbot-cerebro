@@ -474,16 +474,19 @@ h3 {
     text-wrap: balance
 }
 
+/* Três pesos no app: 400 no texto, 500 em botões e rótulos, 600 em títulos, números e destaques (strong). */
 h2 {
     font-size: var(--fs-4);
-    font-weight: 750;
-    letter-spacing: -.02em
+    font-weight: 600
 }
 
 h3 {
     font-size: var(--fs-3);
-    font-weight: 700;
-    letter-spacing: -.01em
+    font-weight: 600
+}
+
+strong {
+    font-weight: 600
 }
 
 p {
@@ -545,7 +548,7 @@ button {
     background: var(--raised);
     color: var(--ink);
     font-size: var(--fs-2);
-    font-weight: 650;
+    font-weight: 500;
     line-height: 1.2;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -602,7 +605,7 @@ button[aria-disabled=true] {
     border-color: transparent;
     background: none;
     color: var(--ink-2);
-    font-weight: 600;
+    font-weight: 500;
     text-decoration: underline;
     text-decoration-color: var(--line-strong);
     text-underline-offset: .25em
@@ -702,7 +705,7 @@ select {
     box-shadow: var(--shadow);
     color: var(--ink-hi);
     font-size: var(--fs-2);
-    font-weight: 650;
+    font-weight: 500;
     text-decoration: none
 }
 
@@ -799,23 +802,19 @@ select {
     text-decoration: none
 }
 
-/* "CÉREBRO" em caixa alta e espaçado, com "Meu espaço" embaixo, em cinza. */
+/* "Cérebro" como se escreve, com "Meu espaço" embaixo, em cinza. */
 .brand-name {
     display: grid;
     min-width: 0;
-    font-size: var(--fs-1);
-    font-weight: 800;
+    font-size: var(--fs-3);
+    font-weight: 600;
     line-height: 1.2;
-    letter-spacing: .16em;
-    text-transform: uppercase;
     white-space: nowrap
 }
 
 .brand-name small {
     color: var(--ink-2);
-    font-weight: 550;
-    letter-spacing: 0;
-    text-transform: none
+    font-weight: 400
 }
 
 .brand-mark {
@@ -858,7 +857,7 @@ select {
     background: none;
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 650
+    font-weight: 500
 }
 
 .nav-item:hover:not(:disabled) {
@@ -943,7 +942,7 @@ select {
     border-color: transparent;
     background: none;
     text-align: left;
-    font-weight: 650
+    font-weight: 500
 }
 
 .profile:hover:not(:disabled) {
@@ -976,7 +975,7 @@ select {
     border-radius: 50%;
     background: var(--raised-2);
     color: var(--ink-hi);
-    font-weight: 750
+    font-weight: 600
 }
 
 /* Na barra de cima o perfil é um botão redondo de 44 px, como as ações do Glassy Dashboard: sobra lugar para o estado
@@ -1033,7 +1032,7 @@ select {
     padding: 0 var(--sp-4);
     background: var(--field);
     color: var(--ink-2);
-    font-weight: 550
+    font-weight: 500
 }
 
 .ask-pill:hover:not(:disabled) {
@@ -1128,7 +1127,8 @@ select {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    text-overflow: ellipsis
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums
 }
 
 /* Com a barra estreita para o estado inteiro numa linha, o nome do modelo sai da vista e continua no leitor de tela: no
@@ -1232,13 +1232,13 @@ main:focus {
     margin-bottom: var(--sp-5)
 }
 
-/* Título grande e apertado, como o cabeçalho de vista do Glassy Dashboard. */
+/* Título grande: manda na página pelo tamanho. De 40 px para cima, -0,02em (no celular, com 32 px, 0: mobile.css). */
 .page-title {
     color: var(--ink-hi);
     font-size: var(--fs-6);
-    font-weight: 780;
+    font-weight: 600;
     line-height: 1.03;
-    letter-spacing: -.05em
+    letter-spacing: -.02em
 }
 
 .lead {
@@ -1322,7 +1322,7 @@ main:focus {
     background: var(--panel);
     color: var(--ink-2);
     font-size: var(--fs-1);
-    font-weight: 650
+    font-weight: 500
 }
 
 /* Erro: junto do controle que falhou, com o ícone e a borda da caneta vermelha. */
@@ -1408,7 +1408,7 @@ main:focus {
     border-radius: var(--r-box) var(--r-box) 0 0;
     background: var(--palette);
     color: var(--ink-hi);
-    font-weight: 650;
+    font-weight: 500;
     text-align: center;
     pointer-events: none
 }
@@ -1508,7 +1508,7 @@ main:focus {
     padding: 0 var(--sp-3);
     background: none;
     color: var(--ink-2);
-    font-weight: 600
+    font-weight: 500
 }
 
 .chip:hover:not(:disabled) {
@@ -1538,7 +1538,7 @@ main:focus {
     padding: 0 var(--sp-2) 0 var(--sp-3);
     border-color: transparent;
     background: none;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap
 }
 
@@ -1599,7 +1599,7 @@ main:focus {
     border-radius: var(--r-1);
     background: none;
     color: var(--ink-2);
-    font-weight: 600;
+    font-weight: 500;
     text-align: left
 }
 
@@ -1736,7 +1736,7 @@ main:focus {
 .open-parts > span {
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 600
+    font-weight: 500
 }
 
 /* Faixa "Seu progresso": números honestos, os mesmos do Desempenho. */
@@ -1755,8 +1755,7 @@ main:focus {
 }
 
 .progress-head h2 {
-    margin-right: auto;
-    font-size: var(--fs-3)
+    margin-right: auto
 }
 
 /* Cartões de número: o número grande em cima e a frase embaixo, em colunas iguais que quebram quando não cabem (duas
@@ -1832,15 +1831,13 @@ main:focus {
     box-shadow: var(--edge);
     color: var(--ink-2);
     font-size: var(--fs-1);
-    font-weight: 550
+    font-weight: 500
 }
 
 .stat strong {
     color: var(--ink-hi);
     font-size: var(--fs-num);
-    font-weight: 800;
     line-height: 1.05;
-    letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap
 }
@@ -2011,7 +2008,8 @@ main:focus {
 
 .topic-count {
     color: var(--ink-2);
-    font-size: var(--fs-2)
+    font-size: var(--fs-2);
+    font-variant-numeric: tabular-nums
 }
 
 .summary-tools > button:last-child {
@@ -2079,7 +2077,7 @@ main:focus {
     background: var(--warn-bg);
     color: var(--warn);
     font-size: var(--fs-1);
-    font-weight: 650
+    font-weight: 500
 }
 
 /* Botões que chamam a IA de dentro do estudo: "Não entendi, me explique", "Pedir revisão da IA" e "Pedir comentário da
@@ -2129,7 +2127,7 @@ main:focus {
 
 .why small {
     color: var(--ink-2);
-    font-weight: 700
+    font-weight: 600
 }
 
 .why p {
@@ -2181,7 +2179,7 @@ main:focus {
 }
 
 .pretest-item label {
-    font-weight: 650;
+    font-weight: 500;
     overflow-wrap: anywhere;
     text-wrap: pretty
 }
@@ -2270,7 +2268,7 @@ main:focus {
 }
 
 .own label {
-    font-weight: 650
+    font-weight: 500
 }
 
 /* O campo na medida de leitura, como os do "Tente responder antes de ler". */
@@ -2351,7 +2349,7 @@ main:focus {
 .recall-score > p:first-child {
     color: var(--ink-hi);
     font-size: var(--fs-4);
-    font-weight: 700
+    font-weight: 600
 }
 
 .recall-score ul {
@@ -2502,7 +2500,7 @@ main:focus {
     width: fit-content;
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 650
+    font-weight: 500
 }
 
 .card-form input:read-only {
@@ -2591,7 +2589,7 @@ main:focus {
     background: var(--raised-2);
     color: var(--ink);
     font-size: var(--fs-2);
-    font-weight: 750
+    font-weight: 600
 }
 
 .option-text {
@@ -2640,7 +2638,7 @@ main:focus {
     margin-right: var(--sp-1);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 650;
+    font-weight: 500;
     line-height: var(--lh-ui)
 }
 
@@ -2650,7 +2648,7 @@ main:focus {
     align-items: flex-start;
     gap: var(--sp-2);
     color: var(--ink-hi);
-    font-weight: 700
+    font-weight: 600
 }
 
 .sure-miss .icon {
@@ -2716,8 +2714,7 @@ main:focus {
 /* O título do fim do baralho e do quiz recebe o foco: com fit-content o anel abraça a frase, centrada. */
 .empty h2 {
     width: fit-content;
-    margin-inline: auto;
-    font-size: var(--fs-5)
+    margin-inline: auto
 }
 
 .empty p {
@@ -2824,7 +2821,7 @@ main:focus {
 /* Nota da caneta, na mesma Manrope: "certa", "sua resposta", "errei". */
 .pen-note {
     font-size: var(--fs-2);
-    font-weight: 750;
+    font-weight: 600;
     line-height: 1;
     white-space: nowrap
 }
@@ -2951,9 +2948,9 @@ main:focus {
 .chat-title {
     color: var(--ink-hi);
     font-size: clamp(2rem, 4vw, 3rem);
-    font-weight: 750;
+    font-weight: 600;
     line-height: 1.1;
-    letter-spacing: -.04em
+    letter-spacing: -.02em
 }
 
 .chat-rule {
@@ -2980,7 +2977,8 @@ main:focus {
 }
 
 .chat-stage[data-state=conversa] .chat-title {
-    font-size: var(--fs-5)
+    font-size: var(--fs-5);
+    letter-spacing: 0
 }
 
 /* A conversa numa coluna centrada. O respiro de baixo separa a última mensagem dos chips e da caixa presa (a pílula de
@@ -3030,7 +3028,7 @@ main:focus {
 .message small {
     display: block;
     color: var(--ink-2);
-    font-weight: 700
+    font-weight: 600
 }
 
 .message p {
@@ -3653,7 +3651,7 @@ main:focus {
 
 .erros-next {
     margin: var(--sp-2) 0 0;
-    font-weight: 650
+    font-weight: 500
 }
 
 /* "Refazer os de hoje" e "Treinar todas" ficam juntos, na ponta direita: com os quatro passos, a escada enche a
@@ -3730,7 +3728,7 @@ main:focus {
 /* A marca "você tinha certeza" (#80), embaixo dos acertos, no vermelho do texto da caneta. */
 .mistake-when .sure-note {
     color: var(--pen-text);
-    font-weight: 700
+    font-weight: 600
 }
 
 .mistakes li strong {
@@ -3908,7 +3906,7 @@ main:focus {
     margin: var(--sp-5) 0 var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-1);
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0
 }
 
@@ -3916,8 +3914,9 @@ main:focus {
     margin-top: 0
 }
 
-/* O plano até a prova abre "Seu próximo passo" (Desempenho.jsx): a frase de baixo dele fica como logo depois do título. */
-.panel > h2 + p,
+/* O plano até a prova abre "Seu próximo passo" (Desempenho.jsx): a frase de baixo dele fica como logo depois do título.
+   O painel vazio (sem material) fica de fora: a frase dele é centrada (.empty p). */
+.panel:not(.empty) > h2 + p,
 .panel > .plan + p {
     margin: var(--sp-2) 0 var(--sp-4);
     color: var(--ink-2)
@@ -4010,7 +4009,7 @@ main:focus {
 /* "prova em 6 dias" (#86): na tinta do texto, para sair da linha da área e da data. */
 .library-item small strong {
     color: var(--ink);
-    font-weight: 650
+    font-weight: 500
 }
 
 .library-item h2 {
@@ -4057,7 +4056,7 @@ main:focus {
 
 .backup-note strong {
     color: var(--ink);
-    font-weight: 650
+    font-weight: 500
 }
 
 /* ---------- Avisos, espera e janelas ---------- */
@@ -4269,7 +4268,7 @@ main[data-instant] > .view[data-motion-pop-id] {
     gap: var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 650
+    font-weight: 500
 }
 
 .profile-dialog input,
@@ -4305,7 +4304,7 @@ main[data-instant] > .view[data-motion-pop-id] {
     gap: var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-2);
-    font-weight: 650
+    font-weight: 500
 }
 
 .page-range select {

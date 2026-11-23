@@ -24,7 +24,7 @@ export default function Biblioteca({
           <input
             id="busca"
             type="search"
-            placeholder="Buscar materiais…"
+            placeholder="Buscar"
             aria-label="Buscar materiais"
             value={query}
             onChange={e => setQuery(e.target.value)}

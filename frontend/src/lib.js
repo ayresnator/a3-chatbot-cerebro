@@ -727,11 +727,11 @@ const KEPT_MIN = 5;
 const revisited = n => n + ' ' + plural(n, 'questão revista', 'questões revistas');
 const keptMissing = total => plural(KEPT_MIN - total, 'falta ', 'faltam ') + revisited(KEPT_MIN - total);
 
-// O número no topo do Desempenho, ao lado do acerto no quiz.
+// O número no topo do Desempenho, ao lado do acerto no quiz. O espaço antes do "·" não quebra: a linha não começa nele.
 export function keptStat({ total, rate }) {
   return total >= KEPT_MIN
-    ? { value: rate + '%', label: 'acerto que ficou · ' + revisited(total) + ' depois de 1 dia ou mais' }
-    : { value: '—', label: 'acerto que ficou · ' + keptMissing(total) };
+    ? { value: rate + '%', label: 'acerto que ficou\u00a0· ' + revisited(total) + ' depois de 1 dia ou mais' }
+    : { value: '—', label: 'acerto que ficou\u00a0· ' + keptMissing(total) };
 }
 
 // Os dois acertos dos últimos 30 dias lado a lado, na nota do gráfico: na hora e o que ficou. Contam todas as áreas,
@@ -884,7 +884,7 @@ export function slashHints(list, text) {
 // title é o material aberto sobre o qual o chat pergunta (chatSubject); sem ele, vale o texto do editor. study é o modo
 // estudo do celular (#85), também sem IA.
 export function hello({ user, area, level, input, title, api, study = false }) {
-  return 'Olá' + (user?.name ? ', ' + user.name : '') + '! Sou o Cérebro, seu tutor ' +
+  return (user?.name ? 'Olá, ' + user.name + '. ' : '') + 'Sou o Cérebro, tutor ' +
     (area === 'Escolar' ? 'das matérias escolares' : 'de ' + area) + ' no nível ' + level + '. ' +
     (api
       ? 'Pergunte o que quiser ou escolha uma das sugestões abaixo. ' +
