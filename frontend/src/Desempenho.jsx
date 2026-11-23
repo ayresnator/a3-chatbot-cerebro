@@ -67,7 +67,7 @@ export default function Desempenho({
                     <span className="full">
                       {d.total} {plural(d.total, 'resposta', 'respostas')}<br />{d.rate}% certas
                     </span>
-                    <span className="short">{d.rate + '% · ' + d.total}</span>
+                    <span className="short">{d.rate + '% · ' + d.total}</span>
                     <div
                       className={'chart-bar' + (i === days.length - 1 ? ' today' : '')}
                       style={{ '--h': d.total / busiest }}

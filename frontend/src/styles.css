@@ -1958,14 +1958,15 @@ main:focus {
     font-size: var(--fs-2)
 }
 
-.tabs [role=tab]:hover {
-    background: var(--raised);
+/* O hover só clareia o texto: com fundo, a aba sob o ponteiro ficava igual à selecionada. */
+.tabs [role=tab]:not([aria-selected=true]):hover {
+    background: none;
     color: var(--ink)
 }
 
 .tabs [role=tab][aria-selected=true] {
     background: var(--raised-2);
-    box-shadow: inset 0 0 0 var(--hair) var(--line);
+    box-shadow: inset 0 0 0 var(--hair) var(--line-strong);
     color: var(--ink-hi)
 }
 
