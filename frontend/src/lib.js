@@ -840,7 +840,7 @@ export function examLine(list, size = list.length) {
 }
 
 // Sugestões ao lado da caixa do chat, sempre sobre o assunto: de partida (o texto do assunto ou a área) até a primeira
-// resposta; depois, as perguntas que a IA mandou junto com a última resposta. Se ela não mandar nenhuma, entram três fixas.
+// resposta; depois, as perguntas que a IA mandou junto com a última resposta. Se faltarem, as fixas completam as três.
 // input é o texto do assunto (chatSubject): o do editor ou o do material aberto. key é a marca do assunto (chatSubject):
 // as da IA só valem com a marca da resposta, e se o aluno muda de assunto, voltam as fixas. Só conta resposta do assunto
 // atual, como em chatHistory: com a conversa de outro assunto na tela, voltam as de partida.
@@ -853,9 +853,15 @@ export function hints({ chat, input, area, tips, key }) {
         : STARTERS[area]),
     ];
   }
-  return tips.key === key && tips.list.length
-    ? tips.list
-    : ['Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar'];
+  // A IA pode sugerir o que o aluno já perguntou neste assunto (#158): a repetida sai, e as fixas completam as três,
+  // sem repetir pergunta feita nem o que já está na lista. Compara como norm, sem ligar também para espaços. Com todas
+  // já perguntadas a lista fica vazia, em vez de repetir uma: os chips somem (styles.css) e o botão Atalhos desliga.
+  const same = t => norm(t).replace(/\s+/g, '');
+  const seen = new Set(chat.filter(m => m.role === 'user' && m.key === key).map(m => same(m.text)));
+  return [
+    ...(tips.key === key ? tips.list : []),
+    'Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar',
+  ].filter(t => !seen.has(same(t)) && seen.add(same(t))).slice(0, 3);
 }
 
 // Histórico do pedido ao chat: as 6 últimas mensagens do assunto atual, cada uma com até 4.000 caracteres (o limite do

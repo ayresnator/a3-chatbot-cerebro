@@ -213,13 +213,15 @@ export function ChatComposer({
         />
         <div className="composer-bar">
           {/* O mousedown não tira o foco do campo: no Safari o clique não dá foco ao botão, o campo perdia o foco, a lista
-              fechava e o clique a reabria. */}
+              fechava e o clique a reabria. Sem sugestão (todas já perguntadas, lib.js hints) ele fica desligado: não há
+              lista para abrir. */}
           <button
             type="button"
             className="shortcuts"
             aria-label="Atalhos"
             aria-expanded={shown}
             aria-controls={shown ? 'atalhos' : undefined}
+            disabled={!hints.length}
             onMouseDown={e => e.preventDefault()}
             onClick={toggle}
           >

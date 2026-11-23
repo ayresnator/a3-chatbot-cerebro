@@ -1432,9 +1432,65 @@ test('hints: antes da primeira resposta, com texto no editor, pergunta sobre o t
   );
 });
 
-test('hints: depois da resposta, valem as sugestões que a IA mandou para este assunto', () => {
+test('hints: depois da resposta, valem as sugestões que a IA mandou para este assunto, completadas pelas fixas até três', () => {
   const tips = { key: CHAT_KEY, list: ['E o PIB per capita?', 'Como se mede?'] };
-  assert.deepEqual(hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips, key: CHAT_KEY }), tips.list);
+  assert.deepEqual(
+    hints({ chat: ANSWERED, input: 'Um texto', area: 'Economia', tips, key: CHAT_KEY }),
+    [...tips.list, 'Me dê um exemplo do dia a dia']
+  );
+});
+
+// Conversa sobre fotossíntese em que a IA volta a sugerir perguntas que o aluno já fez (#158).
+const PHOTO = subjectKey('Fotossíntese', 'Escolar');
+const PHOTO_ARGS = { input: 'Fotossíntese', area: 'Escolar', key: PHOTO };
+const PHOTO_TIPS = {
+  key: PHOTO, list: ['Quais são as fases da fotossíntese?', 'O que acontece na fase clara?', 'Como funciona o ciclo de Calvin?'],
+};
+const askedIn = (key, ...texts) => texts.flatMap(text => [
+  { role: 'user', text, key }, { role: 'assistant', text: 'Resposta.', key },
+]);
+
+test('hints: sugestão que o aluno já perguntou neste assunto não aparece, e as fixas completam as três', () => {
+  const chat = askedIn(PHOTO, 'Quais são as fases da fotossíntese?', 'O que acontece na fase clara?');
+  assert.deepEqual(
+    hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }),
+    ['Como funciona o ciclo de Calvin?', 'Me dê um exemplo do dia a dia', 'Explique de outro jeito']
+  );
+});
+
+test('hints: as fixas também não repetem pergunta feita nem o que já está na lista, e nunca passam de três', () => {
+  const chat = askedIn(PHOTO, ...PHOTO_TIPS.list, 'Me dê um exemplo do dia a dia');
+  assert.deepEqual(
+    hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }), ['Explique de outro jeito', 'Faça uma pergunta para eu praticar']
+  );
+  const tips = { key: PHOTO, list: ['E a clorofila?', 'e a CLOROFILA', 'Explique de outro jeito', 'E a respiração?', 'E o oxigênio?'] };
+  assert.deepEqual(
+    hints({ chat: askedIn(PHOTO, 'Oi'), tips, ...PHOTO_ARGS }), ['E a clorofila?', 'Explique de outro jeito', 'E a respiração?']
+  );
+});
+
+test('hints: com todas já perguntadas, a lista fica vazia em vez de repetir uma pergunta feita', () => {
+  const chat = askedIn(PHOTO, ...PHOTO_TIPS.list, 'Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar');
+  assert.deepEqual(hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }), []);
+});
+
+test('hints: pergunta feita em outro assunto não conta', () => {
+  const chat = [
+    ...askedIn(subjectKey('Plantas', 'Escolar'), 'Como funciona o ciclo de Calvin?'),
+    ...askedIn(PHOTO, 'O que acontece na fase clara?'),
+  ];
+  assert.deepEqual(
+    hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }),
+    ['Quais são as fases da fotossíntese?', 'Como funciona o ciclo de Calvin?', 'Me dê um exemplo do dia a dia']
+  );
+});
+
+test('hints: pergunta com outra caixa, sem acento, com outros espaços e sem a pontuação do fim conta como a mesma', () => {
+  const chat = askedIn(PHOTO, '  quais sao as FASES  da fotossintese ', 'o que acontece na fase clara.');
+  assert.deepEqual(
+    hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }),
+    ['Como funciona o ciclo de Calvin?', 'Me dê um exemplo do dia a dia', 'Explique de outro jeito']
+  );
 });
 
 test('hints: de volta a um assunto respondido, com as sugestões de outro ou sem sugestões da IA, entram as três fixas', () => {
