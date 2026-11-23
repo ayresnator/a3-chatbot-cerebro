@@ -3618,6 +3618,17 @@ function App() {
                   <div className="chat-dock">
                     {API_BASE && (
                       <>
+                        {/* O filtro do vidro dos chips (#110, do Liquid Glass Button do 21st.dev): um ruído que distorce e
+                            desfoca o fundo atrás de cada chip (styles.css, .suggestions button::before). Um só para todos
+                            os chips, fora da vista e do leitor de tela. */}
+                        <svg className="glass-filter" aria-hidden="true" focusable="false">
+                          <filter id="vidro-liquido" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.05 0.05" numOctaves="1" seed="1" result="ruido" />
+                            <feGaussianBlur in="ruido" stdDeviation="2" result="ruido-suave" />
+                            <feDisplacementMap in="SourceGraphic" in2="ruido-suave" scale="70" xChannelSelector="R" yChannelSelector="B" result="distorcido" />
+                            <feGaussianBlur in="distorcido" stdDeviation="4" />
+                          </filter>
+                        </svg>
                         {/* Os chips ficam acima da caixa (#109), também antes dela no Tab. Durante a espera da resposta eles
                             somem (data-espera): a pílula de espera fica no lugar deles, e os chips da resposta nova chegam
                             com ela. Com a lista do "/" aberta eles também somem (styles.css). */}

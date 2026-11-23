@@ -289,6 +289,16 @@
     --line-quiet: rgb(255 255 255 / .05);
     --palette: rgb(5 5 5 / .94);
     --chat-veil: rgb(0 0 0 / .55);
+    /* Chips de sugestão do Dúvidas no estilo do Liquid Glass Button do 21st.dev (#110): a borda de vidro em sombras
+       internas claras (os valores do tema escuro do componente), o filtro SVG que distorce e desfoca o fundo atrás deles
+       (#vidro-liquido, App.jsx), quanto eles crescem sob o ponteiro e em quanto tempo. */
+    --liquid: 0 0 8px rgb(0 0 0 / .03), 0 2px 6px rgb(0 0 0 / .08), inset 3px 3px .5px -3.5px rgb(255 255 255 / .09),
+        inset -3px -3px .5px -3.5px rgb(255 255 255 / .85), inset 1px 1px 1px -.5px rgb(255 255 255 / .6),
+        inset -1px -1px 1px -.5px rgb(255 255 255 / .6), inset 0 0 6px 6px rgb(255 255 255 / .12),
+        inset 0 0 2px 2px rgb(255 255 255 / .06), 0 0 12px rgb(0 0 0 / .15);
+    --liquid-filter: url(#vidro-liquido);
+    --lift: 1.05;
+    --t-lift: 300ms;
 
     /* Seta das listas de opções (select): o "abaixo" de icons.jsx, traço de 1,75 px em --ink-2. Vai como imagem
        porque o select não aceita filho; sem ela ficava a seta do sistema. */
@@ -322,8 +332,11 @@
         --err-bg: #221010;
         --warn-bg: #241a0e;
         --quiet: #0d0d0d;
+        --chip: #141414;
         --palette: #050505;
         --chat-veil: #050505;
+        --liquid: none;
+        --liquid-filter: none;
         --blur: none;
         --shine: none;
         --sheen: transparent
@@ -331,7 +344,7 @@
 }
 
 /* Contraste alto pedido no sistema: além do vidro sólido (acima), o cinza do texto e as bordas ficam mais claros, também
-   as bordas discretas do Dúvidas (a barra de cima e o dock). */
+   as bordas discretas do Dúvidas (a barra de cima, o dock e os chips). */
 @media (prefers-contrast: more) {
     :root {
         --ink-2: #c2c2c2;
@@ -3517,8 +3530,10 @@ main:focus {
     pointer-events: auto
 }
 
-/* Chips de sugestão (só com a IA), acima da caixa (#109): botões secundários comuns, o vidro elevado com o fio. No herói
-   os chips ficam centrados; com mensagens, alinhados à esquerda. Durante a espera da resposta eles somem (data-espera): a pílula
+/* Chips de sugestão (só com a IA), acima da caixa (#109), no estilo do Liquid Glass Button do 21st.dev (#110): fundo
+   transparente, a borda de vidro em sombras internas claras (::after) e, atrás dela, o fundo distorcido e desfocado pelo
+   filtro #vidro-liquido (::before). As duas camadas ficam dentro do chip (isolation) e atrás do texto. No herói os chips
+   ficam centrados; com mensagens, alinhados à esquerda. Durante a espera da resposta eles somem (data-espera): a pílula
    de espera (.chat-status) fica no lugar deles, e os chips da resposta nova chegam com ela. Com a lista do "/" aberta
    eles somem também: ela é mais estreita que a coluna e deixava a ponta de um chip de fora, e um clique ali mandava a
    pergunta dele. */
@@ -3540,13 +3555,98 @@ main:focus {
     visibility: hidden
 }
 
-/* Durante a espera de outra resposta da IA os chips ficam desligados como os outros botões (button:disabled). */
 .suggestions button {
+    position: relative;
+    isolation: isolate;
     min-height: var(--control-h-inline);
     padding: var(--sp-1) var(--sp-4);
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink);
     font-weight: 500;
     text-align: left;
     overflow-wrap: anywhere
+}
+
+.suggestions button::before,
+.suggestions button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none
+}
+
+/* Onde o navegador não aplica filtro SVG no fundo (Safari, Firefox), fica só a borda de vidro. Com mensagens o filtro
+   sai: a faixa atrás da caixa presa já desfoca a conversa, e refazer a distorção a cada quadro da rolagem pesava, como
+   o desfoque da caixa (acima). */
+.suggestions button::before {
+    z-index: calc(var(--z-behind) - 1);
+    backdrop-filter: var(--liquid-filter)
+}
+
+.chat-stage[data-state=conversa] .suggestions button::before {
+    backdrop-filter: none
+}
+
+.suggestions button::after {
+    z-index: var(--z-behind);
+    box-shadow: var(--liquid)
+}
+
+/* Sob o ponteiro o fundo continua transparente, sem o vidro elevado dos outros botões; só o texto clareia. */
+.suggestions button:hover:not(:disabled) {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-hi)
+}
+
+/* O chip cresce 5% em 0,3 s, como o componente, só com mouse ou caneta e sem movimento reduzido. A pressão parte do chip
+   crescido, no tempo curto dos outros botões (--t-fast). O foco do teclado não mexe no tamanho. A transição própria fica
+   aqui dentro: no toque e com movimento reduzido vale a dos outros botões (a curta, ou nenhuma). */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .suggestions button {
+        transition: color var(--t-fast) var(--ease), scale var(--t-lift) var(--ease)
+    }
+
+    .suggestions button:hover:not(:disabled) {
+        scale: var(--lift)
+    }
+
+    .suggestions button:hover:active:not(:disabled):not(:focus-visible) {
+        scale: calc(var(--lift) * var(--press));
+        transition-duration: var(--t-fast)
+    }
+}
+
+/* Durante a espera de outra resposta da IA os chips ficam desligados como os outros botões (button:disabled): o texto
+   em --ink-3 e, no lugar da borda de vidro, o contorno discreto. */
+.suggestions button:disabled {
+    border-color: var(--line-quiet);
+    color: var(--ink-3)
+}
+
+.suggestions button:disabled::after {
+    box-shadow: none
+}
+
+/* Transparência reduzida, contraste alto ou cores forçadas: sem o vidro (--liquid e --liquid-filter ficam none, no
+   começo do arquivo), o chip ganha o fundo sólido e a borda clara dos campos. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+    .suggestions button,
+    .suggestions button:hover:not(:disabled) {
+        border-color: var(--line-strong);
+        background: var(--chip)
+    }
+}
+
+/* O SVG do filtro #vidro-liquido (App.jsx) fica fora da vista, sem tamanho e fora do fluxo: com display none o filtro
+   deixaria de valer. */
+.glass-filter {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden
 }
 
 .chat-end {

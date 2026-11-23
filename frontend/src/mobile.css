@@ -586,8 +586,10 @@
     /* Com mensagens os chips ficam numa linha que rola de lado (a página não rola): a conversa fica com o lugar de duas
        linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria. O Tab rola a linha até o chip inteiro
        (App.jsx, onKeyUp do chip), e o scroll-padding deixa um pedaço do vizinho à vista. A dica do teclado sai da vista
-       (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. */
+       (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. Na linha que rola o chip não
+       cresce sob o ponteiro (--lift): a rolagem cortaria a ponta dele. */
     .chat-stage[data-state=conversa] .suggestions {
+        --lift: 1;
         flex-wrap: nowrap;
         overflow-x: auto;
         scrollbar-width: none;
@@ -924,8 +926,8 @@
     }
 
     /* Dúvidas: aqui a faixa da caixa quebra em duas linhas, e o herói com os chips não cabia acima da barra de baixo.
-       Os chips vão para a linha que rola de lado também no herói, como na conversa, e a saudação e os respiros
-       encolhem. Em cima a linha devolve os 4 px do respiro; embaixo fica o espaço até a caixa. */
+       Os chips vão para a linha que rola de lado também no herói (sem crescer sob o ponteiro, como na conversa), e a
+       saudação e os respiros encolhem. Em cima a linha devolve os 4 px do respiro; embaixo fica o espaço até a caixa. */
     .chat-head {
         margin-bottom: var(--sp-4)
     }
@@ -935,6 +937,7 @@
     }
 
     .suggestions {
+        --lift: 1;
         flex-wrap: nowrap;
         justify-content: flex-start;
         overflow-x: auto;
