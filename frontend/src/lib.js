@@ -855,7 +855,8 @@ export function hints({ chat, input, area, tips, key }) {
     ];
   }
   // A IA pode sugerir o que o aluno já perguntou neste assunto (#158): a repetida sai, e as fixas completam as três,
-  // sem repetir pergunta feita nem o que já está na lista. Compara como norm, sem ligar também para espaços.
+  // sem repetir pergunta feita nem o que já está na lista. Compara como norm, sem ligar também para espaços. Com todas
+  // já perguntadas a lista fica vazia, em vez de repetir uma: os chips somem (styles.css) e o botão Atalhos desliga.
   const same = t => norm(t).replace(/\s+/g, '');
   const seen = new Set(chat.filter(m => m.role === 'user' && m.key === key).map(m => same(m.text)));
   return [

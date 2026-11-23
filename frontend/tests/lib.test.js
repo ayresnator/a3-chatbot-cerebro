@@ -1469,6 +1469,11 @@ test('hints: as fixas também não repetem pergunta feita nem o que já está na
   );
 });
 
+test('hints: com todas já perguntadas, a lista fica vazia em vez de repetir uma pergunta feita', () => {
+  const chat = askedIn(PHOTO, ...PHOTO_TIPS.list, 'Me dê um exemplo do dia a dia', 'Explique de outro jeito', 'Faça uma pergunta para eu praticar');
+  assert.deepEqual(hints({ chat, tips: PHOTO_TIPS, ...PHOTO_ARGS }), []);
+});
+
 test('hints: pergunta feita em outro assunto não conta', () => {
   const chat = [
     ...askedIn(subjectKey('Plantas', 'Escolar'), 'Como funciona o ciclo de Calvin?'),
