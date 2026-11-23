@@ -36,7 +36,9 @@ test('atalho "Pergunte ao Cérebro": sem lugar para o nome inteiro, ele sai da v
   assert.match(styles, /\n\.ask-pill \{\s*container-type: inline-size\s*\}/);
   // 11 rem: o nome, a lupa e o vão pedem 169 px com a letra padrão (sem o orbe, que saiu na #157).
   const hidden = inside(styles, '@container (max-width: 11rem)');
-  assert.match(hidden, /\.ask-pill-text \{[^}]*clip-path: inset\(50%\) !important\s*\}/, 'sem o !important a animação terminada desfaz o recorte');
+  assert.match(hidden, /\.ask-pill-text \{[^}]*clip-path: inset\(50%\)\s*\}/, 'recortado, o nome sai da vista e o leitor de tela continua lendo');
+  // A frase não se escreve sozinha (#157): sem animação, nada desfaz o recorte de cima.
+  assert.doesNotMatch(rule(styles, '.ask-pill-text'), /animation/);
   assert.doesNotMatch(hidden, /display: none|visibility: hidden/, 'o nome do botão vem deste texto');
 });
 

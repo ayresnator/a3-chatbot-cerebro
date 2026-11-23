@@ -11,13 +11,12 @@ import { flushSync } from 'react-dom';
 import { animate } from 'motion/mini';
 import { stagger } from 'motion/react';
 
-// Chegada confiante (a --ease do styles.css) e saída que acelera para fora: curvas próprias, nunca o ease pronto.
+// Uma curva só, a --ease do styles.css (EASE_OUT); EASE_IN, que acelera para fora, só nas saídas. Três tempos, os do
+// styles.css: 0,16 s no retorno e nas saídas curtas, 0,2 s na janela e no que esmaece, 0,36 s no que entra ou desliza.
 export const EASE_OUT = [0.22, 1, 0.36, 1];
 export const EASE_IN = [0.55, 0, 1, 0.45];
-// Abertura do app (uma vez por sessão: 0,45 s), troca de seção (rotina do estudo: até ~300 ms) e blocos pequenos.
-const SPRING = { type: 'spring', duration: 0.45, bounce: 0 };
-const SPRING_QUICK = { type: 'spring', duration: 0.3, bounce: 0 };
-const SPRING_SMALL = { type: 'spring', duration: 0.35, bounce: 0 };
+// O que entra: a página (na abertura do app e na troca de seção), os blocos pequenos e o fim do baralho e do quiz.
+const SPRING = { type: 'spring', duration: 0.36, bounce: 0 };
 
 export const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -39,7 +38,7 @@ export const byKeyboard = () => keyboard;
 // Saída que não se move (custom = true nas variantes de saída): a ação veio do teclado, a página estava rolada, o
 // aluno passou direto por ela ou o retorno da questão, que sai a cada questão.
 const gone = { opacity: 0, transition: { duration: 0 } };
-const FADE = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.15 } } };
+const FADE = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.16, ease: EASE_OUT } } };
 
 // Bloco da página: sobe 8 px; com blur, também sai de um desfoque de 4 px (só o título). Sem balanço a mola não passa
 // do ponto (nada de desfoque negativo). No fim o filtro sai (transitionEnd): parado em blur(0px) ele deixaria o bloco
@@ -56,19 +55,19 @@ const fade = transition => ({ hidden: { opacity: 0 }, show: { opacity: 1, transi
 // da nova, numa mola curta que some logo no começo (AnimatePresence com popLayout a tira do fluxo na hora, e styles.css
 // tira o clique dela): a troca nunca segura o aluno. Sem desfoque: 2 px de desfoque na página inteira paravam o
 // desenho da tela por 0,2 a 0,3 s a cada troca (medido no Chromium), e a entrada da nova não aparecia.
-// Troca de seção (ROUTINE): a nova começa na hora, na mola de 0,3 s; só o título e o bloco seguinte se escalonam
-// (0,04 s), os outros vêm com o segundo. Assenta em ~0,34 s.
-// Abertura do app (OPENING): os blocos entram um depois do outro, 0,04 s entre eles (uma página tem até 5), na mola
-// de 0,45 s.
+// Troca de seção (ROUTINE): a nova começa na hora, na mola de 0,36 s; só o título e o bloco seguinte se escalonam
+// (0,04 s), os outros vêm com o segundo. Assenta em ~0,4 s.
+// Abertura do app (OPENING): os blocos entram um depois do outro, 0,04 s entre eles (uma página tem até 5), na mesma
+// mola.
 // Movimento reduzido (CALM): a página que sai some na hora (as duas esmaecendo juntas misturavam os títulos) e a nova
-// esmaece de 0 a 1 em 0,15 s, sem subir.
+// esmaece de 0 a 1 em 0,16 s, sem subir.
 const EXIT_FAST = { type: 'spring', duration: 0.16, bounce: 0 };
 const VIEW = {
   hidden: {},
   show: { transition: { delayChildren: i => Math.min(i, 1) * 0.04 } },
   exit: still => (still ? gone : { opacity: 0, transition: EXIT_FAST }),
 };
-export const ROUTINE = { view: VIEW, title: rise(SPRING_QUICK, true), rise: rise(SPRING_QUICK), fade: fade(SPRING_QUICK) };
+export const ROUTINE = { view: VIEW, title: rise(SPRING, true), rise: rise(SPRING), fade: fade(SPRING) };
 export const OPENING = {
   view: { ...VIEW, show: { transition: { delayChildren: stagger(0.04) } } },
   title: rise(SPRING, true),
@@ -84,11 +83,11 @@ export const CALM = { view: { hidden: {}, show: {}, exit: gone }, title: FADE, r
 // um menu, como o editor do Estudar, o crescimento de 0,98 pode voltar.
 export const HERO = {
   title: { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: SPRING } },
-  rule: { hidden: { opacity: 0, scaleX: 0 }, show: { opacity: 1, scaleX: 1, transition: { duration: 0.6, delay: 0.2, ease: EASE_OUT } } },
-  lead: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.3, delay: 0.1 } } },
+  rule: { hidden: { opacity: 0, scaleX: 0 }, show: { opacity: 1, scaleX: 1, transition: { duration: 0.36, delay: 0.2, ease: EASE_OUT } } },
+  lead: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.36, delay: 0.1, ease: EASE_OUT } } },
   box: { hidden: { opacity: 0 }, show: { opacity: 1, transition: { ...SPRING, delay: 0.05 } } },
   chips: { hidden: {}, show: { transition: { delayChildren: stagger(0.06, { startDelay: 0.15 }) } } },
-  chip: { hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: SPRING_SMALL } },
+  chip: { hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: SPRING } },
 };
 export const HERO_CALM = { title: FADE, rule: FADE, lead: FADE, box: FADE, chips: {}, chip: FADE };
 
@@ -97,51 +96,46 @@ export const HERO_CALM = { title: FADE, rule: FADE, lead: FADE, box: FADE, chips
 // anterior ficava legível embaixo da questão nova).
 export const POP = {
   hidden: { opacity: 0, y: 6 },
-  show: { opacity: 1, y: 0, transition: SPRING_SMALL },
+  show: { opacity: 1, y: 0, transition: SPRING },
   exit: still => (still ? gone : { opacity: 0, transition: EXIT_FAST }),
 };
 export const POP_CALM = {
   ...FADE,
-  exit: still => (still ? gone : { opacity: 0, transition: { duration: 0.1 } }),
+  exit: still => (still ? gone : { opacity: 0, transition: { duration: 0.16, ease: EASE_OUT } }),
 };
 
 // A linha "Desfazer" sai do fluxo na hora (popLayout) enquanto a lista sobe para o lugar dela. A saída é curta e cai
 // logo no começo (ease-out), para a linha não ficar legível por cima da lista; no movimento reduzido a lista não
 // desliza, então a linha some na hora.
-export const undoExit = still => (still || reduced() ? gone : { opacity: 0, transition: { duration: 0.08, ease: EASE_OUT } });
+export const undoExit = still => (still || reduced() ? gone : { opacity: 0, transition: { duration: 0.16, ease: EASE_OUT } });
 
 // O que estava carregando ficou pronto no mesmo lugar (o material no lugar do esqueleto, a explicação no lugar das
 // linhas): esmaece, sem subir, porque o lugar já era dele.
 export const FOCUS = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0.3, ease: EASE_OUT } },
+  show: { opacity: 1, transition: { duration: 0.36, ease: EASE_OUT } },
   exit: still => (still ? gone : { opacity: 0, transition: EXIT_FAST }),
 };
 export const FOCUS_CALM = POP_CALM;
 
-// Fim do baralho e do quiz (Jhey: o único lugar com um pouco de brincadeira): sobe de 0,97 com um balanço curto.
+// Fim do baralho e do quiz (Jhey: o único lugar com um pouco de brincadeira): sobe de 0,97, na mola sem balanço.
 export const FINALE = {
   hidden: { opacity: 0, y: 10, scale: 0.97 },
-  show: {
-    opacity: 1, y: 0, scale: 1,
-    transition: { default: { type: 'spring', duration: 0.5, bounce: 0.2 }, opacity: { duration: 0.25, ease: EASE_OUT } },
-  },
+  show: { opacity: 1, y: 0, scale: 1, transition: SPRING },
 };
 
 // Janela e folha (App.jsx, Modal), em segundos. O fundo escuro é do CSS (styles.css, dialog::backdrop): entra em
-// --t-fade e, sem movimento reduzido, sai junto com elas, então out e sheetOut têm de bater com as saídas de lá.
+// --t-fade e sai junto com elas, então out, sheetOut e calmOut têm de bater com as saídas de lá.
 export const MODAL = {
-  in: 0.24,
-  out: 0.14, // = --t-fade-out, a saída do fundo da janela
-  sheetIn: 0.3,
+  in: 0.2,
+  out: 0.16, // = --t-fast, a saída do fundo da janela
+  sheetIn: 0.36,
   sheetOut: 0.2, // = --t-fade, a saída do fundo da folha (.sheet[data-closing])
-  sheetEase: [0.32, 0.72, 0, 1],
   // Reaberta no meio da saída.
-  settle: 0.12,
-  // Movimento reduzido: só a opacidade. calmOut é a exceção à regra de cima: a janela e a folha somem antes do fundo,
-  // e o close() tira o fundo no meio do esmaecer.
-  calmIn: 0.15,
-  calmOut: 0.1,
+  settle: 0.16,
+  // Movimento reduzido: só a opacidade.
+  calmIn: 0.16,
+  calmOut: 0.16, // = --t-fast
 };
 
 // Primeiro estado de um bloco que entra: parado (initial false) quando a ação veio do teclado.
@@ -158,7 +152,7 @@ export function enter(el, start) {
     el.style.opacity = '0.3';
     if (!calm) el.style.transform = start;
   }
-  animate(el, calm ? { opacity: 1 } : { opacity: 1, transform: 'none' }, { duration: calm ? 0.12 : 0.16, ease: EASE_OUT });
+  animate(el, calm ? { opacity: 1 } : { opacity: 1, transform: 'none' }, { duration: 0.16, ease: EASE_OUT });
 }
 
 // Mudança numa lista sem pulo (FLIP): mede onde estava cada bloco [data-flip] de scope, aplica commit() na hora
@@ -175,7 +169,7 @@ export function flipList(scope, commit) {
       continue;
     }
     const dy = top - el.getBoundingClientRect().top;
-    if (Math.abs(dy) > 0.5) animate(el, { transform: ['translateY(' + dy + 'px)', 'none'] }, { duration: 0.28, ease: EASE_OUT });
+    if (Math.abs(dy) > 0.5) animate(el, { transform: ['translateY(' + dy + 'px)', 'none'] }, { duration: 0.36, ease: EASE_OUT });
   }
 }
 
@@ -191,6 +185,6 @@ export function leave(item, commit) {
       flipList(scope, commit);
       if (!item.isConnected) return;
       item.style.pointerEvents = '';
-      animate(item, { opacity: 1, transform: 'none' }, { duration: 0.15, ease: EASE_OUT });
+      animate(item, { opacity: 1, transform: 'none' }, { duration: 0.16, ease: EASE_OUT });
     });
 }

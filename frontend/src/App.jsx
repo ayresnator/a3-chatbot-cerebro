@@ -13,7 +13,6 @@ import {
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
-  useMoonHidden,
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
   PerfilSkeleton, Countdown, StudyPlan, ExamDate, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
@@ -184,21 +183,18 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
-  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado" para as ondas e a lua do Dúvidas
-  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
-  // sem nada gravado, elas andam. O botão fica na barra de cima e, no celular, na folha "Mais" (#144: dentro da janela
-  // do perfil, quem se incomodava com o movimento não o achava). Com movimento reduzido no sistema (wavesStill, lido ao
-  // vivo) as ondas e a lua ficam paradas e o botão some (lib.js, backdropMoves).
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado" para as ondas (WCAG 2.2.2) e fica
+  // gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey); sem nada gravado,
+  // elas andam. O botão fica na barra de cima; a folha "Mais" também tem um (#144), que no celular, sem ondas, não
+  // aparece. Com movimento reduzido no sistema (wavesStill, lido ao vivo) as ondas ficam paradas e o botão some; sem as
+  // ondas, também (lib.js, backdropMoves). A lua do Dúvidas é parada e não conta.
   const wavesAllowed = useWavesAllowed();
   const wavesStill = useWavesStill();
-  const moonHidden = useMoonHidden();
   const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
   // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido; null enquanto não
   // houve aviso, e as ondas contam como ligadas.
   const [wavesActive, setWavesActive] = useState(null);
-  const fundoShown = backdropMoves({
-    still: wavesStill, waves: wavesAllowed && wavesActive !== false, moon: !moonHidden,
-  });
+  const fundoShown = backdropMoves({ still: wavesStill, waves: wavesAllowed && wavesActive !== false });
   // A troca do "Fundo animado" que o navegador não gravou: o aviso sai também na folha "Mais", junto do botão.
   const [fundoUnsaved, setFundoUnsaved] = useState(false);
   const toggleFundo = () => {
@@ -359,13 +355,14 @@ function App() {
   // A página da vez (Resumos, Flashcards e Quizzes são a mesma, a do material) e a hora em que ela abriu, gravadas
   // depois de cada troca (useLayoutEffect abaixo). live: a página já estava na tela antes deste desenho, então o que
   // monta agora dentro dela anima à parte; o que vem junto com ela não, a entrada é a da página. cut: outra troca antes
-  // de ela assentar (0,35 s): o aluno passou direto, e a troca corta para a nova, sem entrada nem saída.
+  // de ela assentar (0,4 s: a mola de 0,36 s e o escalonamento): o aluno passou direto, e a troca corta para a nova, sem
+  // entrada nem saída.
   const viewKey = MATERIAL.includes(page) ? 'material' : page;
   const viewAt = useRef({ key: null, at: -Infinity });
   const live = viewAt.current.key === viewKey;
-  const cut = !live && performance.now() - viewAt.current.at < 350;
+  const cut = !live && performance.now() - viewAt.current.at < 400;
   // Variantes do Motion (anim.js): com movimento reduzido, só a opacidade. A primeira página (a abertura do app) entra
-  // na mola de 0,45 s, bloco a bloco; as trocas de seção, na de 0,3 s.
+  // bloco a bloco; as trocas de seção, quase de uma vez. As duas na mola de 0,36 s.
   const calm = useReducedMotion();
   const { view: viewIn, title: titleIn, rise, fade } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
   const pop = calm ? POP_CALM : POP;
@@ -3564,8 +3561,7 @@ function App() {
                   data-state={chat.length ? 'conversa' : 'heroi'}
                   data-teto={capped ? '' : undefined}
                 >
-                  {/* Com o "Fundo animado" desligado a lua para de respirar, como as ondas. */}
-                  <span className="moon" style={{ animation: fundo ? undefined : 'none' }} aria-hidden="true"></span>
+                  <span className="moon" aria-hidden="true"></span>
                   <div className="chat-head">
                     {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
                     <div className="chat-title-box">
@@ -3615,7 +3611,7 @@ function App() {
                       </div>
                     )}
                     <div className="chat" role="log" aria-live="polite">
-                      <ChatLog chat={chat} asking={asking} pop={pop} />
+                      <ChatLog chat={chat} pop={pop} />
                     </div>
                   </div>
                   {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
@@ -4223,12 +4219,12 @@ function App() {
   );
 }
 
-// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa, a espera ou o movimento mudam (memo): cada
-// tecla na caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
+// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa ou o movimento mudam (memo): cada tecla na
+// caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
 // Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam na conversa quando a
-// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A resposta toma o
-// lugar do balão de espera, que esmaece por cima dela.
-const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
+// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A espera da resposta
+// fica só na pílula acima da caixa (.chat-wait), com o orbe e os segundos.
+const ChatLog = React.memo(function ChatLog({ chat, pop }) {
   return (
     <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
       {chat.map((msg, i) => (
@@ -4243,21 +4239,6 @@ const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
           <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
         </m.div>
       ))}
-      {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula acima da caixa, uma
-          vez só para o leitor de tela. */}
-      {asking && (
-        <m.div
-          key="espera"
-          className="message assistant thinking"
-          aria-hidden="true"
-          variants={pop}
-          initial={appear()}
-          animate="show"
-          exit="exit"
-        >
-          <span className="dots"><span></span><span></span><span></span></span>
-        </m.div>
-      )}
     </AnimatePresence>
   );
 });
@@ -4363,10 +4344,10 @@ function Modal({ className, labelledBy, describedBy, back, sheet = false, onClos
     dialog.showModal();
     if (!byKeyboard()) {
       if (reduced()) {
-        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn });
+        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn, ease: EASE_OUT });
       } else if (sheet) {
-        // A curva da folha do iOS: sai rápido da barra e assenta devagar.
-        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: MODAL.sheetEase });
+        // A folha sai rápido da barra e assenta devagar, na curva de tudo.
+        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: EASE_OUT });
       } else {
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();

@@ -2435,13 +2435,11 @@ test('storageKey: o "Fundo animado" é do aparelho, e a demonstração lê a mes
   assert.equal(storageKey('fundo'), 'cerebro-fundo');
 });
 
-test('backdropMoves: o "Fundo animado" aparece com as ondas ou a lua para parar, e some com movimento reduzido', () => {
-  const shown = (still, waves, moon) => backdropMoves({ still, waves, moon });
-  assert.equal(shown(false, true, true), true, 'computador: as ondas e a lua');
-  assert.equal(shown(false, false, true), true, 'celular, ou computador sem WebGL: só a lua');
-  assert.equal(shown(false, true, false), true, 'contraste alto no computador: só as ondas');
-  assert.equal(shown(false, false, false), false, 'cores forçadas, ou contraste alto no celular: nada se move');
-  assert.equal(shown(true, true, true), false, 'movimento reduzido: as duas já estão paradas');
+test('backdropMoves: o "Fundo animado" aparece com as ondas para parar, e some com movimento reduzido', () => {
+  const shown = (still, waves) => backdropMoves({ still, waves });
+  assert.equal(shown(false, true), true, 'computador: as ondas');
+  assert.equal(shown(false, false), false, 'celular, computador sem WebGL ou cores forçadas: nada se move (a lua é parada)');
+  assert.equal(shown(true, true), false, 'movimento reduzido: as ondas já estão paradas');
 });
 
 test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {

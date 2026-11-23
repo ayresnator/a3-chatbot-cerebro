@@ -229,10 +229,9 @@
     --busy-h: calc(var(--control-h-inline) + var(--sp-1) * 2 + var(--hair) * 2);
     /* Fio: bordas e divisões. */
     --hair: 1px;
-    /* Marca da questão atual: sublinhado de 2 px, 3 px abaixo dela. Barra do gráfico num dia sem resposta: 3 px. */
+    /* Marca da questão atual: sublinhado de 2 px, 3 px abaixo dela. */
     --underline: 2px;
     --underline-gap: 3px;
-    --bar-min: 3px;
     /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard, na grade de 4 px (@supports
        abaixo do :root). */
     --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
@@ -249,40 +248,23 @@
     --z-tabbar: 30;
     --z-top: 90;
 
-    /* Movimento (anim.js tem o mesmo em JS): chegada com --ease, saída com --ease-in, mais curta. Pressão do botão
-       em 100 ms, retorno de 120 a 200 ms, troca de página numa mola de 0,3 s (0,45 s na abertura do app), caneta em
-       0,52 s (marks.jsx). Nada do que o teclado dispara se move ([data-input=teclado], anim.js). */
+    /* Movimento (anim.js tem o mesmo em JS): uma curva, --ease; --ease-in só nas saídas. Três tempos: --t-fast
+       (160 ms) no retorno (cor, pressão do botão, rotação do ícone, menus pequenos, saída do fundo da janela), --t-fade
+       (200 ms) no fundo da janela e da folha, no fio de progresso e no ícone da pílula do dock, --t-slide (360 ms) no
+       que entra ou desliza (a pílula do dock, as barras do gráfico). Mudou aqui, mude lá (anim.js, MODAL: a janela e a
+       folha saem no mesmo tempo que o fundo delas). Nada do que o teclado dispara se move ([data-input=teclado]). */
     --ease: cubic-bezier(.22, 1, .36, 1);
     --ease-in: cubic-bezier(.55, 0, 1, .45);
     --t-fast: 160ms;
-    --t-press: 100ms;
-    /* A pílula ciano do dock desliza até a seção aberta em 0,36 s; o ícone dela escurece em 0,2 s, depois de 0,12 s,
-       para ficar preto quando ela chega. */
-    --t-slide: 360ms;
-    --t-ink: 200ms;
-    --t-ink-delay: 120ms;
-    /* Só o fundo escuro da janela e da folha: entra em 0,2 s e sai em 0,14 s (0,2 s atrás da folha). Sem movimento
-       reduzido, a janela e a folha saem no mesmo tempo que ele (anim.js, MODAL): mudou aqui, mude lá. Com movimento
-       reduzido, elas somem antes, em 0,1 s (MODAL.calmOut), e levam o fundo no meio do esmaecer. */
     --t-fade: 200ms;
-    --t-fade-out: 140ms;
-    /* O fio de progresso (cartões avaliados, questões respondidas) anda em 0,2 s. */
-    --t-meter: 200ms;
-    /* As barras do gráfico crescem do chão em 0,5 s, depois de 0,15 s. */
-    --t-grow: 500ms;
+    --t-slide: 360ms;
+    /* O ícone da pílula do dock escurece depois de 0,12 s, para ficar preto quando ela chega; as barras do gráfico
+       crescem do chão depois de 0,15 s; o cursor do editor pisca a cada 1 s. */
+    --t-ink-delay: 120ms;
     --t-grow-delay: 150ms;
-    /* A frase do atalho "Pergunte ao Cérebro" se escreve em 1,1 s, depois de 0,3 s; o cursor do editor pisca a cada 1 s. */
-    --t-typing: 1.1s;
-    --t-typing-delay: .3s;
     --t-caret: 1s;
-    /* O fio da espera corre em 1,6 s, devagar nas pontas. */
+    /* O fio da espera corre em 1,6 s (#42), em velocidade constante: um laço não tem chegada nem saída. */
     --t-wait: 1.6s;
-    --ease-wait: cubic-bezier(.65, 0, .35, 1);
-    /* O que respira (a lua do Dúvidas e os pontos da resposta a caminho) vai e volta na mesma curva, devagar nas duas
-       pontas. */
-    --ease-breathe: cubic-bezier(.42, 0, .58, 1);
-    --t-moon: 9s;
-    --t-dots: 1.2s;
     --press: .97;
     /* Esqueleto: branco a 7% por cima de qualquer vidro, parado. Fio da espera: o ciano do foco. */
     --sk: rgb(255 255 255 / .07);
@@ -553,7 +535,7 @@ button {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
-        color var(--t-fast) var(--ease), scale var(--t-press) var(--ease)
+        color var(--t-fast) var(--ease), scale var(--t-fast) var(--ease)
 }
 
 button:hover:not(:disabled, [aria-disabled=true]) {
@@ -882,8 +864,8 @@ select {
     border: 0;
     border-radius: 50%;
     justify-content: center;
-    transition: background-color var(--t-fast) var(--ease), color var(--t-ink) var(--ease) var(--t-ink-delay),
-        scale var(--t-press) var(--ease)
+    transition: background-color var(--t-fast) var(--ease), color var(--t-fade) var(--ease) var(--t-ink-delay),
+        scale var(--t-fast) var(--ease)
 }
 
 .rail .nav-item[aria-current=page],
@@ -1024,7 +1006,7 @@ select {
     font-size: var(--fs-2)
 }
 
-/* O atalho do Dúvidas tem cara de busca: a frase que se escreve sozinha na abertura e a lupa. */
+/* O atalho do Dúvidas tem cara de busca: a frase e a lupa. */
 .ask-pill {
     justify-content: flex-start;
     gap: var(--sp-3);
@@ -1044,24 +1026,11 @@ select {
     margin-left: auto
 }
 
-/* A frase aparece da esquerda para a direita em 19 passos, como se fosse digitada, uma vez. É um passo por letra em
-   média: a Manrope não é monoespaçada, então um passo pode cortar uma letra no meio por um instante. */
 .ask-pill-text {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    text-overflow: ellipsis;
-    animation: typing var(--t-typing) steps(19, end) var(--t-typing-delay) both
-}
-
-@keyframes typing {
-    from {
-        clip-path: inset(0 100% 0 0)
-    }
-
-    to {
-        clip-path: inset(0)
-    }
+    text-overflow: ellipsis
 }
 
 .top-actions {
@@ -1166,8 +1135,7 @@ select {
 
 /* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 920 px, e com a letra a 200%, o nome
    virava "P…". Sem os 11 rem do nome, da lupa e do vão (169 px com a letra padrão), o nome sai da vista e continua no
-   botão para o leitor de tela; fica a lupa. O !important vence o recorte da animação da frase, que continua valendo
-   depois que ela termina. */
+   botão para o leitor de tela; fica a lupa. */
 .ask-pill {
     container-type: inline-size
 }
@@ -1177,7 +1145,7 @@ select {
         position: absolute;
         width: 1px;
         height: 1px;
-        clip-path: inset(50%) !important
+        clip-path: inset(50%)
     }
 }
 
@@ -2867,9 +2835,9 @@ main:focus {
     justify-content: safe center
 }
 
-/* A lua ciano, só CSS: o corpo escuro, a luz de borda em cima e um brilho externo fraco. Fica atrás da caixa e respira
-   devagar (só a opacidade). Com mensagens ela sobe para a borda de cima do palco e fica só o brilho, sem o corpo: um
-   disco escuro atrás da conversa aparecia como um círculo cortando os balões. */
+/* A lua ciano, só CSS: o corpo escuro, a luz de borda em cima e um brilho externo fraco. Fica atrás da caixa, parada.
+   Com mensagens ela sobe para a borda de cima do palco e fica só o brilho, sem o corpo: um disco escuro atrás da
+   conversa aparecia como um círculo cortando os balões. */
 .moon {
     position: absolute;
     top: calc(50% + 2rem);
@@ -2882,8 +2850,7 @@ main:focus {
     background: radial-gradient(circle closest-side, transparent 70%, var(--moon-glow) 90%, var(--moon-rim));
     box-shadow: 0 0 5rem var(--moon-glow);
     translate: -50% -50%;
-    pointer-events: none;
-    animation: moon-breathe var(--t-moon) var(--ease-breathe) infinite alternate
+    pointer-events: none
 }
 
 /* O corpo é o mesmo disco um pouco mais abaixo: em cima sobra só a borda iluminada. */
@@ -2896,17 +2863,10 @@ main:focus {
     translate: 0 3%
 }
 
-@keyframes moon-breathe {
-    from {
-        opacity: .72
-    }
-}
-
 .chat-stage[data-state=conversa] .moon {
     top: 0;
     background: radial-gradient(closest-side, var(--moon-glow), transparent);
-    box-shadow: none;
-    animation: none
+    box-shadow: none
 }
 
 .chat-stage[data-state=conversa] .moon::before {
@@ -3035,50 +2995,10 @@ main:focus {
     margin-top: var(--sp-1)
 }
 
-/* Balão de espera da resposta: só os três pontos, que pulsam um depois do outro (parados com movimento reduzido). */
-.message.thinking {
-    padding: var(--sp-4)
-}
-
-.dots {
-    display: flex;
-    gap: var(--sp-1)
-}
-
-.dots span {
-    width: .375rem;
-    height: .375rem;
-    border-radius: 50%;
-    background: var(--ink-2);
-    animation: dot var(--t-dots) var(--ease-breathe) infinite
-}
-
-/* Cada ponto começa um oitavo do ciclo depois do anterior. */
-.dots span:nth-child(2) {
-    animation-delay: calc(var(--t-dots) / 8)
-}
-
-.dots span:nth-child(3) {
-    animation-delay: calc(var(--t-dots) / 4)
-}
-
-@keyframes dot {
-    0%,
-    100% {
-        opacity: .3;
-        scale: .85
-    }
-
-    50% {
-        opacity: .9;
-        scale: 1.1
-    }
-}
-
 /* ---------- Esperas e esqueletos ---------- */
 
-/* Espera de um pedido à IA (ui.jsx, Wait): o fio indeterminado em cima, o que acontece, os segundos e o limite, o
-   Cancelar. O fio é a única coisa que se move numa espera; o esqueleto fica parado. */
+/* Espera de um pedido à IA (ui.jsx, Wait): o fio indeterminado em cima (#42), o orbe (#54), o que acontece, os
+   segundos e o limite, o Cancelar. Só o fio e o orbe se movem; o esqueleto fica parado. */
 .wait {
     position: relative;
     display: flex;
@@ -3132,7 +3052,7 @@ main:focus {
     border-radius: inherit;
     background: var(--focus);
     translate: -100% 0;
-    animation: wait-run var(--t-wait) var(--ease-wait) infinite
+    animation: wait-run var(--t-wait) linear infinite
 }
 
 @keyframes wait-run {
@@ -3314,7 +3234,7 @@ main:focus {
     background: var(--sec, var(--focus));
     transform-origin: left;
     scale: var(--p) 1;
-    transition: scale var(--t-meter) var(--ease)
+    transition: scale var(--t-fade) var(--ease)
 }
 
 /* A caixa e o que vem com ela: os chips em cima (#109), a pílula de espera e a lista de atalhos por cima deles, a dica e
@@ -3807,14 +3727,33 @@ main:focus {
 
 /* ---------- Desempenho ---------- */
 
+/* --plot é a altura da barra do maior dia; --date, a altura da linha da data, fixa para a grade saber onde fica o chão
+   das barras. */
 .chart {
+    --plot: 12rem;
+    --date: 1.25rem;
+    position: relative;
+    isolation: isolate;
     display: flex;
     align-items: flex-end;
     justify-content: space-around;
     gap: var(--sp-3);
-    min-height: 13rem;
-    padding: var(--sp-4) 0;
-    border-bottom: var(--hair) solid var(--line)
+    padding: var(--sp-4) 0
+}
+
+/* Grade: três linhas finas, no chão das barras, na metade e na altura do maior dia. Por trás das barras (z-index
+   dentro do .chart isolado). Em cores forçadas o gradiente sai sozinho: ficam as barras na cor do texto. */
+.chart-grid {
+    position: absolute;
+    inset-inline: 0;
+    bottom: calc(var(--sp-4) + var(--date) + var(--sp-2));
+    z-index: var(--z-behind);
+    height: calc(var(--plot) + var(--hair));
+    background: repeating-linear-gradient(to top, rgb(255 255 255 / .08) 0 var(--hair), transparent 0 calc(var(--plot) / 2))
+}
+
+.chart small {
+    line-height: var(--date)
 }
 
 /* min-width: 0 pesa com a letra aumentada (a do navegador ou o texto do celular) e, com a letra padrão, quando a barra
@@ -3846,16 +3785,26 @@ main:focus {
     display: none
 }
 
-/* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1), com 3 px no dia vazio. A barra cresce do chão
-   quando o gráfico aparece (só ela, por transform); a do esqueleto fica parada. */
+/* Altura da barra: respostas do dia sobre o maior dia (--h, de 0 a 1); o dia vazio não tem barra (Desempenho.jsx). As
+   barras ficam num cinza neutro e só a de hoje leva o ciano. A barra cresce do chão quando o gráfico aparece (só ela,
+   por transform); a do esqueleto fica parada. */
 .chart-bar {
     width: 100%;
     max-width: 3.5rem;
-    height: max(var(--bar-min), calc(var(--h) * 7.5rem));
+    height: calc(var(--h) * var(--plot));
     border-radius: var(--r-1) var(--r-1) 0 0;
-    background: var(--accent);
+    background: rgb(255 255 255 / .16);
     transform-origin: bottom;
-    animation: bar-grow var(--t-grow) var(--ease) var(--t-grow-delay) backwards
+    animation: bar-grow var(--t-slide) var(--ease) var(--t-grow-delay) backwards
+}
+
+.chart-bar.today {
+    background: var(--accent)
+}
+
+/* Sem resposta nos 7 dias, a frase fica no lugar das colunas, separada das notas como o gráfico. */
+.chart-empty {
+    padding-block: var(--sp-5)
 }
 
 @keyframes bar-grow {
@@ -4218,7 +4167,7 @@ dialog[data-closing] {
 
 dialog[data-closing]::backdrop {
     opacity: 0;
-    transition: opacity var(--t-fade-out) var(--ease-in)
+    transition: opacity var(--t-fast) var(--ease-in)
 }
 
 /* A folha desce em 0,2 s: o fundo escurecido acompanha até ela sair da tela. */
@@ -4233,7 +4182,7 @@ html:has(dialog[open]) {
     overflow: hidden
 }
 
-/* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, o balão de espera) não recebe
+/* O que sai por cima do que entra (AnimatePresence com popLayout: a página, o aviso, a pílula de espera) não recebe
    clique: a troca nunca segura o aluno. */
 [data-motion-pop-id] {
     pointer-events: none
@@ -4708,9 +4657,10 @@ main[data-instant] > .view[data-motion-pop-id] {
     animation-duration: 0s
 }
 
-/* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo (na barra de cima e no editor, que mostra
-   uma frase parada e não move o brilho da caixa: prompt-composer.jsx), sem as barras crescendo e sem o fio correndo (fica o trilho parado e os segundos contando); o esqueleto já é
-   parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda pode esmaecer. */
+/* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo no editor (ele mostra uma frase parada e não
+   move o brilho da caixa: prompt-composer.jsx), sem as barras crescendo e sem o fio correndo (fica o trilho parado e os
+   segundos contando); o esqueleto já é parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda
+   pode esmaecer. */
 @media (prefers-reduced-motion: reduce) {
     button,
     .mistakes summary .icon,
@@ -4728,10 +4678,7 @@ main[data-instant] > .view[data-motion-pop-id] {
         scale: none
     }
 
-    .ask-pill-text,
     .chart-bar,
-    .moon,
-    .dots span,
     .caret,
     .level-menu {
         animation: none
@@ -4777,10 +4724,14 @@ main[data-instant] > .view[data-motion-pop-id] {
        o trecho que corre no fio da espera da IA voltam na cor do texto do sistema. */
     .chart-bar,
     .meter > span,
-    .dots span,
     .wait-bar::after {
         forced-color-adjust: none;
         background: CanvasText
+    }
+
+    /* A barra de hoje, que fora daqui é a ciano. */
+    .chart-bar.today {
+        background: Highlight
     }
 
     .chat-title {
