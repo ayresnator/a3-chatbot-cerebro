@@ -3697,6 +3697,11 @@ main:focus {
     visibility: hidden
 }
 
+/* Sem sugestão (todas já perguntadas no assunto, #158, lib.js hints): o grupo vazio sai da tela e do leitor de tela. */
+.suggestions:empty {
+    display: none
+}
+
 .suggestions button {
     position: relative;
     isolation: isolate;

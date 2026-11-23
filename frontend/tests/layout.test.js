@@ -53,6 +53,10 @@ test('alvos de toque: 44 px com o dedo também no layout do computador, e as alt
   assert.doesNotMatch(rule(styles, '.error summary'), /min-height/);
 });
 
+test('sugestões do chat: sem nenhuma (todas já perguntadas, #158), o grupo sai da tela e do leitor de tela', () => {
+  assert.match(rule(styles, '.suggestions:empty'), /display: none/);
+});
+
 test('botão com o custo na linha de baixo: cresce com ela, e com uma linha e o ícone continua com 44 px', () => {
   // 12 px menos o fio da borda: o ícone de 1,25 rem, os dois respiros e as duas bordas somam os 2,75 rem do botão.
   assert.match(rule(styles, '.action'), /padding-block: calc\(var\(--sp-3\) - var\(--hair\)\)/);
