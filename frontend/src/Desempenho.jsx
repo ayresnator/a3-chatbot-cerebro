@@ -127,6 +127,7 @@ export default function Desempenho({
             )}
           </>
         )}
+        <h3 className="subjects-label">Por área</h3>
         <ul className="subjects" role="list">
           {AREAS.map(a => (
             <li className="subject" key={a}>

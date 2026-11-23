@@ -67,7 +67,8 @@
         display: grid;
         grid-auto-columns: minmax(max-content, 1fr);
         grid-auto-flow: column;
-        gap: var(--dock-gap);
+        /* 2 px, e não os 4 do dock: com 4 a barra rolava 5 px em 390 px. */
+        gap: var(--sp-0);
         overflow-x: auto;
         scrollbar-width: none;
         scroll-padding-inline: var(--sp-6);
@@ -577,10 +578,8 @@
     /* Com mensagens os chips ficam numa linha que rola de lado (a página não rola): a conversa fica com o lugar de duas
        linhas. O respiro de 4 px guarda o anel de foco, que a rolagem cortaria. O Tab rola a linha até o chip inteiro
        (App.jsx, onKeyUp do chip), e o scroll-padding deixa um pedaço do vizinho à vista. A dica do teclado sai da vista
-       (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. Na linha que rola o chip não
-       cresce sob o ponteiro (--lift): a rolagem cortaria a ponta dele. */
+       (continua no aria-describedby do campo): a caixa presa ocupava um terço da tela. */
     .chat-stage[data-state=conversa] .suggestions {
-        --lift: 1;
         flex-wrap: nowrap;
         overflow-x: auto;
         scrollbar-width: none;
@@ -790,15 +789,13 @@
         flex: 1 1 auto
     }
 
-    /* Biblioteca: a busca e o filtro ganham a linha inteira; Exportar e Importar dividem a de baixo. */
+    /* Biblioteca: a busca e o filtro ganham uma linha inteira cada; Exportar e Importar dividem a linha deles. */
     .toolbar {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr))
+        display: grid
     }
 
-    .search,
-    .toolbar .inline-field {
-        grid-column: 1 / -1
+    .data-tools button {
+        flex: 1 1 0
     }
 
     /* O rótulo "Área" à esquerda e a lista no resto da linha. */
@@ -919,8 +916,8 @@
     }
 
     /* Dúvidas: aqui a faixa da caixa quebra em duas linhas, e o herói com os chips não cabia acima da barra de baixo.
-       Os chips vão para a linha que rola de lado também no herói (sem crescer sob o ponteiro, como na conversa), e a
-       saudação e os respiros encolhem. Em cima a linha devolve os 4 px do respiro; embaixo fica o espaço até a caixa. */
+       Os chips vão para a linha que rola de lado também no herói, como na conversa, e a saudação e os respiros
+       encolhem. Em cima a linha devolve os 4 px do respiro; embaixo fica o espaço até a caixa. */
     .chat-head {
         margin-bottom: var(--sp-4)
     }
@@ -930,7 +927,6 @@
     }
 
     .suggestions {
-        --lift: 1;
         flex-wrap: nowrap;
         justify-content: flex-start;
         overflow-x: auto;

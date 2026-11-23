@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { Icon } from '../../icons.jsx';
 import { useFit } from '../../ui.jsx';
@@ -7,7 +7,7 @@ import { AREAS, LEVELS, LEVEL_NOTES, askKey, rove, typeDelay } from '../../lib.j
 
 // Caixa do editor da tela Estudar (#61), o Prompt Composer do 21st.dev adaptado ao Cérebro: o cartão de vidro com o
 // brilho que segue o ponteiro, a frase de exemplo que se escreve no campo vazio, o campo que cresce com o texto, a área
-// em chips, o nível num menu e o "Perguntar ao Cérebro" que pulsa quando há o que enviar. Do original ficaram de fora o
+// em chips, o nível num menu e o "Perguntar ao Cérebro" que liga quando há o que enviar. Do original ficaram de fora o
 // registro de construção e a prévia (uma simulação: aqui a espera e o resultado são de verdade e ficam na página do
 // material), os anexos (o backend só recebe texto), os ícones de pixel e as frases que se escrevem e se apagam sem fim
 // (WCAG 2.2.2). O texto, a área, o nível e quem pergunta continuam no App; as ferramentas do editor (ditado, arquivo,
@@ -229,8 +229,6 @@ export function PromptComposer({
     };
   }, []);
   const ready = !waiting && !!value.trim();
-  // Lido quando o botão liga ou desliga: o botão que liga pelo teclado (o texto digitado) não pulsa (styles.css).
-  const quiet = useMemo(byKeyboard, [ready]);
   // As frases de exemplo saem dos exemplos prontos (exemplos.js), que ficaram fora do JavaScript da abertura: a caixa os
   // busca quando monta. Até eles chegarem o campo vazio fica sem frase, e ela só começa a se escrever depois de 0,9 s.
   const [examples, setExamples] = useState(null);
@@ -302,7 +300,6 @@ export function PromptComposer({
           <button
             type="button"
             className="ask"
-            data-quiet={(ready && quiet) || undefined}
             disabled={!ready}
             aria-describedby={reason}
             onClick={onSend}

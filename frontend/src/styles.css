@@ -196,17 +196,17 @@
     --r-round: 999px;
 
     /* Medidas do app */
-    /* Margem da coluna do app e a barra de cima: a distância dela ao topo, a altura e o respiro de dentro (6 px em
-       cima e embaixo, 9 à direita e 13 à esquerda, como no Glassy Dashboard). */
+    /* Margem da coluna do app e a barra de cima: a distância dela ao topo, a altura (64 px) e o respiro de dentro (8 px
+       à direita e 12 à esquerda; em cima e embaixo os itens de 44 px ficam no meio). A margem acompanha a largura e cai
+       na grade de 4 px no bloco @supports logo abaixo do :root. */
     --gutter: clamp(1rem, 2.5vw, 2.25rem);
     --top-y: var(--sp-4);
-    --top-h: 3.75rem;
-    --top-pad: 6px 9px 6px 13px;
-    /* Logo da barra de cima (35 px) e o orbe do atalho "Pergunte ao Cérebro" (25 px). */
+    --top-h: 4rem;
+    --top-pad: 0 8px 0 12px;
+    /* Logo da barra de cima (35 px). */
     --logo: 2.1875rem;
-    --orb: 1.5625rem;
     /* Respiro do controle segmentado (as abas do material) e da barra de baixo em telefone estreito. */
-    --seg-pad: 3px;
+    --seg-pad: 4px;
     --tabbar-h: 0rem;
     --content-w: 64rem;
     --control-h: 2.75rem;
@@ -219,10 +219,10 @@
     /* Círculo da letra das opções do quiz e coluna do número do tópico no resumo. O recuo da nota da caneta embaixo da
        opção, no celular, parte dele. */
     --letter: 1.75rem;
-    /* Dock: itens de 44 px, 4 px de respiro e 3 px entre eles. Ele sai 24 px para fora da borda do palco. */
+    /* Dock: itens de 44 px, 4 px de respiro e 4 px entre eles. Ele sai 24 px para fora da borda do palco. */
     --dock-item: 2.75rem;
     --dock-pad: 4px;
-    --dock-gap: 3px;
+    --dock-gap: 4px;
     --dock-w: calc(var(--dock-item) + var(--dock-pad) * 2 + var(--hair) * 2);
     --dock-out: 1.5rem;
     /* Faixa de espera da IA (.busy): o botão Cancelar, o respiro e o fio. Ela fica centrada na altura da barra de cima. */
@@ -233,7 +233,8 @@
     --underline: 2px;
     --underline-gap: 3px;
     --bar-min: 3px;
-    /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard. */
+    /* Respiro de dentro do palco: 2,15vw em cima e 3,2vw dos lados, como no Glassy Dashboard, na grade de 4 px (@supports
+       abaixo do :root). */
     --main-top: clamp(1.25rem, 2.15vw, 2.25rem);
     --main-x: clamp(1.5rem, 3.2vw, 3rem);
     /* Camadas, de baixo para cima: os brilhos, o canvas das ondas (.waves) e a faixa atrás do conteúdo, a caixa presa
@@ -277,24 +278,22 @@
     /* O fio da espera corre em 1,6 s, devagar nas pontas. */
     --t-wait: 1.6s;
     --ease-wait: cubic-bezier(.65, 0, .35, 1);
-    /* O que respira (a lua do Dúvidas, os pontos da resposta a caminho e o brilho do "Perguntar ao Cérebro") vai e volta
-       na mesma curva, devagar nas duas pontas. O brilho pulsa duas vezes: menos de 5 s. */
+    /* O que respira (a lua do Dúvidas e os pontos da resposta a caminho) vai e volta na mesma curva, devagar nas duas
+       pontas. */
     --ease-breathe: cubic-bezier(.42, 0, .58, 1);
     --t-moon: 9s;
     --t-dots: 1.2s;
-    --t-pulse: 2.4s;
     --press: .97;
     /* Esqueleto: branco a 7% por cima de qualquer vidro, parado. Fio da espera: o ciano do foco. */
     --sk: rgb(255 255 255 / .07);
     --wait-track: rgb(147 241 247 / .16);
 
-    /* Tela Dúvidas (#57). --chat-w é a coluna da conversa e da caixa; --r-box, o canto da caixa; --r-list, o da lista
-       de atalhos. A lua (atrás da caixa, só CSS) tem o corpo escuro, a luz de borda ciano em cima (--moon-rim, o ponto
-       mais claro dela) e um brilho externo fraco (--moon-glow); --pointer-glow é o centro do brilho que segue o
-       ponteiro. O título do herói vai do branco até --hero-end, com 7:1 ou mais até sobre a borda da lua com o brilho
-       do ponteiro por cima (contraste57.mjs, na pasta das fotos da #57). */
+    /* Tela Dúvidas (#57). --chat-w é a coluna da conversa e da caixa; --r-box, o canto da caixa e do editor do Estudar
+       (o das pílulas de dentro, 20 px, mais os 9 px até a borda); --r-list, o da lista de atalhos. A lua (atrás da
+       caixa, só CSS) tem o corpo escuro, a luz de borda ciano em cima (--moon-rim, o ponto mais claro dela) e um brilho
+       externo fraco (--moon-glow); --pointer-glow é o centro do brilho que segue o ponteiro. */
     --chat-w: 47.5rem;
-    --r-box: 22px;
+    --r-box: 29px;
     --r-list: 12px;
     --moon: clamp(18rem, 40vw, 34rem);
     --moon-body: #030707;
@@ -302,29 +301,27 @@
     --moon-rim: rgb(147 241 247 / .08);
     --moon-glow: rgb(147 241 247 / .04);
     --pointer-glow: rgb(147 241 247 / .025);
-    --hero-end: #c2c2c2;
-    --rule-ink: rgb(255 255 255 / .2);
     /* A barra de cima e o dock discretos no Dúvidas (--quiet, --line-quiet), o vidro escuro da lista de atalhos
        (--palette) e a faixa que escurece a conversa atrás da caixa presa (--chat-veil). */
     --quiet: rgb(13 13 13 / .3);
     --line-quiet: rgb(255 255 255 / .05);
     --palette: rgb(5 5 5 / .94);
     --chat-veil: rgb(0 0 0 / .55);
-    /* Chips de sugestão do Dúvidas no estilo do Liquid Glass Button do 21st.dev (#110): a borda de vidro em sombras
-       internas claras (os valores do tema escuro do componente), o filtro SVG que distorce e desfoca o fundo atrás deles
-       (#vidro-liquido, App.jsx), quanto eles crescem sob o ponteiro e em quanto tempo. */
-    --liquid: 0 0 8px rgb(0 0 0 / .03), 0 2px 6px rgb(0 0 0 / .08), inset 3px 3px .5px -3.5px rgb(255 255 255 / .09),
-        inset -3px -3px .5px -3.5px rgb(255 255 255 / .85), inset 1px 1px 1px -.5px rgb(255 255 255 / .6),
-        inset -1px -1px 1px -.5px rgb(255 255 255 / .6), inset 0 0 6px 6px rgb(255 255 255 / .12),
-        inset 0 0 2px 2px rgb(255 255 255 / .06), 0 0 12px rgb(0 0 0 / .15);
-    --liquid-filter: url(#vidro-liquido);
-    --lift: 1.05;
-    --t-lift: 300ms;
 
     /* Seta das listas de opções (select): o "abaixo" de icons.jsx, traço de 1,75 px em --ink-2. Vai como imagem
        porque o select não aceita filho; sem ela ficava a seta do sistema. */
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999999' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 10l5 5 5-5' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
     --chevron-w: 1.25rem;
+}
+
+/* A margem do app e o respiro do palco acompanham a largura e param no múltiplo de 4 px mais perto. Sem round() no
+   navegador ficam os valores do :root. O mobile.css vem depois e troca os três por valores fixos. */
+@supports (width: round(nearest, 1px, 4px)) {
+    :root {
+        --gutter: round(nearest, clamp(1rem, 2.5vw, 2.25rem), 4px);
+        --main-top: round(nearest, clamp(1.25rem, 2.15vw, 2.25rem), 4px);
+        --main-x: round(nearest, clamp(1.5rem, 3.2vw, 3rem), 4px)
+    }
 }
 
 /* Transparência reduzida ou contraste alto no sistema: o vidro fica sólido, sem transparência e sem desfoque. No alto
@@ -343,11 +340,8 @@
         --err-bg: #221010;
         --warn-bg: #241a0e;
         --quiet: #0d0d0d;
-        --chip: #141414;
         --palette: #050505;
         --chat-veil: #050505;
-        --liquid: none;
-        --liquid-filter: none;
         --blur: none;
         --shine: none;
         --sheen: transparent
@@ -355,7 +349,7 @@
 }
 
 /* Contraste alto pedido no sistema: além do vidro sólido (acima), o cinza do texto e as bordas ficam mais claros, também
-   as bordas discretas do Dúvidas (a barra de cima, o dock e os chips). */
+   as bordas discretas do Dúvidas (a barra de cima e o dock). */
 @media (prefers-contrast: more) {
     :root {
         --ink-2: #c2c2c2;
@@ -364,17 +358,6 @@
         --line-quiet: var(--line)
     }
 }
-
-/* Cor de cada seção (hoje todas no ciano): o ícone dos botões de gerar e o fio de progresso do material (--sec). */
-[data-tab=estudar] { --tab: var(--tab-estudar) }
-[data-tab=duvidas] { --tab: var(--tab-duvidas) }
-[data-tab=resumos] { --tab: var(--tab-resumos) }
-[data-tab=flashcards] { --tab: var(--tab-flashcards) }
-[data-tab=quizzes] { --tab: var(--tab-quizzes) }
-[data-tab=erros] { --tab: var(--tab-erros) }
-[data-tab=desempenho] { --tab: var(--tab-desempenho) }
-[data-tab=biblioteca] { --tab: var(--tab-biblioteca) }
-[data-tab=mais] { --tab: var(--tab-mais) }
 
 *,
 *::before,
@@ -767,12 +750,12 @@ select {
 }
 
 /* Janela mais baixa que o dock preso: as últimas seções ficavam fora da janela, e só apareciam no fim da página. A
-   conta é a dele (os oito itens de 2,75 rem e os 31 px dos vãos, do respiro e da borda) mais o 1,5 rem do topo, menos
-   1 px: até 406 px com a letra padrão, e cresce com a letra do navegador. O dock fica com a altura que sobra abaixo da
+   conta é a dele (os oito itens de 2,75 rem e os 38 px dos vãos, do respiro e da borda) mais o 1,5 rem do topo, menos
+   1 px: até 413 px com a letra padrão, e cresce com a letra do navegador. O dock fica com a altura que sobra abaixo da
    barra de cima e rola por dentro, sem barra de rolagem; o item cortado na borda mostra que há mais, e o Tab rola o
    dock até o anel do foco. Só aqui: a rolagem corta as dicas, que saem para o lado, e o nome da seção fica no nome do
    botão e no título da página. */
-@media (max-height: calc(23.5rem + 30px)) {
+@media (max-height: calc(23.5rem + 37px)) {
     .rail {
         max-height: calc(100dvh - var(--top-y) - var(--top-h) - var(--sp-4) - var(--sp-6) - var(--sp-5));
         overflow: hidden auto;
@@ -1042,12 +1025,12 @@ select {
     font-size: var(--fs-2)
 }
 
-/* O atalho do Dúvidas tem cara de busca: o orbe ciano, a frase que se escreve sozinha na abertura e a lupa. */
+/* O atalho do Dúvidas tem cara de busca: a frase que se escreve sozinha na abertura e a lupa. */
 .ask-pill {
     justify-content: flex-start;
     gap: var(--sp-3);
     width: 100%;
-    padding: 0 var(--sp-4) 0 var(--sp-2);
+    padding: 0 var(--sp-4);
     background: var(--field);
     color: var(--ink-2);
     font-weight: 550
@@ -1060,15 +1043,6 @@ select {
 
 .ask-pill .icon {
     margin-left: auto
-}
-
-.orb {
-    width: var(--orb);
-    height: var(--orb);
-    flex: none;
-    border-radius: 50%;
-    background: radial-gradient(circle at 34% 30%, var(--ink-hi), var(--accent) 38%, var(--accent-off) 78%);
-    box-shadow: 0 0 .75rem var(--accent-off)
 }
 
 /* A frase aparece da esquerda para a direita em 19 passos, como se fosse digitada, uma vez. É um passo por letra em
@@ -1191,14 +1165,14 @@ select {
 }
 
 /* O atalho é quem cede lugar ao estado da IA e ao "Fundo animado": de 851 a uns 920 px, e com a letra a 200%, o nome
-   virava "P…". Sem os 13 rem do orbe, do nome, da lupa e dos vãos, o nome sai da vista e continua no botão para o
-   leitor de tela; ficam o orbe e a lupa. O !important vence o recorte da animação da frase, que continua valendo depois
-   que ela termina. */
+   virava "P…". Sem os 11 rem do nome, da lupa e do vão (169 px com a letra padrão), o nome sai da vista e continua no
+   botão para o leitor de tela; fica a lupa. O !important vence o recorte da animação da frase, que continua valendo
+   depois que ela termina. */
 .ask-pill {
     container-type: inline-size
 }
 
-@container (max-width: 13rem) {
+@container (max-width: 11rem) {
     .ask-pill-text {
         position: absolute;
         width: 1px;
@@ -1703,31 +1677,13 @@ main:focus {
     min-height: var(--control-h-tool)
 }
 
-/* Com texto para enviar (o botão ligado), o "Perguntar ao Cérebro" fica com a borda e a seta ciano, e um brilho pulsa
-   em volta dele duas vezes (menos de 5 s) e para. */
+/* Com texto para enviar (o botão ligado), o "Perguntar ao Cérebro" fica com a borda ciano; a seta segue o texto. */
 .ask:enabled {
-    border-color: var(--accent);
-    animation: ask-ready var(--t-pulse) var(--ease-breathe) 2
+    border-color: var(--accent)
 }
 
 .ask:enabled:hover {
     border-color: var(--accent-hover)
-}
-
-.ask:enabled .icon {
-    color: var(--accent)
-}
-
-/* O botão que ligou pelo teclado (o texto digitado) não pulsa: pelo teclado nada se move (anim.js). O atributo é lido
-   quando o botão liga (prompt-composer.jsx): o clique que vem depois não faz o pulso aparecer. */
-.ask[data-quiet] {
-    animation: none
-}
-
-@keyframes ask-ready {
-    50% {
-        box-shadow: 0 0 0 var(--sp-1) var(--accent-soft), 0 0 var(--sp-5) var(--accent-off)
-    }
 }
 
 /* As teclas da dica do teclado, embaixo da caixa. */
@@ -1753,14 +1709,8 @@ main:focus {
     text-wrap: balance
 }
 
-.note .icon {
-    width: 1.125rem;
-    height: 1.125rem;
-    margin-top: .05rem
-}
-
 /* O grupo de gerar: o botão principal ou, com o material do texto aberto, as três partes, que só abrem, e o "Gerar de
-   novo", à direita. O ícone de cada parte leva a cor da seção dela (--tab, hoje o ciano em todas). */
+   novo", à direita. Os ícones ficam na cor do texto do botão. */
 .actions {
     display: flex;
     flex-wrap: wrap;
@@ -1773,10 +1723,6 @@ main:focus {
     flex-wrap: wrap;
     row-gap: var(--sp-0);
     padding-block: calc(var(--sp-3) - var(--hair))
-}
-
-.action[data-tab]:not(:disabled) .icon {
-    color: var(--tab)
 }
 
 .open-parts {
@@ -1897,18 +1843,6 @@ main:focus {
     letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap
-}
-
-/* O primeiro cartão (a sequência de dias) em destaque: ciano liso, texto preto. No esqueleto, não. */
-.stat:first-child:has(strong) {
-    border-color: transparent;
-    background: var(--accent);
-    box-shadow: none;
-    color: var(--on-accent)
-}
-
-.stat:first-child:has(strong) strong {
-    color: var(--on-accent)
 }
 
 /* As 7 marcas numa linha só, com até 20 px cada: no cartão estreito todas encolhem por igual (15 px no cartão de
@@ -2036,7 +1970,8 @@ main:focus {
     border-color: var(--pen)
 }
 
-/* Abas de verdade (role="tab") num controle segmentado em pílula: a selecionada em ciano, com texto preto. */
+/* Abas de verdade (role="tab") num controle segmentado em pílula: a selecionada é um degrau de superfície com fio e o
+   texto em branco. O ciano da seção aberta fica no dock e na barra de baixo. */
 .tabs {
     display: flex;
     width: fit-content;
@@ -2064,18 +1999,14 @@ main:focus {
 }
 
 .tabs [role=tab][aria-selected=true] {
-    background: var(--accent);
-    color: var(--on-accent)
+    background: var(--raised-2);
+    box-shadow: inset 0 0 0 var(--hair) var(--line);
+    color: var(--ink-hi)
 }
 
-/* A faixa das abas rola de lado (overflow): o anel por fora seria cortado nela, então vai por dentro da aba; na aba
-   ciano ele é preto. */
+/* A faixa das abas rola de lado (overflow): o anel por fora seria cortado nela, então vai por dentro da aba. */
 .tabs [role=tab]:focus-visible {
     outline-offset: calc(-2 * var(--ring))
-}
-
-.tabs [role=tab][aria-selected=true]:focus-visible {
-    outline-color: var(--on-accent)
 }
 
 .topic-count {
@@ -2093,17 +2024,18 @@ main:focus {
     list-style: none
 }
 
-/* Só as linhas da lista: a lista do comentário da IA, dentro do tópico (.own-review), é uma lista comum. */
+/* Só as linhas da lista: a lista do comentário da IA, dentro do tópico (.own-review), é uma lista comum. O número fica
+   na linha de base do título. */
 .summary > li {
     display: grid;
     grid-template-columns: var(--letter) minmax(0, 1fr);
+    align-items: first baseline;
     gap: var(--sp-3);
     padding: var(--sp-4) 0;
     border-bottom: var(--hair) solid var(--line)
 }
 
 .topic-n {
-    padding-top: .15rem;
     color: var(--ink-3);
     font-size: var(--fs-2);
     font-variant-numeric: tabular-nums
@@ -2187,7 +2119,7 @@ main:focus {
     max-width: calc(var(--measure) + var(--sp-4) * 2);
     margin: var(--sp-3) 0 var(--sp-5);
     padding: var(--sp-3) var(--sp-4);
-    border: var(--hair) solid var(--line-strong);
+    border: var(--hair) solid var(--line);
     border-radius: var(--r-2);
     background: var(--raised);
     line-height: var(--lh-read);
@@ -2226,7 +2158,7 @@ main:focus {
 .own {
     margin: 0 0 var(--sp-5);
     padding: var(--sp-4) var(--sp-5);
-    border: var(--hair) solid var(--line-strong);
+    border: var(--hair) solid var(--line);
     border-radius: var(--r-3);
     background: var(--raised)
 }
@@ -2498,7 +2430,7 @@ main:focus {
     width: 100%;
     min-height: 16rem;
     padding: var(--sp-6) var(--sp-5);
-    border-color: var(--line-strong);
+    border-color: rgb(255 255 255 / .2);
     border-radius: var(--r-3);
     background: var(--panel);
     font-weight: 400;
@@ -2536,11 +2468,6 @@ main:focus {
     gap: var(--sp-2);
     color: var(--ink-2);
     font-size: var(--fs-1)
-}
-
-.face-hint .icon {
-    width: 1rem;
-    height: 1rem
 }
 
 .verdicts .no:not(:disabled) .icon {
@@ -2734,7 +2661,7 @@ main:focus {
 .feedback {
     margin: var(--sp-5) 0;
     padding: var(--sp-4) var(--sp-5);
-    border: var(--hair) solid var(--line-strong);
+    border: var(--hair) solid var(--line);
     border-radius: var(--r-3);
     background: var(--raised);
     line-height: var(--lh-read);
@@ -3021,13 +2948,8 @@ main:focus {
     gap: var(--sp-2)
 }
 
-/* padding-bottom: o "j" de "hoje" não perde a ponta no recorte do degradê. */
 .chat-title {
-    padding-bottom: .08em;
-    background: linear-gradient(90deg, var(--ink-hi), var(--hero-end));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--ink-hi);
     font-size: clamp(2rem, 4vw, 3rem);
     font-weight: 750;
     line-height: 1.1;
@@ -3037,7 +2959,7 @@ main:focus {
 .chat-rule {
     display: block;
     height: var(--hair);
-    background: linear-gradient(90deg, transparent, var(--rule-ink), transparent);
+    background: var(--line);
     transform-origin: left
 }
 
@@ -3466,7 +3388,7 @@ main:focus {
     position: relative
 }
 
-/* A caixa: vidro que passa por cima do texto, canto de 22 px, borda clara de campo (3:1) e sombra grande e escura. O
+/* A caixa: vidro que passa por cima do texto, canto de 29 px, borda clara de campo (3:1) e sombra grande e escura. O
    anel de foco fica na caixa inteira, como no editor do Estudar. */
 .composer-box {
     border: var(--hair) solid var(--line-strong);
@@ -3672,10 +3594,8 @@ main:focus {
     display: none
 }
 
-/* Chips de sugestão (só com a IA), acima da caixa (#109), no estilo do Liquid Glass Button do 21st.dev (#110): fundo
-   transparente, a borda de vidro em sombras internas claras (::after) e, atrás dela, o fundo distorcido e desfocado pelo
-   filtro #vidro-liquido (::before). As duas camadas ficam dentro do chip (isolation) e atrás do texto. No herói os chips
-   ficam centrados; com mensagens, alinhados à esquerda. Durante a espera da resposta eles somem (data-espera): a pílula
+/* Chips de sugestão (só com a IA), acima da caixa (#109): botões secundários comuns, o vidro elevado com o fio. No herói
+   os chips ficam centrados; com mensagens, alinhados à esquerda. Durante a espera da resposta eles somem (data-espera): a pílula
    de espera (.chat-status) fica no lugar deles, e os chips da resposta nova chegam com ela. Com a lista do "/" aberta
    eles somem também: ela é mais estreita que a coluna e deixava a ponta de um chip de fora, e um clique ali mandava a
    pergunta dele. */
@@ -3697,98 +3617,13 @@ main:focus {
     visibility: hidden
 }
 
+/* Durante a espera de outra resposta da IA os chips ficam desligados como os outros botões (button:disabled). */
 .suggestions button {
-    position: relative;
-    isolation: isolate;
     min-height: var(--control-h-inline);
     padding: var(--sp-1) var(--sp-4);
-    border-color: transparent;
-    background: transparent;
-    color: var(--ink);
     font-weight: 500;
     text-align: left;
     overflow-wrap: anywhere
-}
-
-.suggestions button::before,
-.suggestions button::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none
-}
-
-/* Onde o navegador não aplica filtro SVG no fundo (Safari, Firefox), fica só a borda de vidro. Com mensagens o filtro
-   sai: a faixa atrás da caixa presa já desfoca a conversa, e refazer a distorção a cada quadro da rolagem pesava, como
-   o desfoque da caixa (acima). */
-.suggestions button::before {
-    z-index: calc(var(--z-behind) - 1);
-    backdrop-filter: var(--liquid-filter)
-}
-
-.chat-stage[data-state=conversa] .suggestions button::before {
-    backdrop-filter: none
-}
-
-.suggestions button::after {
-    z-index: var(--z-behind);
-    box-shadow: var(--liquid)
-}
-
-/* Sob o ponteiro o fundo continua transparente, sem o vidro elevado dos outros botões; só o texto clareia. */
-.suggestions button:hover:not(:disabled) {
-    border-color: transparent;
-    background: transparent;
-    color: var(--ink-hi)
-}
-
-/* O chip cresce 5% em 0,3 s, como o componente, só com mouse ou caneta e sem movimento reduzido. A pressão parte do chip
-   crescido, no tempo curto dos outros botões. O foco do teclado não mexe no tamanho. A transição própria fica aqui
-   dentro: no toque e com movimento reduzido vale a dos outros botões (a curta, ou nenhuma). */
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-    .suggestions button {
-        transition: color var(--t-fast) var(--ease), scale var(--t-lift) var(--ease)
-    }
-
-    .suggestions button:hover:not(:disabled) {
-        scale: var(--lift)
-    }
-
-    .suggestions button:hover:active:not(:disabled):not(:focus-visible) {
-        scale: calc(var(--lift) * var(--press));
-        transition-duration: var(--t-press)
-    }
-}
-
-/* Durante a espera de outra resposta da IA os chips ficam desligados como os outros botões (button:disabled): o texto
-   em --ink-3 e, no lugar da borda de vidro, o contorno discreto. */
-.suggestions button:disabled {
-    border-color: var(--line-quiet);
-    color: var(--ink-3)
-}
-
-.suggestions button:disabled::after {
-    box-shadow: none
-}
-
-/* Transparência reduzida, contraste alto ou cores forçadas: sem o vidro (--liquid e --liquid-filter ficam none, no
-   começo do arquivo), o chip ganha o fundo sólido e a borda clara dos campos. */
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-    .suggestions button,
-    .suggestions button:hover:not(:disabled) {
-        border-color: var(--line-strong);
-        background: var(--chip)
-    }
-}
-
-/* O SVG do filtro #vidro-liquido (App.jsx) fica fora da vista, sem tamanho e fora do fluxo: com display none o filtro
-   deixaria de valer. */
-.glass-filter {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden
 }
 
 .chat-end {
@@ -4068,6 +3903,19 @@ main:focus {
     color: var(--ink-2)
 }
 
+/* "Por área", o rótulo da lista de áreas no "Seu próximo passo": 24 px do que vem antes, 8 px das linhas. */
+.subjects-label {
+    margin: var(--sp-5) 0 var(--sp-2);
+    color: var(--ink-2);
+    font-size: var(--fs-1);
+    font-weight: 600;
+    letter-spacing: 0
+}
+
+.subjects-label + .subjects {
+    margin-top: 0
+}
+
 /* O plano até a prova abre "Seu próximo passo" (Desempenho.jsx): a frase de baixo dele fica como logo depois do título. */
 .panel > h2 + p,
 .panel > .plan + p {
@@ -4082,6 +3930,11 @@ main:focus {
     flex-wrap: wrap;
     align-items: center;
     gap: var(--sp-3)
+}
+
+/* Exportar e Importar: 16 px abaixo da busca (.row) e 8 px acima da frase que os explica. */
+.data-tools {
+    margin-bottom: var(--sp-2)
 }
 
 .search {
@@ -4833,7 +4686,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 
 /* Pelo teclado nada se move (anim.js marca <html data-input>): a pílula do dock, o fio de progresso, a seta de "Ver
    resposta", a seta do menu do nível, o fundo da janela, o estado da IA sob a faixa de espera, as barras do gráfico e o
-   menu do nível mudam na hora. O pulso do "Perguntar ao Cérebro" tem a regra dele (.ask[data-quiet]). */
+   menu do nível mudam na hora. */
 :root[data-input=teclado] .rail::before,
 :root[data-input=teclado] .rail .nav-item,
 :root[data-input=teclado] .meter > span,
@@ -4857,8 +4710,7 @@ main[data-instant] > .view[data-motion-pop-id] {
 }
 
 /* Movimento reduzido: sem deslize, sem pressão, sem a frase se escrevendo (na barra de cima e no editor, que mostra
-   uma frase parada e não move o brilho da caixa: prompt-composer.jsx), sem o brilho pulsando no "Perguntar ao
-   Cérebro", sem as barras crescendo e sem o fio correndo (fica o trilho parado e os segundos contando); o esqueleto já é
+   uma frase parada e não move o brilho da caixa: prompt-composer.jsx), sem as barras crescendo e sem o fio correndo (fica o trilho parado e os segundos contando); o esqueleto já é
    parado e as marcas da caneta já aparecem prontas (marks.jsx). Opacidade ainda pode esmaecer. */
 @media (prefers-reduced-motion: reduce) {
     button,
@@ -4882,8 +4734,7 @@ main[data-instant] > .view[data-motion-pop-id] {
     .moon,
     .dots span,
     .caret,
-    .level-menu,
-    .ask:enabled {
+    .level-menu {
         animation: none
     }
 
@@ -4900,15 +4751,8 @@ main[data-instant] > .view[data-motion-pop-id] {
     }
 }
 
-/* Contraste alto e cores forçadas: o título do Dúvidas vira texto sólido, e a lua e o brilho do ponteiro saem. */
+/* Contraste alto e cores forçadas: a lua e o brilho do ponteiro saem. */
 @media (prefers-contrast: more), (forced-colors: active) {
-    .chat-title {
-        background: none;
-        -webkit-background-clip: border-box;
-        background-clip: border-box;
-        color: var(--ink-hi)
-    }
-
     .moon,
     .pointer-glow {
         display: none

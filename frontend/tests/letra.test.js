@@ -29,14 +29,14 @@ test('as ondas ligam na largura em que o dock entra: 1 px acima da quebra da bar
 });
 
 test('dock: na janela mais baixa que ele, fica com a altura que sobra e rola por dentro, sem encolher os itens', () => {
-  // 406 px com a letra padrão: de 407 para cima o dock preso (383 px, a 24 do topo) cabe na janela. A conta confere
+  // 413 px com a letra padrão: de 414 para cima o dock preso (390 px, a 24 do topo) cabe na janela. A conta confere
   // com as medidas do dock no :root: oito itens, sete vãos, o respiro e a borda dos dois lados, e o topo.
-  const [, low] = styles.match(/@media \(max-height: calc\(23\.5rem \+ 30px\)\) \{([\s\S]*?\n)\}\n/);
+  const [, low] = styles.match(/@media \(max-height: calc\(23\.5rem \+ 37px\)\) \{([\s\S]*?\n)\}\n/);
   const px = name => {
     const [, n, unit] = styles.match(new RegExp(`--${name}: ([\\d.]+)(rem|px);`));
     return n * (unit === 'rem' ? 16 : 1);
   };
-  assert.equal(8 * px('dock-item') + 7 * px('dock-gap') + 2 * px('dock-pad') + 2 * px('hair') + px('sp-5') - 1, 23.5 * 16 + 30);
+  assert.equal(8 * px('dock-item') + 7 * px('dock-gap') + 2 * px('dock-pad') + 2 * px('hair') + px('sp-5') - 1, 23.5 * 16 + 37);
   assert.match(low, /\.rail \{\s*max-height: calc\(100dvh - [^;]+\);\s*overflow: hidden auto;/);
   assert.match(low, /\.rail \.nav-item \{\s*flex: none\s*\}/);
   // Fora dessa janela o dock não corta nada: as dicas saem para o lado dele.
