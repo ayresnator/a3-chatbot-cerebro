@@ -1,10 +1,10 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { animate } from 'motion/mini';
-import { byKeyboard } from './anim.js';
+import { EASE_OUT, byKeyboard } from './anim.js';
 
 // A caneta de correção: ○ novo, ✗ errei, ↻ refazer, ✓ certo. Traços feitos à mão em SVG, mais grossos que os ícones.
 // Com draw, a marca se desenha quando aparece: cada traço tem pathLength 1 e o animate do Motion leva o
-// stroke-dashoffset de 1 a 0, um traço depois do outro, em 0,52 s no total. Com movimento reduzido, ou quando a ação
+// stroke-dashoffset de 1 a 0, um traço depois do outro, em 0,36 s no total. Com movimento reduzido, ou quando a ação
 // veio do teclado, ela já aparece pronta.
 // A marca não é lida pelo leitor de tela: certo e errado vão em texto ao lado (a nota da caneta ou o rótulo do grupo).
 const STROKES = {
@@ -16,8 +16,7 @@ const STROKES = {
   ],
   certo: ['M4.5 12.8c1.3 1 2.6 2.4 3.9 4.6.3.5.9.5 1.2 0 2.4-4.6 5.6-8.6 9.9-12.1'],
 };
-const DRAW = 0.52;
-const EASE = [0.22, 1, 0.36, 1];
+const DRAW = 0.36;
 
 export function Pen({ kind, note, draw = false, delay = 0, className = '' }) {
   const root = useRef(null);
@@ -27,9 +26,9 @@ export function Pen({ kind, note, draw = false, delay = 0, className = '' }) {
     const paths = [...root.current.querySelectorAll('path')];
     const step = DRAW / paths.length;
     paths.forEach((path, i) =>
-      animate(path, { strokeDashoffset: ['1px', '0px'] }, { duration: step, delay: delay + i * step, ease: EASE }));
+      animate(path, { strokeDashoffset: ['1px', '0px'] }, { duration: step, delay: delay + i * step, ease: EASE_OUT }));
     const text = root.current.querySelector('.pen-note');
-    if (text) animate(text, { opacity: [0, 1] }, { duration: 0.2, delay: delay + DRAW * 0.6, ease: EASE });
+    if (text) animate(text, { opacity: [0, 1] }, { duration: 0.2, delay: delay + DRAW * 0.6, ease: EASE_OUT });
   }, []);
   return (
     <span ref={root} className={'pen pen--' + kind + (className ? ' ' + className : '')}>

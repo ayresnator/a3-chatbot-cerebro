@@ -39,7 +39,7 @@ export default function Desempenho({
         <Stat {...keptStat(kept)} />
         <Stat
           value={percent(cards)}
-          label={'autoavaliação nos cartões · ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
+          label={'autoavaliação nos cartões\u00a0· ' + cards.total + (cards.total === 1 ? ' cartão' : ' cartões')}
         />
       </m.div>
       {/* Com a lista "Área do gráfico" dentro, o painel só esmaece (anim.js, fade). */}
@@ -53,26 +53,40 @@ export default function Desempenho({
             </select>
           </label>
         </div>
-        <div className="chart">
-          {/* A altura da barra é o número de respostas do dia. O rótulo diz o que mede ("6 respostas", "50% certas");
-              no celular a coluna é estreita e fica a forma curta, "50% · 6" (mobile.css). O leitor de tela ouve a
-              coluna por extenso (spokenDay). */}
-          {/* 7,5 rem no maior dia: em tela estreita o rótulo quebra em até três linhas e ainda cabe na caixa. */}
-          {days.map(d => (
-            <div key={d.day} role="img" aria-label={spokenDay(d)}>
-              <span className="full">
-                {d.total ? <>{d.total} {plural(d.total, 'resposta', 'respostas')}<br />{d.rate}% certas</> : '—'}
-              </span>
-              <span className="short">{d.total ? d.rate + '% · ' + d.total : '—'}</span>
-              <div className="chart-bar" style={{ '--h': d.total / busiest }}></div>
-              <small>{d.label}</small>
-            </div>
-          ))}
-        </div>
-        <p className="chart-note">
-          A altura da barra é o número de respostas do dia; o percentual é o acerto. Conta a primeira resposta de cada
-          questão do quiz no dia. Os cartões ficam à parte: são autoavaliação.
-        </p>
+        {days.some(d => d.total) ? (
+          <div className="chart">
+            {/* A altura da barra é o número de respostas do dia. O rótulo diz o que mede ("6 respostas", "50% certas");
+                no celular a coluna é estreita e fica a forma curta, "50% · 6" (mobile.css). O leitor de tela ouve a
+                coluna por extenso (spokenDay). Só a barra de hoje (a última) vai em ciano; o dia sem resposta fica só
+                com a data. */}
+            <span className="chart-grid" aria-hidden="true"></span>
+            {days.map((d, i) => (
+              <div key={d.day} role="img" aria-label={spokenDay(d)}>
+                {d.total > 0 && (
+                  <>
+                    <span className="full">
+                      {d.total} {plural(d.total, 'resposta', 'respostas')}<br />{d.rate}% certas
+                    </span>
+                    <span className="short">{d.rate + '% · ' + d.total}</span>
+                    <div
+                      className={'chart-bar' + (i === days.length - 1 ? ' today' : '')}
+                      style={{ '--h': d.total / busiest }}
+                    ></div>
+                  </>
+                )}
+                <small>{d.label}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="hint chart-empty">Nenhuma resposta nos últimos 7 dias</p>
+        )}
+        {days.some(d => d.total) && (
+          <p className="chart-note">
+            A altura da barra é o número de respostas do dia; o percentual é o acerto. Conta a primeira resposta de cada
+            questão do quiz no dia. Os cartões ficam à parte: são autoavaliação.
+          </p>
+        )}
         <p className="chart-note">
           {keptLine(kept)} "Na hora" é a primeira vez que a questão aparece; "que ficou" é a mesma questão em outro dia.
         </p>
@@ -127,6 +141,7 @@ export default function Desempenho({
             )}
           </>
         )}
+        <h3 className="subjects-label">Por área</h3>
         <ul className="subjects" role="list">
           {AREAS.map(a => (
             <li className="subject" key={a}>

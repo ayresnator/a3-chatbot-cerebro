@@ -13,7 +13,6 @@ import {
   byKeyboard, appear, reduced, enter, flipList, leave,
 } from './anim.js';
 import {
-  useMoonHidden,
   Stat, UndoRow, Wait, Orb, Sk, SummarySkeleton, CardSkeleton, QuizSkeleton, DesempenhoSkeleton, BibliotecaSkeleton,
   PerfilSkeleton, Countdown, StudyPlan, ExamDate, Waves, useWavesAllowed, useWavesStill,
 } from './ui.jsx';
@@ -184,21 +183,18 @@ function App() {
   const [login, setLogin] = useState(false);
   // Folha "Mais" da barra de baixo, no celular.
   const [more, setMore] = useState(false);
-  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado" para as ondas e a lua do Dúvidas
-  // (WCAG 2.2.2) e fica gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey);
-  // sem nada gravado, elas andam. O botão fica na barra de cima e, no celular, na folha "Mais" (#144: dentro da janela
-  // do perfil, quem se incomodava com o movimento não o achava). Com movimento reduzido no sistema (wavesStill, lido ao
-  // vivo) as ondas e a lua ficam paradas e o botão some (lib.js, backdropMoves).
+  // Fundo em ondas (ui.jsx, Waves): só no computador com mouse. O "Fundo animado" para as ondas (WCAG 2.2.2) e fica
+  // gravado no navegador, numa chave só para a demonstração e o app com IA (lib.js, storageKey); sem nada gravado,
+  // elas andam. O botão fica na barra de cima; a folha "Mais" também tem um (#144), que no celular, sem ondas, não
+  // aparece. Com movimento reduzido no sistema (wavesStill, lido ao vivo) as ondas ficam paradas e o botão some; sem as
+  // ondas, também (lib.js, backdropMoves). A lua do Dúvidas é parada e não conta.
   const wavesAllowed = useWavesAllowed();
   const wavesStill = useWavesStill();
-  const moonHidden = useMoonHidden();
   const [fundo, setFundo] = useState(() => read('fundo', true) !== false);
   // O último aviso do Waves: false sem WebGL na GPU, com o shader recusado ou com o contexto perdido; null enquanto não
   // houve aviso, e as ondas contam como ligadas.
   const [wavesActive, setWavesActive] = useState(null);
-  const fundoShown = backdropMoves({
-    still: wavesStill, waves: wavesAllowed && wavesActive !== false, moon: !moonHidden,
-  });
+  const fundoShown = backdropMoves({ still: wavesStill, waves: wavesAllowed && wavesActive !== false });
   // A troca do "Fundo animado" que o navegador não gravou: o aviso sai também na folha "Mais", junto do botão.
   const [fundoUnsaved, setFundoUnsaved] = useState(false);
   const toggleFundo = () => {
@@ -220,9 +216,9 @@ function App() {
   const [level, setLevel] = useState(DRAFT.level || 'Básico');
   const [input, setInput] = useState(DRAFT.input);
   const [result, setResult] = useState(DRAFT.result);
-  // Espera de um pedido à IA fora do chat: { kind, label, orb, since }. kind é o pedido (gerar, why, review, own,
-  // example), para a espera aparecer no botão dele; label vai na espera, e orb é o estado do orbe ao lado dele (ui.jsx,
-  // Wait); since é a hora do pedido, para os segundos.
+  // Espera de um pedido à IA fora do chat: { kind, label, since }. kind é o pedido (gerar, why, review, own,
+  // example), para a espera aparecer no botão dele; label vai na espera (ui.jsx, Wait, só com o fio: o orbe fica na
+  // pílula do Dúvidas); since é a hora do pedido, para os segundos.
   // Na geração, prior é o material aberto no clique (o esqueleto só cobre ele); na revisão, answer é a resposta revista;
   // no comentário da explicação com as próprias palavras, item é o tópico.
   const [busy, setBusy] = useState(null);
@@ -359,13 +355,14 @@ function App() {
   // A página da vez (Resumos, Flashcards e Quizzes são a mesma, a do material) e a hora em que ela abriu, gravadas
   // depois de cada troca (useLayoutEffect abaixo). live: a página já estava na tela antes deste desenho, então o que
   // monta agora dentro dela anima à parte; o que vem junto com ela não, a entrada é a da página. cut: outra troca antes
-  // de ela assentar (0,35 s): o aluno passou direto, e a troca corta para a nova, sem entrada nem saída.
+  // de ela assentar (0,4 s: a mola de 0,36 s e o escalonamento): o aluno passou direto, e a troca corta para a nova, sem
+  // entrada nem saída.
   const viewKey = MATERIAL.includes(page) ? 'material' : page;
   const viewAt = useRef({ key: null, at: -Infinity });
   const live = viewAt.current.key === viewKey;
-  const cut = !live && performance.now() - viewAt.current.at < 350;
+  const cut = !live && performance.now() - viewAt.current.at < 400;
   // Variantes do Motion (anim.js): com movimento reduzido, só a opacidade. A primeira página (a abertura do app) entra
-  // na mola de 0,45 s, bloco a bloco; as trocas de seção, na de 0,3 s.
+  // bloco a bloco; as trocas de seção, quase de uma vez. As duas na mola de 0,36 s.
   const calm = useReducedMotion();
   const { view: viewIn, title: titleIn, rise, fade } = calm ? CALM : viewAt.current.key === null ? OPENING : ROUTINE;
   const pop = calm ? POP_CALM : POP;
@@ -858,7 +855,7 @@ function App() {
     // demonstração é instantânea e não mostra espera nenhuma.
     // O quiz e o baralho só recomeçam quando o material chega: cancelar ou falhar devolve o anterior no mesmo ponto.
     const wait = !!API_BASE;
-    setBusy({ kind: 'gerar', label: 'Gerando o material…', orb: 'working', since: Date.now(), prior: result });
+    setBusy({ kind: 'gerar', label: 'Gerando o material…', since: Date.now(), prior: result });
     if (wait) {
       setPage(target);
       // O botão apertado sai da tela com o Estudar: o foco espera no título da página do material, e o leitor de tela
@@ -1070,7 +1067,7 @@ function App() {
     // Um backup cabe em poucos megabytes, o limite do armazenamento do navegador: arquivo maior não é um.
     const backup = file.size > 20e6 ? null : readBackup(await file.text().catch(() => ''));
     if (!backup) {
-      toast('Este arquivo não é um backup do Cérebro.');
+      toast('Este arquivo não é um backup do Cérebro');
       return;
     }
     // O histórico entra e sai sem as repetições de dias passados (lib.js, compactEvents): o backup não as traz de volta,
@@ -1384,7 +1381,7 @@ function App() {
     if (waiting) return;
     const from = origin(item);
     setWhy({ item });
-    setBusy({ kind: 'why', label: 'Esperando a explicação…', orb: 'composing', since: Date.now() });
+    setBusy({ kind: 'why', label: 'Esperando a explicação…', since: Date.now() });
     // A espera nasce junto com a explicação e não seria lida.
     say('Esperando a explicação…');
     // A explicação entra abaixo do botão e vem à vista (Why): na janela baixa o botão, que fica com o foco, saía pelo
@@ -1439,7 +1436,7 @@ function App() {
     const from = origin(s);
     let review = null;
     setOwn({ ...mine, error: null });
-    setBusy({ kind: 'own', label: 'Esperando o comentário…', orb: 'solving', since: Date.now(), item: s });
+    setBusy({ kind: 'own', label: 'Esperando o comentário…', since: Date.now(), item: s });
     // A espera nasce junto com o comentário e não seria lida. Ela entra acima do botão e o empurra para trás da barra
     // de baixo: a página rola até ele, que fica com o foco.
     say('Esperando o comentário da IA…');
@@ -1504,7 +1501,7 @@ function App() {
     // O aluno pode seguir adiante, ou refazer a questão, enquanto espera: só muda a resposta que foi revista.
     // Na tela ela é reconhecida pelo próprio objeto; no que está gravado, por ser anterior a este pedido.
     const asked = new Date().toISOString();
-    setBusy({ kind: 'review', label: 'Esperando a revisão…', orb: 'solving', since: Date.now(), answer: mine });
+    setBusy({ kind: 'review', label: 'Esperando a revisão…', since: Date.now(), answer: mine });
     // A espera entra acima do botão e, no celular, o empurra para trás do "Próxima questão" preso: a página rola até
     // ele, que fica com o foco.
     focusAfter.current = [null, null, '#pedir-revisao'];
@@ -1555,7 +1552,7 @@ function App() {
     // O material do pedido está aberto: esta cópia ou outra dele, aberta de novo da biblioteca durante a espera.
     const isOpen = now => now.result === material || (!!material.id && now.result?.id === material.id);
     setExtra(null);
-    setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', orb: 'composing', since: Date.now(), of: material });
+    setBusy({ kind: 'questoes', label: 'Escrevendo questões novas…', since: Date.now(), of: material });
     // A espera nasce no fim do quiz e não seria lida. Com o botão no pé da janela ela nasceria fora da vista: a página
     // rola até ela, e o foco fica no botão.
     say('Escrevendo questões novas…');
@@ -2223,7 +2220,6 @@ function App() {
               go('Dúvidas');
             }}
           >
-            <span className="orb" aria-hidden="true"></span>
             <span className="ask-pill-text">Pergunte ao Cérebro</span>
             <Icon name="buscar" />
           </button>
@@ -2521,8 +2517,8 @@ function App() {
                     {plan.length > 0 && <StudyPlan rows={plan} onOpen={openTask} />}
                     <div className="stats">
                       <Stat
-                        value={streakDays + (streakDays === 1 ? ' dia' : ' dias')}
-                        label={plural(streakDays, 'seguido de estudo', 'seguidos de estudo')}
+                        value={streakDays}
+                        label={plural(streakDays, 'dia seguido de estudo', 'dias seguidos de estudo')}
                       />
                       <Stat value={cards.total} label={plural(cards.total, 'cartão revisado', 'cartões revisados')} />
                       <Stat
@@ -2568,7 +2564,7 @@ function App() {
                         <div className="result-header">
                           <div>
                             <Sk w="55%" className="sk-title" />
-                            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                            <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                           </div>
                         </div>
                         {tablist(true)}
@@ -2580,10 +2576,10 @@ function App() {
                       </m.section>
                     ) : !result ? (
                       <m.section key="vazio" className="panel empty" variants={focusIn} initial={live && appear()} animate="show" exit="exit">
-                        <h2>Seu próximo aprendizado está por aqui.</h2>
-                        <p>Adicione um texto para criar seu material de estudo.</p>
+                        <h2>Nenhum material aberto</h2>
+                        <p>Cole o texto da aula no Estudar para gerar resumo, flashcards e quiz.</p>
                         <div className="row center">
-                          <button type="button" className="primary" onClick={() => openPage('Estudar')}>Adicionar conteúdo</button>
+                          <button type="button" className="primary" onClick={() => openPage('Estudar')}>Ir para Estudar</button>
                           {saved.length > 0 && (
                             <button type="button" onClick={() => openPage('Biblioteca')}>
                               Abrir da biblioteca ({saved.length})
@@ -2866,7 +2862,7 @@ function App() {
                                             </div>
                                           ) : (
                                             <>
-                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras.</label>
+                                              <label htmlFor="proprio-campo">Sem olhar o texto, explique o tópico com suas palavras</label>
                                               <p className="hint" id="proprio-dica">De 2 a 5 frases, com até 1.000 caracteres.</p>
                                               <textarea
                                                 id="proprio-campo"
@@ -2904,7 +2900,7 @@ function App() {
                                             <div className="review-wait">
                                               <Sk className="sk-read" />
                                               <Sk w="72%" className="sk-read" />
-                                              <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                              <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                             </div>
                                           )}
                                           {own.error && <div role="alert" className="error"><Problem error={own.error} /></div>}
@@ -2998,7 +2994,8 @@ function App() {
                               )}
                               <button
                                 type="button"
-                                className="primary"
+                                // Com o "Tente responder antes de ler" aberto, o ciano fica no "Ler o resumo" dele.
+                                className={recall.pre === 'aberto' && pretest.length > 0 ? undefined : 'primary'}
                                 onClick={() => openPage('Flashcards', ['.flashcard', 'main h1'])}
                               >
                                 Estudar flashcards deste resumo
@@ -3201,7 +3198,8 @@ function App() {
                                   ))}
                                 </ul>
                               )}
-                              {wrong.length > 0 ? (
+                              {/* Sem erro, a linha "Você acertou 6 de 6." de cima já diz tudo. */}
+                              {wrong.length > 0 && (
                                 <ol className="review" role="list">
                                   {wrong.map((q, i) => (
                                     <li key={i}>
@@ -3220,8 +3218,6 @@ function App() {
                                     </li>
                                   ))}
                                 </ol>
-                              ) : (
-                                <p>Você acertou todas!</p>
                               )}
                               {/* O estudante novo descobre o caderno aqui. No quiz do próprio caderno já há "Voltar ao
                                   caderno". A frase só aparece enquanto vale: o fim do quiz continua na tela na volta de
@@ -3300,7 +3296,7 @@ function App() {
                               {/* A espera das questões novas e o erro dela ficam embaixo do botão, no lugar do pedido. */}
                               {busy?.kind === 'questoes' && busy.of === result && (
                                 <div className="quiz-wait">
-                                  <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                  <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                 </div>
                               )}
                               {extra?.error && extra.of === result && (
@@ -3462,7 +3458,7 @@ function App() {
                                     tabIndex={-1}
                                     aria-describedby={!answer.ok && answer.conf === 'certeza' ? 'certeza-errada' : undefined}
                                   >
-                                    {answer.ok ? 'Acertou!' : 'Vamos revisar esse conceito.'}
+                                    {answer.ok ? 'Acertou' : 'Errou'}
                                   </strong>
                                   {/* Errou com "Tenho certeza" (#80): o aviso vem antes de tudo, e o leitor de tela o ouve
                                       junto com o título, que recebe o foco. */}
@@ -3497,7 +3493,7 @@ function App() {
                                     <div className="review-wait">
                                       <Sk className="sk-read" />
                                       <Sk w="72%" className="sk-read" />
-                                      <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={cancelAI} />
+                                      <Wait label={busy.label} since={busy.since} onCancel={cancelAI} />
                                     </div>
                                   )}
                                   {answer.review?.verdict && (
@@ -3565,13 +3561,12 @@ function App() {
                   data-state={chat.length ? 'conversa' : 'heroi'}
                   data-teto={capped ? '' : undefined}
                 >
-                  {/* Com o "Fundo animado" desligado a lua para de respirar, como as ondas. */}
-                  <span className="moon" style={{ animation: fundo ? undefined : 'none' }} aria-hidden="true"></span>
+                  <span className="moon" aria-hidden="true"></span>
                   <div className="chat-head">
                     {/* O fio embaixo do título tem a largura dele: os dois ficam numa caixa da largura do título. */}
                     <div className="chat-title-box">
                       <m.h1 id="chat-titulo" className="chat-title" tabIndex={-1} variants={hero.title}>
-                        Como posso ajudar hoje?
+                        Dúvidas
                       </m.h1>
                       {!chat.length && <m.span className="chat-rule" aria-hidden="true" variants={hero.rule}></m.span>}
                     </div>
@@ -3616,7 +3611,7 @@ function App() {
                       </div>
                     )}
                     <div className="chat" role="log" aria-live="polite">
-                      <ChatLog chat={chat} asking={asking} pop={pop} />
+                      <ChatLog chat={chat} pop={pop} />
                     </div>
                   </div>
                   {/* Uma só rolagem, a da página: com mensagens a caixa fica presa embaixo (acima da barra, no celular). */}
@@ -3779,7 +3774,7 @@ function App() {
                   </AnimatePresence>
                   {mistakes.length === 0 ? (
                     <div className="empty">
-                      <h2>Nenhuma questão para rever.</h2>
+                      <h2>Nenhuma questão para rever</h2>
                       <p className="hint">As que você errar nos quizzes aparecem aqui.</p>
                       <button type="button" className="primary" onClick={() => openPage(result ? 'Quizzes' : 'Estudar')}>
                         {result ? 'Fazer o quiz do material aberto' : 'Gerar um material'}
@@ -3937,7 +3932,7 @@ function App() {
       <AnimatePresence custom={byKeyboard() || waitInline}>
         {band && (
           <m.div key="espera" className="busy" variants={pop} initial={appear()} animate="show" exit="exit">
-            <Wait label={busy.label} orb={busy.orb} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
+            <Wait label={busy.label} since={busy.since} onCancel={API_BASE ? cancelAI : null} />
           </m.div>
         )}
       </AnimatePresence>
@@ -4109,7 +4104,7 @@ function App() {
                 <Icon name="fechar" />
               </button>
               <BrandMark />
-              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui.'}</h2>
+              <h2 id="profile-title">{user ? 'Seu perfil' : 'Seu próximo aprendizado começa aqui'}</h2>
               <p>
                 {user
                   ? 'Seu nome e sua área principal ficam só neste navegador. Não é uma conta com senha.'
@@ -4235,12 +4230,12 @@ function App() {
   );
 }
 
-// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa, a espera ou o movimento mudam (memo): cada
-// tecla na caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
+// As mensagens da conversa do Dúvidas. Só se redesenham quando a conversa ou o movimento mudam (memo): cada tecla na
+// caixa redesenha o App, e com 40 mensagens refazer os balões e o rich() de cada resposta pesava na digitação.
 // Mensagem nova entra; nenhuma sai com movimento (Nova conversa limpa na hora). As que já estavam na conversa quando a
-// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A resposta toma o
-// lugar do balão de espera, que esmaece por cima dela.
-const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
+// página abriu não animam à parte (initial false). A pergunta enviada pelo teclado aparece parada. A espera da resposta
+// fica só na pílula acima da caixa (.chat-wait), com o orbe e os segundos.
+const ChatLog = React.memo(function ChatLog({ chat, pop }) {
   return (
     <AnimatePresence initial={false} mode="popLayout" custom={byKeyboard()}>
       {chat.map((msg, i) => (
@@ -4255,21 +4250,6 @@ const ChatLog = React.memo(function ChatLog({ chat, asking, pop }) {
           <p>{msg.role === 'user' ? msg.text : rich(msg.text)}</p>
         </m.div>
       ))}
-      {/* O balão de espera só tem os três pontos: quem diz que o Cérebro está escrevendo é a pílula acima da caixa, uma
-          vez só para o leitor de tela. */}
-      {asking && (
-        <m.div
-          key="espera"
-          className="message assistant thinking"
-          aria-hidden="true"
-          variants={pop}
-          initial={appear()}
-          animate="show"
-          exit="exit"
-        >
-          <span className="dots"><span></span><span></span><span></span></span>
-        </m.div>
-      )}
     </AnimatePresence>
   );
 });
@@ -4375,10 +4355,10 @@ function Modal({ className, labelledBy, describedBy, back, sheet = false, onClos
     dialog.showModal();
     if (!byKeyboard()) {
       if (reduced()) {
-        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn });
+        animate(dialog, { opacity: [0, 1] }, { duration: MODAL.calmIn, ease: EASE_OUT });
       } else if (sheet) {
-        // A curva da folha do iOS: sai rápido da barra e assenta devagar.
-        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: MODAL.sheetEase });
+        // A folha sai rápido da barra e assenta devagar, na curva de tudo.
+        animate(dialog, { transform: ['translateY(100%)', 'none'] }, { duration: MODAL.sheetIn, ease: EASE_OUT });
       } else {
         const o = opener?.getBoundingClientRect?.();
         const d = dialog.getBoundingClientRect();
@@ -4464,7 +4444,7 @@ function Why({ text, error, wait, onCancel, pop, focusIn }) {
             <Sk w="90%" className="sk-read" />
             <Sk w="62%" className="sk-read" />
           </span>
-          {wait?.kind === 'why' && <Wait label={wait.label} orb={wait.orb} since={wait.since} onCancel={onCancel} />}
+          {wait?.kind === 'why' && <Wait label={wait.label} since={wait.since} onCancel={onCancel} />}
         </>
       )}
     </m.div>
@@ -4504,7 +4484,7 @@ class ErrorBoundary extends React.Component {
     if (!this.state.failed) return this.props.children;
     return (
       <section className="panel empty" role="alert">
-        <h2>Algo quebrou nesta tela.</h2>
+        <h2>Algo quebrou nesta tela</h2>
         <button className="primary" onClick={() => window.location.reload()}>Recarregar a página</button>
       </section>
     );

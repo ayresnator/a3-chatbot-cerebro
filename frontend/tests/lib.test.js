@@ -593,18 +593,18 @@ test('quizRate e firstAttempts: o campo prev não muda as contas', () => {
 
 test('keptStat: com menos de 5 revistas o número fica vazio e diz quantas faltam', () => {
   const revisits = n => Array.from({ length: n }, (_, i) => quizAt(16, i, i % 3 > 0, { prev: true }));
-  assert.deepEqual(keptStat(retention([], today())), { value: '—', label: 'acerto que ficou · faltam 5 questões revistas' });
+  assert.deepEqual(keptStat(retention([], today())), { value: '—', label: 'acerto que ficou\u00a0· faltam 5 questões revistas' });
   assert.deepEqual(keptStat(retention(revisits(3), today())), {
-    value: '—', label: 'acerto que ficou · faltam 2 questões revistas',
+    value: '—', label: 'acerto que ficou\u00a0· faltam 2 questões revistas',
   });
   assert.deepEqual(keptStat(retention(revisits(4), today())), {
-    value: '—', label: 'acerto que ficou · falta 1 questão revista',
+    value: '—', label: 'acerto que ficou\u00a0· falta 1 questão revista',
   });
   assert.deepEqual(keptStat(retention(revisits(5), today())), {
-    value: '60%', label: 'acerto que ficou · 5 questões revistas depois de 1 dia ou mais',
+    value: '60%', label: 'acerto que ficou\u00a0· 5 questões revistas depois de 1 dia ou mais',
   });
   assert.deepEqual(keptStat({ total: 14, correct: 9, rate: 64 }), {
-    value: '64%', label: 'acerto que ficou · 14 questões revistas depois de 1 dia ou mais',
+    value: '64%', label: 'acerto que ficou\u00a0· 14 questões revistas depois de 1 dia ou mais',
   });
 });
 
@@ -1573,39 +1573,39 @@ test('slashHints: texto que não começa com "/" ou que já tem espaço ou quebr
 test('hello: com nome e sem nome', () => {
   assert.equal(
     hello({ user: { name: 'Ana' }, area: 'Economia', level: 'Básico', input: '', api: true }),
-    'Olá, Ana! Sou o Cérebro, seu tutor de Economia no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Se colar um texto no editor, respondo com base nele.'
+    'Olá, Ana. Sou o Cérebro, tutor de Economia no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Se colar um texto no editor, respondo com base nele.'
   );
   assert.equal(
     hello({ user: null, area: 'Economia', level: 'Básico', input: 'Um texto', api: true }),
-    'Olá! Sou o Cérebro, seu tutor de Economia no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o texto que está no editor.'
+    'Sou o Cérebro, tutor de Economia no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o texto que está no editor.'
   );
 });
 
 test('hello: na área Escolar', () => {
   assert.equal(
     hello({ user: null, area: 'Escolar', level: 'Avançado', input: '', api: true }),
-    'Olá! Sou o Cérebro, seu tutor das matérias escolares no nível Avançado. Pergunte o que quiser ou escolha uma das sugestões abaixo. Se colar um texto no editor, respondo com base nele.'
+    'Sou o Cérebro, tutor das matérias escolares no nível Avançado. Pergunte o que quiser ou escolha uma das sugestões abaixo. Se colar um texto no editor, respondo com base nele.'
   );
 });
 
 test('hello: na demonstração', () => {
   assert.equal(
     hello({ user: { name: 'Ana' }, area: 'Tecnologia', level: 'Intermediário', input: 'Um texto', api: false }),
-    'Olá, Ana! Sou o Cérebro, seu tutor de Tecnologia no nível Intermediário. Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.'
+    'Olá, Ana. Sou o Cérebro, tutor de Tecnologia no nível Intermediário. Nesta demonstração eu organizo o seu texto em resumo, flashcards e quiz. As respostas a dúvidas ficam para a versão com IA.'
   );
 });
 
 test('hello: no modo estudo, diz que as respostas precisam do computador com a IA', () => {
   assert.equal(
     hello({ user: null, area: 'Economia', level: 'Básico', input: '', title: 'Inflação', api: false, study: true }),
-    'Olá! Sou o Cérebro, seu tutor de Economia no nível Básico. No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as respostas a dúvidas precisam do computador com a IA.'
+    'Sou o Cérebro, tutor de Economia no nível Básico. No modo estudo não há IA neste aparelho: eu organizo o seu texto em resumo, flashcards e quiz, e as respostas a dúvidas precisam do computador com a IA.'
   );
 });
 
 test('hello: com o material aberto como assunto, cita o material e não fala do editor', () => {
   assert.equal(
     hello({ user: null, area: 'Escolar', level: 'Básico', input: 'Revolução Francesa\nCausas: a crise', title: 'Revolução Francesa', api: true }),
-    'Olá! Sou o Cérebro, seu tutor das matérias escolares no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o material "Revolução Francesa".'
+    'Sou o Cérebro, tutor das matérias escolares no nível Básico. Pergunte o que quiser ou escolha uma das sugestões abaixo. Vou considerar o material "Revolução Francesa".'
   );
 });
 
@@ -2491,13 +2491,11 @@ test('storageKey: o "Fundo animado" é do aparelho, e a demonstração lê a mes
   assert.equal(storageKey('fundo'), 'cerebro-fundo');
 });
 
-test('backdropMoves: o "Fundo animado" aparece com as ondas ou a lua para parar, e some com movimento reduzido', () => {
-  const shown = (still, waves, moon) => backdropMoves({ still, waves, moon });
-  assert.equal(shown(false, true, true), true, 'computador: as ondas e a lua');
-  assert.equal(shown(false, false, true), true, 'celular, ou computador sem WebGL: só a lua');
-  assert.equal(shown(false, true, false), true, 'contraste alto no computador: só as ondas');
-  assert.equal(shown(false, false, false), false, 'cores forçadas, ou contraste alto no celular: nada se move');
-  assert.equal(shown(true, true, true), false, 'movimento reduzido: as duas já estão paradas');
+test('backdropMoves: o "Fundo animado" aparece com as ondas para parar, e some com movimento reduzido', () => {
+  const shown = (still, waves) => backdropMoves({ still, waves });
+  assert.equal(shown(false, true), true, 'computador: as ondas');
+  assert.equal(shown(false, false), false, 'celular, computador sem WebGL ou cores forçadas: nada se move (a lua é parada)');
+  assert.equal(shown(true, true), false, 'movimento reduzido: as ondas já estão paradas');
 });
 
 test('newId: a hora ou, se ela já foi usada, um a mais que o maior id; dois materiais no mesmo clique não repetem', () => {

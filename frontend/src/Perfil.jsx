@@ -8,14 +8,14 @@ import { EASE_OUT, byKeyboard } from './anim.js';
 // na janela. O nome e a área continuam no App; ao confirmar, onSave recebe o perfil. fresh: ainda não há perfil, e o
 // botão é o de quem começa ("Começar a estudar"); com perfil, ele só salva. O foco vai para o nome quando o
 // formulário aparece, chegue ele junto com a janela ou depois dela. Chegando depois, no lugar do esqueleto (do mesmo
-// tamanho), ele só esmaece, em 0,18 s; junto com a janela, a entrada é a dela.
+// tamanho), ele só esmaece, em 0,2 s; junto com a janela, a entrada é a dela.
 export default function Perfil({ name, setName, area, fresh, onSave }) {
   const form = useRef(null);
   const field = useRef(null);
   // A janela já estava aberta: o showModal (App.jsx, Modal) roda depois deste efeito quando os dois chegam juntos.
   useLayoutEffect(() => {
     if (form.current.closest('dialog')?.open && !byKeyboard()) {
-      animate(form.current, { opacity: [0, 1] }, { duration: 0.18, ease: EASE_OUT });
+      animate(form.current, { opacity: [0, 1] }, { duration: 0.2, ease: EASE_OUT });
     }
   }, []);
   useEffect(() => field.current?.focus(), []);

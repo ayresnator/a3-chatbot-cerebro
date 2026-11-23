@@ -24,7 +24,7 @@ export default function Biblioteca({
           <input
             id="busca"
             type="search"
-            placeholder="Buscar materiais…"
+            placeholder="Buscar"
             aria-label="Buscar materiais"
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -37,6 +37,9 @@ export default function Biblioteca({
             {['Todas', ...AREAS].map(a => <option key={a}>{a}</option>)}
           </select>
         </label>
+      </div>
+      {/* Exportar e Importar numa linha deles, com a frase que os explica logo embaixo, longe da busca. */}
+      <div className="row data-tools">
         <button type="button" onClick={onExport}>
           <Icon name="exportar" />
           Exportar
