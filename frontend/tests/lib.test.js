@@ -10,7 +10,7 @@ import {
   validMaterial, sameMaterial, validEvent, readList, readUser, readDraft, healthLabel, capReached, errorText, ERRORS, FAILS,
   rateAtCap, pauseNotice, dictate,
   noticeTime, chartLine, topicCount,
-  dictationError, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
+  dictationError, NO_DICTATION, mistakeKey, addMistake, clearMistake, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents,
   shareFile, cardLines, ankiFile, fileName, answerLine, printNote,
   quizSource, mergeQuiz, QUIZ_CAP, savedCopy,
@@ -2739,7 +2739,10 @@ test('dictationError: cada motivo da falha do ditado tem a sua frase', () => {
   assert.equal(dictationError('no-speech'), 'Não ouvi nada. Tente de novo.');
   assert.equal(dictationError('not-allowed'), 'Permita o uso do microfone no navegador.');
   assert.equal(dictationError('service-not-allowed'), 'Permita o uso do microfone no navegador.');
-  assert.equal(dictationError('network'), 'O ditado precisa de internet.');
+  // network com internet é navegador sem o serviço de voz (Brave); só sem internet o aviso fala da internet.
+  assert.equal(dictationError('network', true), NO_DICTATION);
+  assert.equal(dictationError('network', false), 'O ditado precisa de internet.');
+  assert.equal(NO_DICTATION, 'Ditado indisponível neste navegador. Use o Chrome ou o Edge.');
   for (const code of ['aborted', 'audio-capture', undefined]) {
     assert.equal(dictationError(code), 'Não foi possível ouvir. Verifique a permissão do microfone.', String(code));
   }
