@@ -25,7 +25,7 @@ import {
   validCardReview, scheduleCard, dueCards, dayCards,
   noticeTime, topicCount, chartLine,
   matches, libraryCount, hints, chatHistory, hello, chatSubject, subjectKey, healthLabel, capReached, errorText, rateAtCap, pauseNotice, ERRORS,
-  FAILS, dictate, dictationError, examPool, mockExam, examScore, examLine,
+  FAILS, dictate, dictationError, NO_DICTATION, examPool, mockExam, examScore, examLine,
   localDay, mistakeKey, noteAnswer, removeMistake, validMistake, byMaterial, whyQuestion, whyTopic, CONF, guessLine,
   seenStep, readSeen, stepOf, dueOf, dueMistakes, dayMistakes, backOn, restoreMistake, provaOf, studyPlan,
   gradeRequest, explainRequest, fixLastQuizEvent, readBackup, mergeBackup, backupNote, compactEvents, AI_NOTE, markExample, sourceLabel,
@@ -1684,14 +1684,15 @@ function App() {
       return;
     }
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) {
-      toast('Ditado indisponível neste navegador. Use Chrome e permita o microfone.');
+    // O Brave tem a interface do ditado, mas não o serviço de voz: pedir o microfone ali seria à toa.
+    if (!Speech || navigator.brave) {
+      toast(NO_DICTATION);
       return;
     }
     const speech = new Speech();
     speech.lang = 'pt-BR';
     speech.onresult = e => setInput(s => dictate(s, e.results[0][0].transcript));
-    speech.onerror = e => toast(dictationError(e.error));
+    speech.onerror = e => toast(dictationError(e.error, navigator.onLine));
     speech.onend = () => setListening(false);
     recognition.current = speech;
     speech.start();

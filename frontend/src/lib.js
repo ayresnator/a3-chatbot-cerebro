@@ -1067,11 +1067,15 @@ export function dictate(text, spoken) {
   return capText((text + ' ' + spoken).trim());
 }
 
-// Motivo da falha do ditado (o campo error do evento do navegador) em frase para o aluno.
-export function dictationError(code) {
+// Aviso de navegador sem ditado: sem a interface de voz (Firefox) ou com ela e sem o serviço por trás (Brave).
+export const NO_DICTATION = 'Ditado indisponível neste navegador. Use o Chrome ou o Edge.';
+
+// Motivo da falha do ditado (o campo error do evento do navegador) em frase para o aluno. online é o navigator.onLine:
+// o Brave devolve network com internet, porque tem a interface do ditado mas não o serviço de voz.
+export function dictationError(code, online) {
   if (code === 'no-speech') return 'Não ouvi nada. Tente de novo.';
   if (code === 'not-allowed' || code === 'service-not-allowed') return 'Permita o uso do microfone no navegador.';
-  if (code === 'network') return 'O ditado precisa de internet.';
+  if (code === 'network') return online ? NO_DICTATION : 'O ditado precisa de internet.';
   return 'Não foi possível ouvir. Verifique a permissão do microfone.';
 }
 
